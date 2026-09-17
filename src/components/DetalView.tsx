@@ -1,0 +1,793 @@
+'use client';
+
+import React, { useState, useMemo, useEffect } from 'react';
+import { Account, TransactionDetal, Client, AppMode } from '@/types';
+import { StorageService } from '@/lib/storage';
+import { RatesService } from '@/lib/rates-service';
+import { AbonoModal } from '@/components/AbonoModal';
+import { Coins, Search, CheckCircle, Trash2, ArrowDownLeft, Sparkles, RefreshCw } from 'lucide-react';
+
+interface DetalProps {
+  accounts: Account[];
+  clients: Client[];
+  detalTxs: TransactionDetal[];
+  onDataChange: () => void;
+  appMode?: AppMode;
+  onSyncRates?: () => Promise<void>;
+  isSyncingRates?: boolean;
+  lastRatesSync?: string | null;
+}
+
+export function DetalView({
+  accounts,
+  clients,
+  detalTxs,
+  onDataChange,
+  appMode = 'detal',
+  onSyncRates,
+  isSyncingRates,
+  lastRatesSync,
+}: DetalProps) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [ratesVersion, setRatesVersion] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => setRatesVersion((v) => v + 1);
+    window.addEventListener('cambiosjk_rates_updated', handleUpdate);
+    return () => window.removeEventListener('cambiosjk_rates_updated', handleUpdate);
+  }, []);
+
+  const officialUsdtRate = useMemo(() => RatesService.getRateInfo('USDT', appMode), [appMode, ratesVersion]);
+
+  const [feeMode, setFeeMode] = useState<'fixed' | 'percent'>('fixed');
+  const [feePercent, setFeePercent] = useState<string>('');
+
+  const [formData, setFormData] = useState({
+    date: todayStr,
+    client_name: '',
+    client_id: '',
+    usdt_amount: '',
+    sell_price: '',
+    buy_price: '',
+    received_account_id: 'POR_COBRAR',
+    amount_received: '',
+    paid_account_id: '',
+    bank_fee: '0',
+    reference: '',
+    notes: '',
+  });
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterDate, setFilterDate] = useState('');
+  const [isAbonoModalOpen, setIsAbonoModalOpen] = useState(false);
+
+  const handleClientSelect = (name: string) => {
+    const matched = clients.find((c) => c.name.toUpperCase() === name.toUpperCase());
+    if (matched) {
+      setFormData((prev) => ({
+        ...prev,
+        client_name: matched.name,
+        client_id: matched.id,
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        client_name: name,
+        client_id: '',
+      }));
+    }
+  };
+
+  const calculations = useMemo(() => {
+    const qty = parseFloat(formData.usdt_amount) || 0;
+    const sell = parseFloat(formData.sell_price) || 0;
+    const buy = parseFloat(formData.buy_price) || 0;
+
+    // Total a Cobrar = Cantidad USDT / Precio de Venta
+    // Costo de Compra = Cantidad USDT / Precio de Compra
+    const totalToPay = sell > 0 ? qty / sell : 0;
+    const cost = buy > 0 ? qty / buy : 0;
+
+    const pct = parseFloat(feePercent) || 0;
+    const effectiveFee = feeMode === 'percent'
+      ? (totalToPay > 0 ? (totalToPay * pct) / 100 : 0)
+      : (parseFloat(formData.bank_fee) || 0);
+
+    // Ganancia = Total a Cobrar - Costo - Comisión
+    const rawProfit = qty > 0 && sell > 0 && buy > 0 ? totalToPay - cost - effectiveFee : 0;
+    const profitUsd = Number(rawProfit.toFixed(4));
+
+    return {
+      totalToPay: Number(totalToPay.toFixed(2)),
+      effectiveFee: Number(effectiveFee.toFixed(4)),
+      profitUsd,
+    };
+  }, [formData.usdt_amount, formData.sell_price, formData.buy_price, formData.bank_fee, feeMode, feePercent]);
+
+  const handleDeleteTx = (id: string) => {
+    if (confirm('¿Deseas eliminar esta transacción de CRIPTO/DOLAR? Si generó deuda o movió saldos, se revertirá automáticamente.')) {
+      StorageService.deleteTransactionDetal(id);
+      onDataChange();
+    }
+  };
+
+  const handleSetFullPayment = () => {
+    if (formData.received_account_id === 'POR_COBRAR') {
+      const firstAcc = accounts.find((a) => a.currency === 'USD') || accounts[0];
+      setFormData((prev) => ({
+        ...prev,
+        received_account_id: firstAcc ? firstAcc.id : '',
+        amount_received: calculations.totalToPay.toString(),
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        amount_received: calculations.totalToPay.toString(),
+      }));
+    }
+  };
+
+  const handleApplyOfficialRate = () => {
+    if (officialUsdtRate) {
+      setFormData((prev) => ({
+        ...prev,
+        buy_price: officialUsdtRate.costRate.toString(),
+        sell_price: officialUsdtRate.sellRate.toString(),
+      }));
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.client_name || !formData.usdt_amount || !formData.sell_price) {
+      alert('Por favor complete los campos obligatorios: Cliente, Cantidad y Precio de Venta');
+      return;
+    }
+
+    const qty = parseFloat(formData.usdt_amount) || 0;
+    const sell = parseFloat(formData.sell_price) || 0;
+    const buy = parseFloat(formData.buy_price) || 0;
+    const fee = calculations.effectiveFee;
+    const total = calculations.totalToPay;
+
+    const isPorCobrar = formData.received_account_id === 'POR_COBRAR' || !formData.received_account_id;
+    const received = isPorCobrar ? 0 : parseFloat(formData.amount_received) || 0;
+
+    const paymentStatus: 'PAGADO' | 'PARCIAL' | 'PENDIENTE' =
+      received >= total && total > 0 ? 'PAGADO' : received > 0 ? 'PARCIAL' : 'PENDIENTE';
+
+    const clientExists = clients.some(
+      (c) => c.name.toUpperCase() === formData.client_name.trim().toUpperCase()
+    );
+    if (!clientExists) {
+      StorageService.addClient({
+        name: formData.client_name.trim().toUpperCase(),
+      });
+    }
+
+    StorageService.addTransactionDetal({
+      date: formData.date,
+      client_name: formData.client_name.trim().toUpperCase(),
+      client_id: formData.client_id || undefined,
+      usdt_amount: qty,
+      sell_price: sell,
+      buy_price: buy,
+      total_to_pay: total,
+      received_account_id: isPorCobrar ? 'POR_COBRAR' : formData.received_account_id,
+      amount_received: received,
+      payment_status: paymentStatus,
+      paid_account_id: formData.paid_account_id || undefined,
+      bank_fee: fee,
+      fee_percent: feeMode === 'percent' ? (parseFloat(feePercent) || undefined) : undefined,
+      profit_usd: calculations.profitUsd,
+      reference: formData.reference,
+      notes: formData.notes,
+    });
+
+    setFormData({
+      date: formData.date,
+      client_name: '',
+      client_id: '',
+      usdt_amount: '',
+      sell_price: '',
+      buy_price: '',
+      received_account_id: 'POR_COBRAR',
+      amount_received: '',
+      paid_account_id: '',
+      bank_fee: '0',
+      reference: '',
+      notes: '',
+    });
+    setFeePercent('');
+
+    onDataChange();
+  };
+
+  const filteredTxs = useMemo(() => {
+    return detalTxs.filter((tx) => {
+      const matchSearch =
+        tx.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (tx.reference && tx.reference.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchDate = filterDate ? tx.date === filterDate : true;
+      return matchSearch && matchDate;
+    });
+  }, [detalTxs, searchTerm, filterDate]);
+
+  const totalVolumeFiltered = useMemo(() => {
+    return filteredTxs.reduce((sum, tx) => sum + tx.usdt_amount, 0);
+  }, [filteredTxs]);
+
+  const totalProfitFiltered = useMemo(() => {
+    return filteredTxs.reduce((sum, tx) => sum + tx.profit_usd, 0);
+  }, [filteredTxs]);
+
+  return (
+    <div className="space-y-6">
+      {/* Formulario de Registro */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center space-x-2">
+            <Coins className="w-5 h-5 text-emerald-600" />
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Registrar Venta: Cripto / Dólar</h2>
+              <p className="text-xs text-slate-500">Separación de Debe Pagar y Abonos reales (Modelo Excel)</p>
+            </div>
+          </div>
+
+          {/* Botón morado de Abono estilo Excel */}
+          <button
+            type="button"
+            onClick={() => setIsAbonoModalOpen(true)}
+            className="flex items-center space-x-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer self-start sm:self-auto"
+          >
+            <ArrowDownLeft className="w-4 h-4" />
+            <span>+ Registrar Abono (Excel)</span>
+          </button>
+        </div>
+
+        {/* Banner Tasa Oficial Cambios JK */}
+        {officialUsdtRate && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 bg-emerald-50/80 border border-emerald-300 rounded-xl text-xs text-black shadow-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center space-x-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span className="font-bold text-black">
+                  Tasa Oficial App JK ({appMode === 'mayor' ? 'MAYOR' : 'DETAL'}):
+                </span>
+              </div>
+              <span className="text-black font-medium">
+                Venta: <strong className="text-emerald-700 font-mono font-bold">{officialUsdtRate.sellRate}</strong> | 
+                Costo: <strong className="text-black font-mono font-bold">{officialUsdtRate.costRate}</strong>{' '}
+                {officialUsdtRate.provider && (
+                  <span className="text-slate-600 text-[11px]">({officialUsdtRate.provider})</span>
+                )}
+              </span>
+              {lastRatesSync && (
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">
+                  ● En vivo {new Date(lastRatesSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center space-x-2 shrink-0">
+              {onSyncRates && (
+                <button
+                  type="button"
+                  onClick={onSyncRates}
+                  disabled={isSyncingRates}
+                  className="flex items-center space-x-1 font-semibold px-2.5 py-1.5 rounded-lg text-[11px] bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200 shadow-2xs transition cursor-pointer"
+                  title="Sincronizar tasas frescas desde Google Sheets / App"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingRates ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
+                  <span>{isSyncingRates ? 'Sincronizando...' : 'Actualizar Ahora'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleApplyOfficialRate}
+                className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg transition shadow-xs cursor-pointer text-xs"
+              >
+                <span>Aplicar Tasa Oficial ({officialUsdtRate.sellRate})</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+              e.preventDefault();
+            }
+          }}
+          className="space-y-4"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Fecha</label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Cliente *</label>
+              <input
+                type="text"
+                list="clients-list-detal"
+                placeholder="Escribe o selecciona cliente..."
+                value={formData.client_name}
+                onChange={(e) => handleClientSelect(e.target.value)}
+                className="w-full text-xs font-bold border border-slate-300 rounded-xl px-3 py-2 uppercase"
+                required
+              />
+              <datalist id="clients-list-detal">
+                {clients.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.identification ? `${c.name} (${c.identification})` : c.name}
+                  </option>
+                ))}
+              </datalist>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Cantidad MONEDA / USDT *</label>
+              <input
+                type="number"
+                step="any"
+                placeholder="0.00"
+                value={formData.usdt_amount}
+                onChange={(e) => setFormData({ ...formData, usdt_amount: e.target.value })}
+                className="w-full text-xs font-mono font-bold border border-slate-300 rounded-xl px-3 py-2"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Precio de Venta (Tasa) *</label>
+              <input
+                type="number"
+                step="any"
+                placeholder="ej. 1.0204"
+                value={formData.sell_price}
+                onChange={(e) => setFormData({ ...formData, sell_price: e.target.value })}
+                className="w-full text-xs font-mono border border-slate-300 rounded-xl px-3 py-2"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Precio de Compra (Costo)</label>
+              <input
+                type="number"
+                step="any"
+                placeholder="ej. 1.005"
+                value={formData.buy_price}
+                onChange={(e) => setFormData({ ...formData, buy_price: e.target.value })}
+                className="w-full text-xs font-mono border border-slate-300 rounded-xl px-3 py-2"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Pagado Por (Wallet Origen)</label>
+              <select
+                value={formData.paid_account_id}
+                onChange={(e) => setFormData({ ...formData, paid_account_id: e.target.value })}
+                className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white"
+              >
+                <option value="">Seleccionar wallet / cuenta de egreso...</option>
+                {accounts.filter((a) => a.currency === 'USDT' || a.type === 'wallet').length > 0 && (
+                  <optgroup label="Wallets / Cuentas USDT (Recomendadas)">
+                    {accounts
+                      .filter((a) => a.currency === 'USDT' || a.type === 'wallet')
+                      .map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          ★ {acc.name || acc.bank_name} ({acc.currency}) - Saldo: {acc.current_balance.toLocaleString()}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+                {accounts.filter((a) => a.currency !== 'USDT' && a.type !== 'wallet').length > 0 && (
+                  <optgroup label="Otras Cuentas">
+                    {accounts
+                      .filter((a) => a.currency !== 'USDT' && a.type !== 'wallet')
+                      .map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name || acc.bank_name} ({acc.currency}) - Saldo: {acc.current_balance.toLocaleString()}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Recibido Por (Cuenta de Ingreso)
+              </label>
+              <select
+                value={formData.received_account_id}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData((prev) => ({
+                    ...prev,
+                    received_account_id: val,
+                    amount_received: val === 'POR_COBRAR' ? '0' : prev.amount_received,
+                  }));
+                }}
+                className={`w-full text-xs font-bold border rounded-xl px-3 py-2 bg-white ${
+                  formData.received_account_id === 'POR_COBRAR'
+                    ? 'text-rose-700 border-rose-300 bg-rose-50/50'
+                    : 'border-slate-300'
+                }`}
+              >
+                <option value="POR_COBRAR">🔴 POR COBRAR (Pendiente / Crédito)</option>
+                {Array.from(new Set(accounts.map((a) => a.currency))).map((curr) => (
+                  <optgroup key={curr} label={`Cuentas en ${curr}`}>
+                    {accounts
+                      .filter((a) => a.currency === curr)
+                      .map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name || acc.bank_name} ({acc.currency}) - Saldo: {acc.current_balance.toLocaleString()}
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-600">
+                  Cantidad Abonada ($ USD)
+                </label>
+                {formData.received_account_id !== 'POR_COBRAR' && calculations.totalToPay > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleSetFullPayment}
+                    className="text-[10px] font-bold text-emerald-600 hover:underline cursor-pointer"
+                  >
+                    100% Cobrado
+                  </button>
+                )}
+              </div>
+              <input
+                type="number"
+                step="any"
+                placeholder="0.00 (Dejar en 0 si está por cobrar)"
+                disabled={formData.received_account_id === 'POR_COBRAR'}
+                value={formData.received_account_id === 'POR_COBRAR' ? '0' : formData.amount_received}
+                onChange={(e) => setFormData({ ...formData, amount_received: e.target.value })}
+                className={`w-full text-xs font-mono font-bold border rounded-xl px-3 py-2 ${
+                  formData.received_account_id === 'POR_COBRAR'
+                    ? 'bg-slate-100 text-slate-400 border-slate-200'
+                    : 'border-slate-300'
+                }`}
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-600">
+                  Comisión Banco {feeMode === 'fixed' ? '($)' : '(%)'}
+                </label>
+                <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-[11px] font-bold border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setFeeMode('fixed')}
+                    className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
+                      feeMode === 'fixed'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Monto fijo en USD ($)"
+                  >
+                    $
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeeMode('percent')}
+                    className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
+                      feeMode === 'percent'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Porcentaje (%)"
+                  >
+                    %
+                  </button>
+                </div>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="any"
+                  placeholder={feeMode === 'fixed' ? '0.00' : 'ej. 1.0'}
+                  value={feeMode === 'fixed' ? formData.bank_fee : feePercent}
+                  onChange={(e) => {
+                    if (feeMode === 'fixed') {
+                      setFormData({ ...formData, bank_fee: e.target.value });
+                    } else {
+                      setFeePercent(e.target.value);
+                    }
+                  }}
+                  className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 font-mono pr-8"
+                />
+                <span className="absolute right-3 top-2 text-xs font-bold text-slate-400">
+                  {feeMode === 'fixed' ? '$' : '%'}
+                </span>
+              </div>
+              {calculations.effectiveFee > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mt-1.5 space-y-0.5 text-[11px]">
+                  <p className="text-blue-700 font-semibold">
+                    Comisión: {feeMode === 'percent' ? `${feePercent}% (-$${calculations.effectiveFee.toFixed(2)} USD)` : `-$${calculations.effectiveFee.toFixed(2)} USD`} (descontado de ganancia)
+                  </p>
+                  {parseFloat(formData.usdt_amount) > 0 && (
+                    <p className="text-blue-950 font-black">
+                      Débito total wallet salida: -{(parseFloat(formData.usdt_amount) + calculations.effectiveFee).toFixed(2)} USDT
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Referencia</label>
+              <input
+                type="text"
+                placeholder="ej. #1409 o comprobante"
+                value={formData.reference}
+                onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
+                className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Notas / Observaciones</label>
+              <input
+                type="text"
+                placeholder="Condiciones, acuerdo de pago..."
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2"
+              />
+            </div>
+          </div>
+
+          {/* Caja de Cálculos */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center space-x-6">
+              <div>
+                <span className="text-xs text-slate-500 block">DEBE PAGAR (Valor Venta)</span>
+                <span className="text-xl font-bold font-mono text-slate-900">
+                  ${calculations.totalToPay.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
+                </span>
+              </div>
+              <div>
+                <span className="text-xs text-slate-500 block">Estado de Cobro</span>
+                <span
+                  className={`text-xs font-bold px-2 py-0.5 rounded-full inline-block mt-1 ${
+                    formData.received_account_id === 'POR_COBRAR' || (!formData.amount_received && formData.amount_received !== '0') || parseFloat(formData.amount_received) === 0
+                      ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                      : parseFloat(formData.amount_received) >= calculations.totalToPay
+                      ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                      : 'bg-amber-100 text-amber-700 border border-amber-200'
+                  }`}
+                >
+                  {formData.received_account_id === 'POR_COBRAR' || (!formData.amount_received && formData.amount_received !== '0') || parseFloat(formData.amount_received) === 0
+                    ? '🔴 Por Cobrar (Genera Deuda)'
+                    : parseFloat(formData.amount_received) >= calculations.totalToPay
+                    ? '🟢 Cobrado al 100%'
+                    : `🟡 Cobro Parcial ($${formData.amount_received})`}
+                </span>
+              </div>
+              <div>
+                <span className="text-xs text-slate-500 block">Ganancia Neta</span>
+                <span
+                  className={`text-lg font-black font-mono ${
+                    calculations.profitUsd >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                  }`}
+                >
+                  {calculations.profitUsd >= 0
+                    ? `+$${calculations.profitUsd.toFixed(2)}`
+                    : `-$${Math.abs(calculations.profitUsd).toFixed(2)}`}{' '}
+                  USD
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow-sm transition flex items-center space-x-2 ml-auto cursor-pointer"
+            >
+              <CheckCircle className="w-4 h-4" />
+              <span>GUARDAR VENTA</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Historial */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Historial de Ventas CRIPTO / DÓLAR</h3>
+            <p className="text-xs text-slate-500">
+              {filteredTxs.length} registros • Volumen: {totalVolumeFiltered.toFixed(2)} USDT •
+              Ganancia Total: ${totalProfitFiltered.toFixed(2)}
+            </p>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar cliente..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            {filterDate && (
+              <button
+                onClick={() => setFilterDate('')}
+                className="text-xs text-blue-600 hover:underline cursor-pointer"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-600">
+            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase">
+              <tr>
+                <th className="py-2.5 px-3">Fecha</th>
+                <th className="py-2.5 px-3">Cliente</th>
+                <th className="py-2.5 px-3 text-right">Cantidad MONEDA</th>
+                <th className="py-2.5 px-3 text-right">Comisión</th>
+                <th className="py-2.5 px-3 text-right">Tasa Venta</th>
+                <th className="py-2.5 px-3 text-right">Debe Pagar</th>
+                <th className="py-2.5 px-3 text-right">Abonado / Cobrado</th>
+                <th className="py-2.5 px-3">Estado</th>
+                <th className="py-2.5 px-3 text-right">Ganancia ($)</th>
+                <th className="py-2.5 px-3">Recibido Por</th>
+                <th className="py-2.5 px-3 text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-mono">
+              {filteredTxs.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="py-8 text-center text-slate-400 font-sans">
+                    No se encontraron registros de CRIPTO/DOLAR.
+                  </td>
+                </tr>
+              ) : (
+                filteredTxs.map((tx) => {
+                  const recvAcc = accounts.find((a) => a.id === tx.received_account_id);
+                  const isPaid = tx.payment_status === 'PAGADO';
+                  const isPartial = tx.payment_status === 'PARCIAL';
+                  const isPorCobrar = tx.received_account_id === 'POR_COBRAR' || tx.payment_status === 'PENDIENTE' || (!isPaid && !isPartial);
+                  const amountAbonado = isPaid ? tx.total_to_pay : (tx.amount_received || 0);
+
+                  return (
+                    <tr key={tx.id} className="hover:bg-slate-50 transition">
+                      <td className="py-2.5 px-3 text-slate-500 font-sans">{tx.date}</td>
+                      <td className="py-2.5 px-3 font-semibold font-sans text-slate-800">
+                        {tx.client_name}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
+                        <span className="text-[10px] font-bold text-indigo-700 mr-1.5 px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded">
+                          USDT
+                        </span>
+                        {tx.usdt_amount.toFixed(2)}
+                        {tx.bank_fee > 0 && (
+                          <span className="block text-[10px] text-rose-500 font-sans font-normal">
+                            (Debitado: -{(tx.usdt_amount + tx.bank_fee).toFixed(2)})
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-right text-slate-600 font-sans whitespace-nowrap">
+                        {tx.bank_fee > 0 ? (
+                          <span>
+                            {tx.fee_percent ? (
+                              <span className="font-bold text-purple-700 mr-1">{tx.fee_percent}%</span>
+                            ) : null}
+                            <span className="font-mono text-slate-700 font-bold">
+                              (${tx.bank_fee.toFixed(2)})
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-right text-slate-600">{tx.sell_price}</td>
+                      <td className="py-2.5 px-3 text-right font-black text-slate-900 whitespace-nowrap">
+                        ${tx.total_to_pay.toFixed(2)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-bold text-slate-700 whitespace-nowrap">
+                        ${amountAbonado.toFixed(2)}
+                      </td>
+                      <td className="py-2.5 px-3 font-sans">
+                        {isPaid ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                            Pagado
+                          </span>
+                        ) : isPartial ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                            Parcial
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                            Por Cobrar
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
+                          tx.profit_usd < 0
+                            ? 'text-rose-600'
+                            : 'text-emerald-600'
+                        }`}
+                      >
+                        {tx.profit_usd > 0
+                          ? `+$${tx.profit_usd.toFixed(2)}`
+                          : tx.profit_usd < 0
+                          ? `-$${Math.abs(tx.profit_usd).toFixed(2)}`
+                          : `$0.00`}
+                        {tx.bank_fee > 0 && (
+                          <span className="block text-[10px] text-slate-400 font-sans font-normal">
+                            (Comisión: -${tx.bank_fee.toFixed(2)})
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 font-sans text-slate-500 truncate max-w-[140px]">
+                        {isPorCobrar ? (
+                          <span className="text-rose-600 font-semibold text-[11px]">Por Cobrar</span>
+                        ) : recvAcc ? (
+                          recvAcc.name || recvAcc.bank_name
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-sans">
+                        <button
+                          onClick={() => handleDeleteTx(tx.id)}
+                          title="Eliminar operación"
+                          className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal de Abono Independiente */}
+      <AbonoModal
+        isOpen={isAbonoModalOpen}
+        onClose={() => setIsAbonoModalOpen(false)}
+        onSuccess={onDataChange}
+        accounts={accounts}
+        clients={clients}
+        debtors={StorageService.getDebtors()}
+      />
+    </div>
+  );
+}
