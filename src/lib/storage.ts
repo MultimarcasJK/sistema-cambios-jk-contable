@@ -125,7 +125,10 @@ export const StorageService = {
       }
 
       if (remoteClients && remoteClients.length > 0) {
-        saveToStorage(this.getClientsKey(m), remoteClients);
+        const sorted = [...remoteClients].sort((a, b) =>
+          a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
+        );
+        saveToStorage(this.getClientsKey(m), sorted);
       }
       if (remoteSuppliers && remoteSuppliers.length > 0) {
         saveToStorage(this.getSuppliersKey(m), remoteSuppliers);
@@ -887,6 +890,31 @@ export const StorageService = {
     }
 
     return newPayment;
+  },
+
+  deleteDebtPayment(id: string): void {
+    const all = this.getDebtPayments();
+    const pay = all.find((p) => p.id === id);
+    if (pay) {
+      const upperName = pay.client_name.trim().toUpperCase();
+      const debtors = this.getDebtors();
+      const existing = debtors.find(
+        (d) => d.id === pay.debtor_id || d.client_name.trim().toUpperCase() === upperName
+      );
+      if (existing) {
+        this.updateDebtorDebt(existing.id, pay.amount);
+      }
+
+      const amountToRevert =
+        pay.amount_currency && pay.amount_currency > 0
+          ? pay.amount_currency
+          : pay.amount;
+
+      if (pay.account_id && amountToRevert > 0) {
+        this.updateAccountBalance(pay.account_id, -amountToRevert);
+      }
+    }
+    saveToStorage('cambiosjk_debt_payments_v1', all.filter((p) => p.id !== id));
   },
 
   resetToDefaults(): void {

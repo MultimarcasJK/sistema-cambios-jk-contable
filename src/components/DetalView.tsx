@@ -5,6 +5,7 @@ import { Account, TransactionDetal, Client, AppMode } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { RatesService } from '@/lib/rates-service';
 import { AbonoModal } from '@/components/AbonoModal';
+import { parseFormattedNumber, formatCurrency, formatRateDisplay, formatInputNumber } from '@/lib/formatters';
 import { Coins, Search, CheckCircle, Trash2, ArrowDownLeft, Sparkles, RefreshCw } from 'lucide-react';
 
 interface DetalProps {
@@ -94,9 +95,9 @@ export function DetalView({
   };
 
   const calculations = useMemo(() => {
-    const qty = parseFloat(formData.usdt_amount) || 0;
-    const sell = parseFloat(formData.sell_price) || 0;
-    const buy = parseFloat(formData.buy_price) || 0;
+    const qty = parseFormattedNumber(formData.usdt_amount);
+    const sell = parseFormattedNumber(formData.sell_price);
+    const buy = parseFormattedNumber(formData.buy_price);
 
     // Total a Cobrar = Cantidad USDT / Precio de Venta
     // Costo de Compra = Cantidad USDT / Precio de Compra
@@ -106,7 +107,7 @@ export function DetalView({
     const pct = parseFloat(feePercent) || 0;
     const effectiveFee = feeMode === 'percent'
       ? (totalToPay > 0 ? (totalToPay * pct) / 100 : 0)
-      : (parseFloat(formData.bank_fee) || 0);
+      : (parseFormattedNumber(formData.bank_fee) || 0);
 
     // Ganancia = Total a Cobrar - Costo - Comisión
     const rawProfit = qty > 0 && sell > 0 && buy > 0 ? totalToPay - cost - effectiveFee : 0;
@@ -132,12 +133,12 @@ export function DetalView({
       setFormData((prev) => ({
         ...prev,
         received_account_id: firstAcc ? firstAcc.id : '',
-        amount_received: calculations.totalToPay.toString(),
+        amount_received: formatCurrency(calculations.totalToPay),
       }));
     } else {
       setFormData((prev) => ({
         ...prev,
-        amount_received: calculations.totalToPay.toString(),
+        amount_received: formatCurrency(calculations.totalToPay),
       }));
     }
   };
@@ -154,19 +155,20 @@ export function DetalView({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.client_name || !formData.usdt_amount || !formData.sell_price) {
-      alert('Por favor complete los campos obligatorios: Cliente, Cantidad y Precio de Venta');
+    const qty = parseFormattedNumber(formData.usdt_amount);
+    const sell = parseFormattedNumber(formData.sell_price);
+    const buy = parseFormattedNumber(formData.buy_price);
+
+    if (!formData.client_name || qty <= 0 || sell <= 0) {
+      alert('Por favor complete los campos obligatorios: Cliente, Cantidad válida y Precio de Venta');
       return;
     }
 
-    const qty = parseFloat(formData.usdt_amount) || 0;
-    const sell = parseFloat(formData.sell_price) || 0;
-    const buy = parseFloat(formData.buy_price) || 0;
     const fee = calculations.effectiveFee;
     const total = calculations.totalToPay;
 
     const isPorCobrar = formData.received_account_id === 'POR_COBRAR' || !formData.received_account_id;
-    const received = isPorCobrar ? 0 : parseFloat(formData.amount_received) || 0;
+    const received = isPorCobrar ? 0 : parseFormattedNumber(formData.amount_received);
 
     const paymentStatus: 'PAGADO' | 'PARCIAL' | 'PENDIENTE' =
       received >= total && total > 0 ? 'PAGADO' : received > 0 ? 'PARCIAL' : 'PENDIENTE';
@@ -351,11 +353,11 @@ export function DetalView({
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Cantidad MONEDA / USDT *</label>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 placeholder="0.00"
                 value={formData.usdt_amount}
-                onChange={(e) => setFormData({ ...formData, usdt_amount: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, usdt_amount: formatInputNumber(e.target.value) })}
                 className="w-full text-xs font-mono font-bold border border-slate-300 rounded-xl px-3 py-2"
                 required
               />
@@ -470,12 +472,12 @@ export function DetalView({
                 )}
               </div>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 placeholder="0.00 (Dejar en 0 si está por cobrar)"
                 disabled={formData.received_account_id === 'POR_COBRAR'}
                 value={formData.received_account_id === 'POR_COBRAR' ? '0' : formData.amount_received}
-                onChange={(e) => setFormData({ ...formData, amount_received: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, amount_received: formatInputNumber(e.target.value) })}
                 className={`w-full text-xs font-mono font-bold border rounded-xl px-3 py-2 ${
                   formData.received_account_id === 'POR_COBRAR'
                     ? 'bg-slate-100 text-slate-400 border-slate-200'
@@ -606,10 +608,7 @@ export function DetalView({
                     calculations.profitUsd >= 0 ? 'text-emerald-600' : 'text-rose-600'
                   }`}
                 >
-                  {calculations.profitUsd >= 0
-                    ? `+$${calculations.profitUsd.toFixed(2)}`
-                    : `-$${Math.abs(calculations.profitUsd).toFixed(2)}`}{' '}
-                  USD
+                  {calculations.profitUsd >= 0 ? '+' : '-'}${formatCurrency(Math.abs(calculations.profitUsd))} USD
                 </span>
               </div>
             </div>
@@ -664,21 +663,23 @@ export function DetalView({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase">
+        <div className="overflow-x-auto border border-slate-200 rounded-xl">
+          <table className="w-full text-left text-xs text-slate-600 min-w-[1050px]">
+            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase text-[11px]">
               <tr>
                 <th className="py-2.5 px-3">Fecha</th>
                 <th className="py-2.5 px-3">Cliente</th>
                 <th className="py-2.5 px-3 text-right">Cantidad MONEDA</th>
                 <th className="py-2.5 px-3 text-right">Comisión</th>
                 <th className="py-2.5 px-3 text-right">Tasa Venta</th>
-                <th className="py-2.5 px-3 text-right">Debe Pagar</th>
+                <th className="py-2.5 px-3 text-right">Debe Pagar ($)</th>
                 <th className="py-2.5 px-3 text-right">Abonado / Cobrado</th>
                 <th className="py-2.5 px-3">Estado</th>
                 <th className="py-2.5 px-3 text-right">Ganancia ($)</th>
                 <th className="py-2.5 px-3">Recibido Por</th>
-                <th className="py-2.5 px-3 text-right">Acción</th>
+                <th className="py-2.5 px-3 text-center sticky right-0 bg-slate-100 z-10 border-l border-slate-200 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                  Acción
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
@@ -697,7 +698,7 @@ export function DetalView({
                   const amountAbonado = isPaid ? tx.total_to_pay : (tx.amount_received || 0);
 
                   return (
-                    <tr key={tx.id} className="hover:bg-slate-50 transition">
+                    <tr key={tx.id} className="group hover:bg-slate-50 transition">
                       <td className="py-2.5 px-3 text-slate-500 font-sans">{tx.date}</td>
                       <td className="py-2.5 px-3 font-semibold font-sans text-slate-800">
                         {tx.client_name}
@@ -706,10 +707,10 @@ export function DetalView({
                         <span className="text-[10px] font-bold text-indigo-700 mr-1.5 px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded">
                           USDT
                         </span>
-                        {tx.usdt_amount.toFixed(2)}
+                        {formatCurrency(tx.usdt_amount)}
                         {tx.bank_fee > 0 && (
                           <span className="block text-[10px] text-rose-500 font-sans font-normal">
-                            (Debitado: -{(tx.usdt_amount + tx.bank_fee).toFixed(2)})
+                            (Debitado: -{formatCurrency(tx.usdt_amount + tx.bank_fee)})
                           </span>
                         )}
                       </td>
@@ -720,19 +721,19 @@ export function DetalView({
                               <span className="font-bold text-purple-700 mr-1">{tx.fee_percent}%</span>
                             ) : null}
                             <span className="font-mono text-slate-700 font-bold">
-                              (${tx.bank_fee.toFixed(2)})
+                              (${formatCurrency(tx.bank_fee)})
                             </span>
                           </span>
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-right text-slate-600">{tx.sell_price}</td>
+                      <td className="py-2.5 px-3 text-right text-slate-600 font-mono">{formatRateDisplay(tx.sell_price)}</td>
                       <td className="py-2.5 px-3 text-right font-black text-slate-900 whitespace-nowrap">
-                        ${tx.total_to_pay.toFixed(2)}
+                        ${formatCurrency(tx.total_to_pay)}
                       </td>
                       <td className="py-2.5 px-3 text-right font-bold text-slate-700 whitespace-nowrap">
-                        ${amountAbonado.toFixed(2)}
+                        ${formatCurrency(amountAbonado)}
                       </td>
                       <td className="py-2.5 px-3 font-sans">
                         {isPaid ? (
@@ -757,13 +758,13 @@ export function DetalView({
                         }`}
                       >
                         {tx.profit_usd > 0
-                          ? `+$${tx.profit_usd.toFixed(2)}`
+                          ? `+$${formatCurrency(tx.profit_usd)}`
                           : tx.profit_usd < 0
-                          ? `-$${Math.abs(tx.profit_usd).toFixed(2)}`
+                          ? `-$${formatCurrency(Math.abs(tx.profit_usd))}`
                           : `$0.00`}
                         {tx.bank_fee > 0 && (
                           <span className="block text-[10px] text-slate-400 font-sans font-normal">
-                            (Comisión: -${tx.bank_fee.toFixed(2)})
+                            (Comisión: -${formatCurrency(tx.bank_fee)})
                           </span>
                         )}
                       </td>
@@ -776,13 +777,13 @@ export function DetalView({
                           '-'
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-sans">
+                      <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
                         <button
                           onClick={() => handleDeleteTx(tx.id)}
                           title="Eliminar operación"
-                          className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4 text-rose-600" />
                         </button>
                       </td>
                     </tr>

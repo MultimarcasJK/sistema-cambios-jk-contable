@@ -6,6 +6,7 @@ import { StorageService } from '@/lib/storage';
 import { CurrencyService } from '@/lib/currencies';
 import { ShareVoucherModal, VoucherData } from './ShareVoucherModal';
 import { ClientHistoryModal } from './ClientHistoryModal';
+import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInputNumber } from '@/lib/formatters';
 import {
   Users,
   Plus,
@@ -19,6 +20,7 @@ import {
   Receipt,
   Coins,
   FileText,
+  Trash2,
 } from 'lucide-react';
 
 interface DebtorsProps {
@@ -106,14 +108,21 @@ export function DebtorsView({
     setPaymentNotes('');
   };
 
+  const handleDeletePayment = (id: string) => {
+    if (confirm('¿Deseas eliminar este registro de abono? Se revertirá el saldo de la cuenta receptora y se volverá a sumar la deuda al cliente.')) {
+      StorageService.deleteDebtPayment(id);
+      onDataChange();
+    }
+  };
+
   // Sincronizar monto USD cuando cambia moneda, monto en moneda o tasa
   const handleAmountCurrencyChange = (val: string, rateVal?: string, curr?: Currency) => {
     setPaymentAmountCurrency(val);
     const activeCurr = curr || paymentCurrency;
     const rate = parseFloat(rateVal !== undefined ? rateVal : paymentRate);
-    const qty = parseFloat(val);
+    const qty = parseFormattedNumber(val);
 
-    if (!isNaN(qty) && !isNaN(rate) && rate > 0) {
+    if (qty > 0 && !isNaN(rate) && rate > 0) {
       if (activeCurr === 'EUR') {
         setPaymentAmount((qty * rate).toFixed(2));
       } else {
@@ -125,9 +134,9 @@ export function DebtorsView({
   const handleRateChange = (rateVal: string) => {
     setPaymentRate(rateVal);
     const rate = parseFloat(rateVal);
-    const qty = parseFloat(paymentAmountCurrency);
+    const qty = parseFormattedNumber(paymentAmountCurrency);
 
-    if (!isNaN(qty) && !isNaN(rate) && rate > 0) {
+    if (qty > 0 && !isNaN(rate) && rate > 0) {
       if (paymentCurrency === 'EUR') {
         setPaymentAmount((qty * rate).toFixed(2));
       } else {
@@ -139,14 +148,14 @@ export function DebtorsView({
   const handleApplyPayment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentModalDebtor) return;
-    const amountUsd = parseFloat(paymentAmount);
-    if (isNaN(amountUsd) || amountUsd <= 0) {
+    const amountUsd = parseFormattedNumber(paymentAmount);
+    if (amountUsd <= 0) {
       alert('Ingrese un monto válido de abono');
       return;
     }
 
     const isForeign = paymentCurrency !== 'USD' && paymentCurrency !== 'USDT';
-    const amountCurr = isForeign ? (parseFloat(paymentAmountCurrency) || amountUsd) : amountUsd;
+    const amountCurr = isForeign ? (parseFormattedNumber(paymentAmountCurrency) || amountUsd) : amountUsd;
     const rate = isForeign ? (parseFloat(paymentRate) || 1) : 1;
 
     StorageService.addDebtPayment({
@@ -344,10 +353,10 @@ export function DebtorsView({
                       }`}
                     >
                       {d.current_debt > 0
-                        ? `-$${d.current_debt.toFixed(2)}`
+                        ? `-$${formatCurrency(d.current_debt)}`
                         : d.current_debt === 0
-                        ? '$0 (Al día)'
-                        : `+$${Math.abs(d.current_debt).toFixed(2)}`}
+                        ? '$0.00 (Al día)'
+                        : `+$${formatCurrency(Math.abs(d.current_debt))}`}
                     </span>
                   </div>
 
@@ -415,6 +424,9 @@ export function DebtorsView({
                     <th className="p-3 text-right">Descuento Deuda (USD)</th>
                     <th className="p-3">Cuenta Destino</th>
                     <th className="p-3">Observación / Tasa</th>
+                    <th className="p-3 text-center whitespace-nowrap sticky right-0 bg-slate-100 z-10 border-l border-slate-200 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                      Acción
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -422,7 +434,7 @@ export function DebtorsView({
                     const acc = accounts.find((a) => a.id === pay.account_id);
                     const isForeign = pay.currency && pay.currency !== 'USD' && pay.currency !== 'USDT';
                     return (
-                      <tr key={pay.id} className="hover:bg-slate-50">
+                      <tr key={pay.id} className="hover:bg-slate-50 group">
                         <td className="p-3 font-mono text-slate-600">{pay.date}</td>
                         <td
                           onClick={() => setSelectedClientForHistory(pay.client_name)}
@@ -438,14 +450,14 @@ export function DebtorsView({
                               <span className="text-[10px] font-bold text-emerald-700 mr-1.5 px-1.5 py-0.5 bg-emerald-50 border border-emerald-200 rounded">
                                 {pay.currency}
                               </span>
-                              +{pay.amount_currency.toLocaleString()}
+                              +{formatRegionalAmount(pay.amount_currency, pay.currency)}
                             </span>
                           ) : (
                             <span className="inline-flex items-center justify-end">
                               <span className="text-[10px] font-bold text-emerald-700 mr-1.5 px-1.5 py-0.5 bg-emerald-50 border border-emerald-200 rounded">
                                 USD
                               </span>
-                              +${pay.amount.toFixed(2)}
+                              +${formatCurrency(pay.amount)}
                             </span>
                           )}
                         </td>
@@ -453,7 +465,7 @@ export function DebtorsView({
                           <span className="text-[10px] font-bold text-emerald-700 mr-1 px-1.5 py-0.5 bg-emerald-50 border border-emerald-200 rounded">
                             USD
                           </span>
-                          -${pay.amount.toFixed(2)}
+                          -${formatCurrency(pay.amount)}
                         </td>
                         <td className="p-3 text-slate-600">
                           {acc ? (
@@ -468,10 +480,20 @@ export function DebtorsView({
                         <td className="p-3 text-slate-500">
                           {isForeign && pay.exchange_rate ? (
                             <span className="text-[11px] font-mono text-indigo-600 block">
-                              Tasa: {pay.exchange_rate.toLocaleString()}
+                              Tasa: {formatRegionalAmount(pay.exchange_rate, pay.currency)}
                             </span>
                           ) : null}
                           <span className="italic">{pay.notes || '-'}</span>
+                        </td>
+                        <td className="p-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePayment(pay.id)}
+                            title="Eliminar abono y revertir saldo"
+                            className="p-1.5 text-rose-500 hover:text-white hover:bg-rose-600 rounded-lg transition-all duration-150 shadow-sm border border-rose-200 hover:border-rose-600 inline-flex items-center justify-center cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     );
@@ -530,11 +552,11 @@ export function DebtorsView({
                         Monto en {paymentCurrency} *
                       </label>
                       <input
-                        type="number"
-                        step="any"
+                        type="text"
+                        inputMode="decimal"
                         placeholder="0.00"
                         value={paymentAmountCurrency}
-                        onChange={(e) => handleAmountCurrencyChange(e.target.value)}
+                        onChange={(e) => handleAmountCurrencyChange(formatInputNumber(e.target.value))}
                         className="w-full text-sm font-mono border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                         required
                         autoFocus
@@ -561,11 +583,11 @@ export function DebtorsView({
                       Equivalente que Descuenta de la Deuda ($ USD) *
                     </label>
                     <input
-                      type="number"
-                      step="any"
+                      type="text"
+                      inputMode="decimal"
                       placeholder="0.00"
                       value={paymentAmount}
-                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      onChange={(e) => setPaymentAmount(formatInputNumber(e.target.value))}
                       className="w-full text-sm font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       required
                     />
@@ -582,11 +604,11 @@ export function DebtorsView({
                     Monto a Abonar ($ USD) *
                   </label>
                   <input
-                    type="number"
-                    step="any"
+                    type="text"
+                    inputMode="decimal"
                     placeholder="0.00"
                     value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    onChange={(e) => setPaymentAmount(formatInputNumber(e.target.value))}
                     className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     required
                     autoFocus

@@ -7,6 +7,7 @@ import { CurrencyService } from '@/lib/currencies';
 import { RatesService } from '@/lib/rates-service';
 import { AbonoModal } from '@/components/AbonoModal';
 import { ManageCurrenciesModal } from '@/components/ManageCurrenciesModal';
+import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatRateDisplay, formatInputNumber } from '@/lib/formatters';
 import { TrendingUp, Search, CheckCircle, Trash2, ArrowDownLeft, Sparkles, Globe, Coins, RefreshCw } from 'lucide-react';
 
 interface MayorProps {
@@ -110,9 +111,9 @@ export function MayorView({
   }, [accounts, selectedCurrency]);
 
   const calculations = useMemo(() => {
-    const ves = parseFloat(formData.amount_ves) || 0;
-    const buy = parseFloat(formData.buy_price) || 0;
-    const sell = parseFloat(formData.sell_price) || 0;
+    const ves = parseFormattedNumber(formData.amount_ves);
+    const buy = parseFormattedNumber(formData.buy_price);
+    const sell = parseFormattedNumber(formData.sell_price);
 
     if (ves <= 0 || sell <= 0) {
       return { totalToPay: 0, effectiveFee: 0, profitUsd: 0 };
@@ -132,7 +133,7 @@ export function MayorView({
     const pct = parseFloat(feePercent) || 0;
     const effectiveFee = feeMode === 'percent'
       ? (totalToPay > 0 ? (totalToPay * pct) / 100 : 0)
-      : (parseFloat(formData.commission) || 0);
+      : (parseFormattedNumber(formData.commission) || 0);
 
     const profitRaw = totalToPay - costUsd - effectiveFee;
     const profitUsd = Number(profitRaw.toFixed(4));
@@ -150,12 +151,12 @@ export function MayorView({
       setFormData((prev) => ({
         ...prev,
         received_account_id: firstAcc ? firstAcc.id : '',
-        amount_received: calculations.totalToPay.toString(),
+        amount_received: formatCurrency(calculations.totalToPay),
       }));
     } else {
       setFormData((prev) => ({
         ...prev,
-        amount_received: calculations.totalToPay.toString(),
+        amount_received: formatCurrency(calculations.totalToPay),
       }));
     }
   };
@@ -179,19 +180,20 @@ export function MayorView({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.client_name || !formData.amount_ves || !formData.sell_price) {
-      alert('Complete los campos obligatorios: Cliente, Cantidad Bolívares y Tasa de Venta');
+    const ves = parseFormattedNumber(formData.amount_ves);
+    const buy = parseFormattedNumber(formData.buy_price);
+    const sell = parseFormattedNumber(formData.sell_price);
+
+    if (!formData.client_name || ves <= 0 || sell <= 0) {
+      alert('Complete los campos obligatorios: Cliente, Cantidad válida y Tasa de Venta');
       return;
     }
 
-    const ves = parseFloat(formData.amount_ves) || 0;
-    const buy = parseFloat(formData.buy_price) || 0;
-    const sell = parseFloat(formData.sell_price) || 0;
     const comm = calculations.effectiveFee;
     const total = calculations.totalToPay;
 
     const isPorCobrar = formData.received_account_id === 'POR_COBRAR' || !formData.received_account_id;
-    const received = isPorCobrar ? 0 : parseFloat(formData.amount_received) || 0;
+    const received = isPorCobrar ? 0 : parseFormattedNumber(formData.amount_received);
 
     const paymentStatus: 'PAGADO' | 'PARCIAL' | 'PENDIENTE' =
       received >= total && total > 0 ? 'PAGADO' : received > 0 ? 'PARCIAL' : 'PENDIENTE';
@@ -443,11 +445,11 @@ export function MayorView({
                 Cantidad MONEDA ({selectedCurrency}) *
               </label>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 placeholder="0.00"
                 value={formData.amount_ves}
-                onChange={(e) => setFormData({ ...formData, amount_ves: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, amount_ves: formatInputNumber(e.target.value) })}
                 className="w-full text-xs font-mono font-bold border border-slate-300 rounded-xl px-3 py-2"
                 required
               />
@@ -560,12 +562,12 @@ export function MayorView({
                 )}
               </div>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 placeholder="0.00 (Dejar en 0 si está por cobrar)"
                 disabled={formData.received_account_id === 'POR_COBRAR'}
                 value={formData.received_account_id === 'POR_COBRAR' ? '0' : formData.amount_received}
-                onChange={(e) => setFormData({ ...formData, amount_received: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, amount_received: formatInputNumber(e.target.value) })}
                 className={`w-full text-xs font-mono font-bold border rounded-xl px-3 py-2 ${
                   formData.received_account_id === 'POR_COBRAR'
                     ? 'bg-slate-100 text-slate-400 border-slate-200'
@@ -690,7 +692,7 @@ export function MayorView({
                     calculations.profitUsd >= 0 ? 'text-indigo-600' : 'text-rose-600'
                   }`}
                 >
-                  +${calculations.profitUsd.toFixed(2)} USD
+                  {calculations.profitUsd >= 0 ? '+' : '-'}${formatCurrency(Math.abs(calculations.profitUsd))} USD
                 </span>
               </div>
             </div>
@@ -745,9 +747,9 @@ export function MayorView({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto border border-slate-200 rounded-xl">
           <table className="w-full text-left text-xs text-slate-600 min-w-[1250px]">
-            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase">
+            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase text-[11px]">
               <tr>
                 <th className="py-2.5 px-3 whitespace-nowrap">Fecha</th>
                 <th className="py-2.5 px-3 whitespace-nowrap">Cliente</th>
@@ -761,7 +763,9 @@ export function MayorView({
                 <th className="py-2.5 px-3 text-right whitespace-nowrap">Ganancia ($)</th>
                 <th className="py-2.5 px-3 whitespace-nowrap">Cuenta Salida</th>
                 <th className="py-2.5 px-3 whitespace-nowrap">Recibido Por</th>
-                <th className="py-2.5 px-3 text-right whitespace-nowrap">Acción</th>
+                <th className="py-2.5 px-3 text-center whitespace-nowrap sticky right-0 bg-slate-100 z-10 border-l border-slate-200 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                  Acción
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
@@ -782,7 +786,7 @@ export function MayorView({
                   const txCurrency = tx.currency || (tx.sell_price > 0 && tx.sell_price <= 1.5 ? 'EUR' : 'VES');
 
                   return (
-                    <tr key={tx.id} className="hover:bg-slate-50 transition">
+                    <tr key={tx.id} className="group hover:bg-slate-50 transition">
                       <td className="py-2.5 px-3 text-slate-500 font-sans">{tx.date}</td>
                       <td className="py-2.5 px-3 font-semibold font-sans text-slate-800">
                         {tx.client_name}
@@ -791,10 +795,10 @@ export function MayorView({
                         <span className="text-[10px] font-bold text-indigo-700 mr-1.5 px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded">
                           {txCurrency}
                         </span>
-                        {tx.amount_ves.toLocaleString('es-VE')}
+                        {formatRegionalAmount(tx.amount_ves)}
                         {tx.commission > 0 && paidAcc?.currency === 'USD' && (
                           <span className="block text-[10px] text-rose-500 font-sans font-normal">
-                            (Debitado: -{(tx.amount_ves + tx.commission).toLocaleString('es-VE')})
+                            (Debitado: -{formatRegionalAmount(tx.amount_ves + tx.commission)})
                           </span>
                         )}
                       </td>
@@ -805,20 +809,20 @@ export function MayorView({
                               <span className="font-bold text-purple-700 mr-1">{tx.fee_percent}%</span>
                             ) : null}
                             <span className="font-mono text-slate-700 font-bold">
-                              (${tx.commission.toFixed(2)})
+                              (${formatCurrency(tx.commission)})
                             </span>
                           </span>
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-right text-slate-600">{tx.sell_price}</td>
-                      <td className="py-2.5 px-3 text-right text-slate-500 font-mono">{tx.buy_price ? tx.buy_price : '-'}</td>
+                      <td className="py-2.5 px-3 text-right text-slate-600 font-mono">{formatRateDisplay(tx.sell_price)}</td>
+                      <td className="py-2.5 px-3 text-right text-slate-500 font-mono">{tx.buy_price ? formatRateDisplay(tx.buy_price) : '-'}</td>
                       <td className="py-2.5 px-3 text-right font-black text-slate-900">
-                        ${tx.total_to_pay.toFixed(2)}
+                        ${formatCurrency(tx.total_to_pay)}
                       </td>
                       <td className="py-2.5 px-3 text-right font-bold text-slate-700">
-                        ${amountAbonado.toFixed(2)}
+                        ${formatCurrency(amountAbonado)}
                       </td>
                       <td className="py-2.5 px-3 font-sans">
                         {isPaid ? (
@@ -836,16 +840,16 @@ export function MayorView({
                         )}
                       </td>
                       <td
-                        className={`py-2.5 px-3 text-right font-bold ${
+                        className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
                           tx.profit_usd >= 0 ? 'text-emerald-600' : 'text-rose-600'
                         }`}
                       >
                         {tx.profit_usd >= 0
-                          ? `+$${tx.profit_usd.toFixed(2)}`
-                          : `-$${Math.abs(tx.profit_usd).toFixed(2)}`}
+                          ? `+$${formatCurrency(tx.profit_usd)}`
+                          : `-$${formatCurrency(Math.abs(tx.profit_usd))}`}
                         {tx.commission > 0 && (
                           <span className="block text-[10px] text-slate-400 font-sans font-normal">
-                            (Comisión: -${tx.commission.toFixed(2)})
+                            (Comisión: -${formatCurrency(tx.commission)})
                           </span>
                         )}
                       </td>
@@ -861,13 +865,13 @@ export function MayorView({
                           '-'
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-sans">
+                      <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
                         <button
                           onClick={() => handleDeleteTx(tx.id)}
                           title="Eliminar operación"
-                          className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4 text-rose-600" />
                         </button>
                       </td>
                     </tr>

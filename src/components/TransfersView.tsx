@@ -3,7 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { Account, BalanceTransfer } from '@/types';
 import { StorageService } from '@/lib/storage';
-import { ArrowLeftRight, CheckCircle, Search } from 'lucide-react';
+import { ArrowLeftRight, CheckCircle, Search, Trash2 } from 'lucide-react';
+import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInputNumber } from '@/lib/formatters';
 
 interface TransfersProps {
   accounts: Account[];
@@ -29,6 +30,13 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
 
   const [searchTerm, setSearchTerm] = useState('');
 
+  const handleDeleteTransfer = (id: string) => {
+    if (confirm('¿Deseas eliminar este registro de CAMBIO SALDOS? Se revertirán los saldos de la cuenta origen y cuenta destino automáticamente.')) {
+      StorageService.deleteTransfer(id);
+      onDataChange();
+    }
+  };
+
   const fromAccount = useMemo(
     () => accounts.find((a) => a.id === formData.from_account_id),
     [accounts, formData.from_account_id]
@@ -49,22 +57,22 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
   }, [accounts]);
 
   const commissionVal = useMemo(() => {
-    const sent = parseFloat(formData.amount_sent) || 0;
+    const sent = parseFormattedNumber(formData.amount_sent);
     if (sent <= 0) return 0;
     if (feeMode === 'percent') {
       const pct = parseFloat(formData.percentage_fee) || 0;
       return Number(((sent * pct) / 100).toFixed(4));
     }
-    return parseFloat(formData.commission) || 0;
+    return parseFormattedNumber(formData.commission);
   }, [formData.amount_sent, formData.percentage_fee, formData.commission, feeMode]);
 
   const totalDebitedFromOrigin = useMemo(() => {
-    const sent = parseFloat(formData.amount_sent) || 0;
+    const sent = parseFormattedNumber(formData.amount_sent);
     return Number((sent + commissionVal).toFixed(4));
   }, [formData.amount_sent, commissionVal]);
 
   const autoCalculatedReceived = useMemo(() => {
-    const sent = parseFloat(formData.amount_sent) || 0;
+    const sent = parseFormattedNumber(formData.amount_sent);
     return sent > 0 ? sent : 0;
   }, [formData.amount_sent]);
 
@@ -80,11 +88,11 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
       return;
     }
 
-    const sent = parseFloat(formData.amount_sent) || 0;
+    const sent = parseFormattedNumber(formData.amount_sent);
     const pct = feeMode === 'percent' ? (parseFloat(formData.percentage_fee) || 0) : 0;
     const comm = commissionVal;
     const received = formData.amount_received
-      ? parseFloat(formData.amount_received)
+      ? parseFormattedNumber(formData.amount_received)
       : autoCalculatedReceived;
 
     StorageService.addTransfer({
@@ -210,11 +218,11 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                 Cantidad a Enviar {fromAccount ? `(${fromAccount.currency})` : ''} *
               </label>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 placeholder="0.00"
                 value={formData.amount_sent}
-                onChange={(e) => setFormData({ ...formData, amount_sent: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, amount_sent: formatInputNumber(e.target.value) })}
                 className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 font-mono"
                 required
               />
@@ -254,7 +262,8 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
               </div>
               <div className="relative">
                 <input
-                  type="number"
+                  type={feeMode === 'percent' ? 'number' : 'text'}
+                  inputMode="decimal"
                   step="any"
                   placeholder={feeMode === 'percent' ? 'ej. 0.5' : '0.00'}
                   value={feeMode === 'percent' ? formData.percentage_fee : formData.commission}
@@ -263,7 +272,7 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                     if (feeMode === 'percent') {
                       setFormData({ ...formData, percentage_fee: val });
                     } else {
-                      setFormData({ ...formData, commission: val });
+                      setFormData({ ...formData, commission: formatInputNumber(val) });
                     }
                   }}
                   className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 font-mono pr-12"
@@ -272,7 +281,7 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                   {feeMode === 'percent' ? '%' : fromAccount?.currency || '$'}
                 </span>
               </div>
-              {commissionVal > 0 && parseFloat(formData.amount_sent) > 0 && (
+              {commissionVal > 0 && parseFormattedNumber(formData.amount_sent) > 0 && (
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 mt-1.5 space-y-0.5 text-[11px]">
                   <p className="text-purple-700 font-semibold">
                     Comisión: +{commissionVal.toFixed(2)} {fromAccount?.currency || ''}
@@ -289,11 +298,11 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                 Cantidad Efectiva Recibida {toAccount ? `(${toAccount.currency})` : ''}
               </label>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 placeholder={autoCalculatedReceived ? String(autoCalculatedReceived) : '0.00'}
                 value={formData.amount_received}
-                onChange={(e) => setFormData({ ...formData, amount_received: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, amount_received: formatInputNumber(e.target.value) })}
                 className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 font-mono"
               />
             </div>
@@ -359,12 +368,13 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                 <th className="py-2.5 px-3 text-right">Comisión</th>
                 <th className="py-2.5 px-3 text-right">Monto Recibido</th>
                 <th className="py-2.5 px-3">Concepto</th>
+                <th className="py-2.5 px-3 text-center whitespace-nowrap sticky right-0 bg-slate-100 z-10 border-l border-slate-200">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
               {filteredTransfers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400 font-sans">
+                  <td colSpan={8} className="py-8 text-center text-slate-400 font-sans">
                     No se han registrado operaciones de CAMBIO SALDOS todavía.
                   </td>
                 </tr>
@@ -373,7 +383,7 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                   const fromAcc = accounts.find((a) => a.id === t.from_account_id);
                   const toAcc = accounts.find((a) => a.id === t.to_account_id);
                   return (
-                    <tr key={t.id} className="hover:bg-slate-50 transition">
+                    <tr key={t.id} className="hover:bg-slate-50 transition group">
                       <td className="py-2.5 px-3 text-slate-500 font-sans">{t.date}</td>
                       <td className="py-2.5 px-3 font-sans font-semibold text-rose-600">
                         {fromAcc ? fromAcc.name : t.from_account_id}
@@ -387,10 +397,10 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                             {fromAcc.currency}
                           </span>
                         )}
-                        -{t.amount_sent.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        -{formatRegionalAmount(t.amount_sent, fromAcc?.currency || 'USD')}
                         {t.commission > 0 && (
                           <span className="block text-[10px] text-rose-500 font-sans font-normal">
-                            (Debitado: -{(t.amount_sent + t.commission).toLocaleString('en-US', { minimumFractionDigits: 2 })})
+                            (Debitado: -{formatRegionalAmount(t.amount_sent + t.commission, fromAcc?.currency || 'USD')})
                           </span>
                         )}
                       </td>
@@ -400,13 +410,13 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                             {t.percentage_fee}%
                             {t.commission > 0 && (
                               <span className="text-[10px] text-slate-400 block font-sans">
-                                (${t.commission.toLocaleString('en-US', { minimumFractionDigits: 2 })})
+                                ({formatRegionalAmount(t.commission, fromAcc?.currency || 'USD')})
                               </span>
                             )}
                           </span>
                         ) : t.commission > 0 ? (
                           <span>
-                            ${t.commission.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            {formatRegionalAmount(t.commission, fromAcc?.currency || 'USD')}
                           </span>
                         ) : (
                           '-'
@@ -418,9 +428,19 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                             {toAcc.currency}
                           </span>
                         )}
-                        +{t.amount_received.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        +{formatRegionalAmount(t.amount_received, toAcc?.currency || 'USD')}
                       </td>
                       <td className="py-2.5 px-3 font-sans text-slate-500">{t.concept}</td>
+                      <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTransfer(t.id)}
+                          title="Eliminar registro y revertir saldos"
+                          className="p-1.5 text-rose-500 hover:text-white hover:bg-rose-600 rounded-lg transition-all duration-150 shadow-sm border border-rose-200 hover:border-rose-600 inline-flex items-center justify-center cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })

@@ -5,7 +5,8 @@ import { Account, Expense, Currency, CurrencyConfig } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from '@/components/ManageCurrenciesModal';
-import { Receipt, CheckCircle, Search, ArrowUpRight, Coins } from 'lucide-react';
+import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInputNumber } from '@/lib/formatters';
+import { Receipt, CheckCircle, Search, ArrowUpRight, Coins, Trash2 } from 'lucide-react';
 
 interface ExpensesProps {
   accounts: Account[];
@@ -65,7 +66,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
   };
 
   const calculatedUsd = useMemo(() => {
-    const amt = parseFloat(formData.amount) || 0;
+    const amt = parseFormattedNumber(formData.amount);
     const rate = parseFloat(formData.rate_to_usd) || 1;
     if (amt <= 0) return 0;
 
@@ -78,14 +79,20 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
     return rate > 0 ? Number((amt / rate).toFixed(2)) : amt;
   }, [formData.amount, formData.rate_to_usd, formData.currency]);
 
+  const handleDeleteExpense = (id: string) => {
+    if (confirm('¿Deseas eliminar este registro de ingreso/egreso? Si afectó el saldo de una cuenta bancaria, se revertirá automáticamente.')) {
+      StorageService.deleteExpense(id);
+      onDataChange();
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.description || !formData.amount) {
-      alert('Por favor ingrese la descripción y el monto.');
+    const amt = parseFormattedNumber(formData.amount);
+    if (!formData.description || amt <= 0) {
+      alert('Por favor ingrese la descripción y un monto válido.');
       return;
     }
-
-    const amt = parseFloat(formData.amount) || 0;
 
     StorageService.addExpense({
       date: formData.date,
@@ -257,11 +264,11 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Monto *</label>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 placeholder="0.00"
                 value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, amount: formatInputNumber(e.target.value) })}
                 className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold"
                 required
               />
@@ -424,12 +431,13 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
                 <th className="py-2.5 px-3 text-right">Monto Original</th>
                 <th className="py-2.5 px-3 text-right">Equivalente USD</th>
                 <th className="py-2.5 px-3">Cuenta Afectada</th>
+                <th className="py-2.5 px-3 text-center whitespace-nowrap sticky right-0 bg-slate-100 z-10 border-l border-slate-200">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
               {filteredExpenses.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400 font-sans">
+                  <td colSpan={8} className="py-8 text-center text-slate-400 font-sans">
                     No se han registrado movimientos.
                   </td>
                 </tr>
@@ -438,7 +446,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
                   const acc = accounts.find((a) => a.id === exp.account_id);
                   const isIngreso = exp.type === 'ingreso';
                   return (
-                    <tr key={exp.id} className="hover:bg-slate-50 transition">
+                    <tr key={exp.id} className="hover:bg-slate-50 transition group">
                       <td className="py-2.5 px-3 text-slate-500 font-sans">{exp.date}</td>
                       <td className="py-2.5 px-3 font-sans">
                         <span
@@ -471,7 +479,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
                         >
                           {exp.currency}
                         </span>
-                        {isIngreso ? '+' : '-'}{exp.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        {isIngreso ? '+' : '-'}{formatRegionalAmount(exp.amount, exp.currency)}
                       </td>
                       <td
                         className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
@@ -483,10 +491,20 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
                         }`}>
                           USD
                         </span>
-                        {isIngreso ? '+' : '-'}${exp.amount_usd.toFixed(2)}
+                        {isIngreso ? '+' : '-'}{formatCurrency(exp.amount_usd, 'USD')}
                       </td>
                       <td className="py-2.5 px-3 font-sans text-slate-500 truncate max-w-[140px]">
                         {acc ? `${acc.name || acc.bank_name} (${acc.currency})` : 'Caja Externa'}
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteExpense(exp.id)}
+                          title="Eliminar registro y revertir fondos"
+                          className="p-1.5 text-rose-500 hover:text-white hover:bg-rose-600 rounded-lg transition-all duration-150 shadow-sm border border-rose-200 hover:border-rose-600 inline-flex items-center justify-center cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   );

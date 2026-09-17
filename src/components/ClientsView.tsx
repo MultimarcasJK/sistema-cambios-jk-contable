@@ -249,12 +249,14 @@ export function ClientsView({
   };
 
   const filteredClients = useMemo(() => {
-    return clients.filter((c) => {
-      const matchName = c.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchId = c.identification ? c.identification.includes(searchTerm) : false;
-      const matchPhone = c.phone ? c.phone.includes(searchTerm) : false;
-      return matchName || matchId || matchPhone;
-    });
+    return clients
+      .filter((c) => {
+        const matchName = c.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchId = c.identification ? c.identification.includes(searchTerm) : false;
+        const matchPhone = c.phone ? c.phone.includes(searchTerm) : false;
+        return matchName || matchId || matchPhone;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
   }, [clients, searchTerm]);
 
   // Historial y métricas de operaciones del cliente seleccionado

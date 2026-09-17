@@ -7,6 +7,7 @@ import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from './ManageCurrenciesModal';
 import { SupplierHistoryModal } from './SupplierHistoryModal';
 import { ShareSupplierVoucherModal, SupplierVoucherData } from './ShareSupplierVoucherModal';
+import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatRateDisplay, formatInputNumber } from '@/lib/formatters';
 import {
   Truck,
   Plus,
@@ -124,9 +125,9 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
 
   // Cálculo en vivo según la moneda:
   const calculatedCost = useMemo(() => {
-    const qty = parseFloat(purchaseForm.quantity) || 0;
+    const qty = parseFormattedNumber(purchaseForm.quantity);
     const rate = parseFloat(purchaseForm.buy_price) || 1;
-    const credited = parseFloat(purchaseForm.credited_amount) || 0;
+    const credited = parseFormattedNumber(purchaseForm.credited_amount);
 
     if (qty <= 0 || rate <= 0) return { costUsd: 0, pendingDebt: 0 };
 
@@ -179,9 +180,9 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
     }
 
     const supplier = suppliers.find((s) => s.id === purchaseForm.supplier_id);
-    const qty = parseFloat(purchaseForm.quantity) || 0;
+    const qty = parseFormattedNumber(purchaseForm.quantity);
     const rate = parseFloat(purchaseForm.buy_price) || 1;
-    const credited = parseFloat(purchaseForm.credited_amount) || 0;
+    const credited = parseFormattedNumber(purchaseForm.credited_amount);
 
     StorageService.addSupplierPurchase({
       date: purchaseForm.date,
@@ -213,8 +214,8 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
   const handleSupplierPayment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentModalSupplier) return;
-    const amount = parseFloat(paymentAmount);
-    if (isNaN(amount) || amount <= 0) {
+    const amount = parseFormattedNumber(paymentAmount);
+    if (amount <= 0) {
       alert('Por favor ingrese un monto válido');
       return;
     }
@@ -261,6 +262,13 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
   const handleDeleteSupplier = (sup: Supplier) => {
     if (confirm(`¿Estás seguro de que deseas eliminar al proveedor "${sup.name}"?`)) {
       StorageService.deleteSupplier(sup.id);
+      onDataChange();
+    }
+  };
+
+  const handleDeletePurchase = (id: string) => {
+    if (confirm('¿Deseas eliminar esta compra de inventario? Se revertirá la deuda al proveedor y el saldo ingresado a la cuenta.')) {
+      StorageService.deleteSupplierPurchase(id);
       onDataChange();
     }
   };
@@ -457,11 +465,11 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                 Cantidad de {currentCurrencyConfig.code} ({currentCurrencyConfig.symbol}) *
               </label>
               <input
-                type="number"
-                step="any"
-                placeholder="ej. 10000"
+                type="text"
+                inputMode="decimal"
+                placeholder="ej. 10,000"
                 value={purchaseForm.quantity}
-                onChange={(e) => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
+                onChange={(e) => setPurchaseForm({ ...purchaseForm, quantity: formatInputNumber(e.target.value) })}
                 className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold"
                 required
               />
@@ -518,11 +526,11 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                 Abono Inmediato al Proveedor ($ USD)
               </label>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 placeholder="0.00"
                 value={purchaseForm.credited_amount}
-                onChange={(e) => setPurchaseForm({ ...purchaseForm, credited_amount: e.target.value })}
+                onChange={(e) => setPurchaseForm({ ...purchaseForm, credited_amount: formatInputNumber(e.target.value) })}
                 className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 font-mono"
               />
             </div>
@@ -582,7 +590,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
         ) : (
           <div className="overflow-x-auto border border-slate-200 rounded-xl">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+              <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 text-[11px] uppercase">
                 <tr>
                   <th className="p-3">Fecha</th>
                   <th className="p-3">Proveedor</th>
@@ -592,13 +600,16 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                   <th className="p-3 text-right">Costo ($ USD)</th>
                   <th className="p-3">Cuenta Destino</th>
                   <th className="p-3 text-right">Abono Inmediato</th>
+                  <th className="p-3 text-center whitespace-nowrap sticky right-0 bg-slate-100 z-10 border-l border-slate-200 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                    Acción
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-mono">
                 {purchasesHistory.map((p) => {
                   const acc = accounts.find((a) => a.id === p.account_id);
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50">
+                    <tr key={p.id} className="group hover:bg-slate-50 transition">
                       <td className="p-3 font-sans text-slate-600">{p.date}</td>
                       <td className="p-3 font-sans font-bold text-slate-900">
                         <button
@@ -636,19 +647,29 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                         <span className="text-[10px] font-bold text-indigo-700 mr-1.5 px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded">
                           {p.currency}
                         </span>
-                        {p.quantity.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                        {formatRegionalAmount(p.quantity)}
                       </td>
-                      <td className="p-3 text-right text-slate-600">{p.buy_price}</td>
+                      <td className="p-3 text-right text-slate-600 font-mono">{formatRateDisplay(p.buy_price)}</td>
                       <td className="p-3 text-right font-bold text-indigo-600 whitespace-nowrap">
-                        ${p.cost_usd.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        ${formatCurrency(p.cost_usd)}
                       </td>
                       <td className="p-3 font-sans text-slate-600">
                         {acc ? acc.name : '-'}
                       </td>
                       <td className="p-3 text-right font-bold text-emerald-600 whitespace-nowrap">
                         {p.credited_amount && p.credited_amount > 0
-                          ? `+$${p.credited_amount.toFixed(2)}`
+                          ? `+$${formatCurrency(p.credited_amount)}`
                           : '$0.00'}
+                      </td>
+                      <td className="p-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePurchase(p.id)}
+                          title="Eliminar compra"
+                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
+                        >
+                          <Trash2 className="w-4 h-4 text-rose-600" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -943,11 +964,11 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                   Monto a Pagar (USD) *
                 </label>
                 <input
-                  type="number"
-                  step="any"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0.00"
                   value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  onChange={(e) => setPaymentAmount(formatInputNumber(e.target.value))}
                   className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 font-mono"
                   required
                   autoFocus
