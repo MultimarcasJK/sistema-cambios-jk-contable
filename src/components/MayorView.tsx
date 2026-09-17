@@ -46,6 +46,21 @@ export function MayorView({
 
   const officialRate = useMemo(() => RatesService.getRateInfo(selectedCurrency, appMode), [selectedCurrency, appMode, ratesVersion]);
 
+  useEffect(() => {
+    if (officialRate) {
+      setFormData((prev) => {
+        if (!prev.sell_price) {
+          return {
+            ...prev,
+            buy_price: prev.buy_price || officialRate.costRate.toString(),
+            sell_price: prev.sell_price || officialRate.sellRate.toString(),
+          };
+        }
+        return prev;
+      });
+    }
+  }, [officialRate]);
+
   const refreshCurrencies = () => {
     setSystemCurrencies(CurrencyService.getCurrencies());
   };
@@ -210,20 +225,20 @@ export function MayorView({
       notes: formData.notes,
     });
 
-    setFormData({
-      date: formData.date,
+    setFormData((prev) => ({
+      date: prev.date,
       client_name: '',
       client_id: '',
       amount_ves: '',
-      buy_price: '',
-      sell_price: '',
+      buy_price: prev.buy_price,
+      sell_price: prev.sell_price,
       received_account_id: 'POR_COBRAR',
       amount_received: '',
-      paid_account_id: '',
+      paid_account_id: prev.paid_account_id,
       commission: '0',
       reference: '',
       notes: '',
-    });
+    }));
     setFeePercent('');
 
     onDataChange();
@@ -287,7 +302,18 @@ export function MayorView({
                   <span>Moneda:</span>
                   <select
                     value={selectedCurrency}
-                    onChange={(e) => setSelectedCurrency(e.target.value)}
+                    onChange={(e) => {
+                      const newCurr = e.target.value;
+                      setSelectedCurrency(newCurr);
+                      const rateInfo = RatesService.getRateInfo(newCurr, appMode);
+                      if (rateInfo) {
+                        setFormData((prev) => ({
+                          ...prev,
+                          buy_price: rateInfo.costRate.toString(),
+                          sell_price: rateInfo.sellRate.toString(),
+                        }));
+                      }
+                    }}
                     className={`rounded-lg px-2.5 py-1 text-xs outline-hidden cursor-pointer font-bold ${
                       isDark
                         ? 'bg-slate-900 border border-slate-700 text-emerald-400'

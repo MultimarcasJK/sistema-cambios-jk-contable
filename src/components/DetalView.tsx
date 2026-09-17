@@ -39,6 +39,21 @@ export function DetalView({
 
   const officialUsdtRate = useMemo(() => RatesService.getRateInfo('USDT', appMode), [appMode, ratesVersion]);
 
+  useEffect(() => {
+    if (officialUsdtRate) {
+      setFormData((prev) => {
+        if (!prev.sell_price) {
+          return {
+            ...prev,
+            buy_price: prev.buy_price || officialUsdtRate.costRate.toString(),
+            sell_price: prev.sell_price || officialUsdtRate.sellRate.toString(),
+          };
+        }
+        return prev;
+      });
+    }
+  }, [officialUsdtRate]);
+
   const [feeMode, setFeeMode] = useState<'fixed' | 'percent'>('fixed');
   const [feePercent, setFeePercent] = useState<string>('');
 
@@ -184,20 +199,20 @@ export function DetalView({
       notes: formData.notes,
     });
 
-    setFormData({
-      date: formData.date,
+    setFormData((prev) => ({
+      date: prev.date,
       client_name: '',
       client_id: '',
       usdt_amount: '',
-      sell_price: '',
-      buy_price: '',
+      sell_price: prev.sell_price,
+      buy_price: prev.buy_price,
       received_account_id: 'POR_COBRAR',
       amount_received: '',
-      paid_account_id: '',
+      paid_account_id: prev.paid_account_id,
       bank_fee: '0',
       reference: '',
       notes: '',
-    });
+    }));
     setFeePercent('');
 
     onDataChange();
