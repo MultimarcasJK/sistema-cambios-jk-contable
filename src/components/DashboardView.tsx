@@ -12,6 +12,7 @@ import {
 } from '@/types';
 import { CurrencyService } from '@/lib/currencies';
 import { TabKey } from './Navigation';
+import { formatCurrency } from '@/lib/formatters';
 import {
   DollarSign,
   TrendingUp,
@@ -113,7 +114,7 @@ export function DashboardView({
       .filter((e) => e.date === todayStr && e.type !== 'ingreso')
       .reduce((sum, e) => sum + (e.amount_usd || 0), 0);
 
-    const netProfitToday = profitDetalToday + profitMayorToday + extraIncomeToday - expensesToday;
+    const netProfitToday = Number((profitDetalToday + profitMayorToday + extraIncomeToday - expensesToday).toFixed(2));
 
     return {
       profitDetalToday,
@@ -138,22 +139,25 @@ export function DashboardView({
           className="flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-3 rounded-xl font-semibold text-xs sm:text-sm shadow-sm transition"
         >
           <PlusCircle className="w-4 h-4" />
-          <span>Cripto/Dolar</span>
+          <span>+ Venta Cripto/Dólar</span>
         </button>
+
         <button
           onClick={() => onNavigate('mayor')}
           className="flex items-center justify-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-3 rounded-xl font-semibold text-xs sm:text-sm shadow-sm transition"
         >
-          <TrendingUp className="w-4 h-4" />
-          <span>Monedas Regionales</span>
+          <PlusCircle className="w-4 h-4" />
+          <span>+ Venta Regionales</span>
         </button>
+
         <button
           onClick={() => onNavigate('suppliers')}
-          className="flex items-center justify-center space-x-1.5 bg-slate-800 hover:bg-slate-900 text-white py-3 px-3 rounded-xl font-semibold text-xs sm:text-sm shadow-sm transition"
+          className="flex items-center justify-center space-x-1.5 bg-amber-600 hover:bg-amber-700 text-white py-3 px-3 rounded-xl font-semibold text-xs sm:text-sm shadow-sm transition"
         >
-          <Truck className="w-4 h-4 text-amber-400" />
-          <span>Proveedores</span>
+          <Truck className="w-4 h-4" />
+          <span>+ Compra Divisas</span>
         </button>
+
         <button
           onClick={() => onNavigate('transfers')}
           className="flex items-center justify-center space-x-1.5 bg-purple-600 hover:bg-purple-700 text-white py-3 px-3 rounded-xl font-semibold text-xs sm:text-sm shadow-sm transition"
@@ -161,12 +165,13 @@ export function DashboardView({
           <ArrowLeftRight className="w-4 h-4" />
           <span>Cambio Saldos</span>
         </button>
+
         <button
           onClick={() => onNavigate('expenses')}
-          className="flex items-center justify-center space-x-1.5 bg-rose-600 hover:bg-rose-700 text-white py-3 px-3 rounded-xl font-semibold text-xs sm:text-sm shadow-sm transition"
+          className="flex items-center justify-center space-x-1.5 bg-rose-600 hover:bg-rose-700 text-white py-3 px-3 rounded-xl font-semibold text-xs sm:text-sm shadow-sm transition col-span-2 sm:col-span-1"
         >
           <Receipt className="w-4 h-4" />
-          <span>Ingresos/Gastos</span>
+          <span>Ingreso/Gasto</span>
         </button>
       </div>
 
@@ -179,10 +184,10 @@ export function DashboardView({
               Ganancia Neta Hoy
             </span>
             <div className={`text-2xl font-black mt-1 ${todayMetrics.netProfitToday >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              ${todayMetrics.netProfitToday.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
+              ${formatCurrency(todayMetrics.netProfitToday, 2)} USD
             </div>
             <span className="text-xs text-slate-400">
-              Cripto: +${todayMetrics.profitDetalToday.toFixed(0)} | Reg.: +${todayMetrics.profitMayorToday.toFixed(0)}
+              Cripto: +${formatCurrency(todayMetrics.profitDetalToday, 2)} | Reg.: +${formatCurrency(todayMetrics.profitMayorToday, 2)}
             </span>
           </div>
           <div className="w-12 h-12 rounded-xl bg-slate-800 text-emerald-400 border border-slate-700 flex items-center justify-center">
@@ -197,7 +202,7 @@ export function DashboardView({
               Saldo USD (Efectivo/Bancos)
             </span>
             <div className="text-2xl font-black text-slate-900 mt-1">
-              ${totalsByCurrency.USD.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              ${formatCurrency(totalsByCurrency.USD, 2)}
             </div>
             <span className="text-xs text-slate-400">Caja + Pichincha + Zelle</span>
           </div>
@@ -213,7 +218,7 @@ export function DashboardView({
               Saldo USDT en Wallets
             </span>
             <div className="text-2xl font-black text-slate-900 mt-1">
-              ₮{totalsByCurrency.USDT.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              ₮{formatCurrency(totalsByCurrency.USDT, 2)}
             </div>
             <span className="text-xs text-slate-400">Binance + Tron</span>
           </div>
@@ -288,7 +293,7 @@ export function DashboardView({
               Cuentas por Pagar (Proveedores)
             </span>
             <div className="text-xl font-black text-rose-600 font-mono mt-1">
-              ${totalSuppliersDebt.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
+              ${formatCurrency(totalSuppliersDebt, 2)} USD
             </div>
             <span className="text-xs text-blue-600 font-semibold hover:underline">
               Ver Ronal, Gocho, Jesús →
@@ -309,7 +314,7 @@ export function DashboardView({
               Cuentas por Cobrar (Deudores)
             </span>
             <div className="text-xl font-black text-emerald-600 font-mono mt-1">
-              ${totalDebtors.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
+              ${formatCurrency(totalDebtors, 2)} USD
             </div>
             <span className="text-xs text-blue-600 font-semibold hover:underline">
               Ver clientes con deuda →
