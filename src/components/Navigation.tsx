@@ -14,6 +14,8 @@ import {
   UserCheck,
 } from 'lucide-react';
 
+import { useAuth } from '@/lib/auth-context';
+
 export type TabKey =
   | 'dashboard'
   | 'detal'
@@ -33,8 +35,9 @@ interface NavProps {
 }
 
 export function Navigation({ activeTab, onSelectTab, appMode = 'detal' }: NavProps) {
+  const { isAdmin } = useAuth();
   const isDark = appMode === 'mayor';
-  const tabs = [
+  const allTabs = [
     { key: 'dashboard' as TabKey, label: 'Panel', icon: LayoutDashboard },
     { key: 'detal' as TabKey, label: 'Cripto/Dolar', icon: Coins },
     { key: 'mayor' as TabKey, label: 'Monedas Regionales', icon: TrendingUp },
@@ -42,10 +45,12 @@ export function Navigation({ activeTab, onSelectTab, appMode = 'detal' }: NavPro
     { key: 'transfers' as TabKey, label: 'Cambio Saldos', icon: ArrowLeftRight },
     { key: 'expenses' as TabKey, label: 'Ingresos/Gastos', icon: Receipt },
     { key: 'accounts' as TabKey, label: 'Cuentas', icon: Wallet },
-    { key: 'closures' as TabKey, label: 'Cierre', icon: CalendarCheck2 },
+    { key: 'closures' as TabKey, label: 'Cierre', icon: CalendarCheck2, adminOnly: true },
     { key: 'clients' as TabKey, label: 'Clientes', icon: UserCheck },
     { key: 'debtors' as TabKey, label: 'Deudores', icon: Users },
   ];
+
+  const tabs = allTabs.filter((t) => !t.adminOnly || isAdmin);
 
   return (
     <>

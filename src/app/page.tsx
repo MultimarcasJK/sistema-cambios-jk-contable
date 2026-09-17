@@ -30,8 +30,11 @@ import {
   Supplier,
   AppMode,
 } from '@/types';
+import { useAuth } from '@/lib/auth-context';
+import { LoginView } from '@/components/LoginView';
 
 export default function Home() {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [appMode, setAppMode] = useState<AppMode>('detal');
   const [isSyncingRates, setIsSyncingRates] = useState(false);
@@ -53,12 +56,12 @@ export default function Home() {
     setAccounts(StorageService.getAccounts(currentMode));
     setClients(StorageService.getClients(currentMode));
     setSuppliers(StorageService.getSuppliers(currentMode));
-    setDetalTxs(StorageService.getTransactionsDetal());
-    setMayorTxs(StorageService.getTransactionsMayor());
+    setDetalTxs(StorageService.getTransactionsDetal(currentMode));
+    setMayorTxs(StorageService.getTransactionsMayor(currentMode));
     setTransfers(StorageService.getTransfers(currentMode));
     setExpenses(StorageService.getExpenses(currentMode));
     setClosures(StorageService.getClosures(currentMode));
-    setDebtors(StorageService.getDebtors());
+    setDebtors(StorageService.getDebtors(currentMode));
   }, []);
 
   const handleModeChange = (mode: AppMode) => {
@@ -227,6 +230,18 @@ export default function Home() {
     return () => clearTimeout(safetyTimer);
   }, [refreshData]);
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-[#061528] flex flex-col items-center justify-center text-white space-y-4">
+        <div className="w-10 h-10 border-3 border-emerald-500/30 border-t-emerald-400 rounded-full animate-spin" />
+        <p className="text-sm font-semibold text-slate-300">Verificando sesión segura...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginView />;
+  }
 
   if (!isLoaded) {
     return (
@@ -344,6 +359,7 @@ export default function Home() {
               accounts={accounts}
               debtors={debtors}
               onDataChange={refreshData}
+              appMode={appMode}
             />
           )}
 
@@ -355,6 +371,7 @@ export default function Home() {
               detalTxs={detalTxs}
               mayorTxs={mayorTxs}
               onDataChange={refreshData}
+              appMode={appMode}
             />
           )}
 
@@ -366,6 +383,7 @@ export default function Home() {
               detalTxs={detalTxs}
               mayorTxs={mayorTxs}
               onDataChange={refreshData}
+              appMode={appMode}
             />
           )}
         </main>

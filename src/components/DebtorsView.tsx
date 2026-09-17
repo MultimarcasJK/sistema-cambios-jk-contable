@@ -30,6 +30,7 @@ interface DebtorsProps {
   detalTxs?: TransactionDetal[];
   mayorTxs?: TransactionMayor[];
   onDataChange: () => void;
+  appMode?: import('@/types').AppMode;
 }
 
 export function DebtorsView({
@@ -39,6 +40,7 @@ export function DebtorsView({
   detalTxs,
   mayorTxs,
   onDataChange,
+  appMode,
 }: DebtorsProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -57,8 +59,8 @@ export function DebtorsView({
   const availableCurrencies = useMemo(() => CurrencyService.getCurrencies(), []);
 
   const allPayments = useMemo(() => {
-    return StorageService.getDebtPayments();
-  }, [debtors]);
+    return StorageService.getDebtPayments(appMode);
+  }, [debtors, appMode]);
 
   // Formulario nuevo deudor
   const [newDebtor, setNewDebtor] = useState({
@@ -90,7 +92,7 @@ export function DebtorsView({
       current_debt: parseFloat(newDebtor.current_debt) || 0,
       phone: newDebtor.phone.trim() || undefined,
       notes: newDebtor.notes.trim() || undefined,
-    });
+    }, appMode);
 
     setIsAdding(false);
     setNewDebtor({ client_name: '', current_debt: '', phone: '', notes: '' });
@@ -110,7 +112,7 @@ export function DebtorsView({
 
   const handleDeletePayment = (id: string) => {
     if (confirm('¿Deseas eliminar este registro de abono? Se revertirá el saldo de la cuenta receptora y se volverá a sumar la deuda al cliente.')) {
-      StorageService.deleteDebtPayment(id);
+      StorageService.deleteDebtPayment(id, appMode);
       onDataChange();
     }
   };
@@ -168,7 +170,7 @@ export function DebtorsView({
       exchange_rate: rate,
       account_id: paymentAccountId || undefined,
       notes: paymentNotes.trim() || undefined,
-    });
+    }, appMode);
 
     setPaymentModalDebtor(null);
     setPaymentAmount('');

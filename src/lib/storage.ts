@@ -100,6 +100,104 @@ export const StorageService = {
     const m = mode || this.getAppMode();
     return 'cambiosjk_' + m + '_sup_payments_v2';
   },
+  getTransactionsDetalKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_txs_detal_v2';
+  },
+  getTransactionsMayorKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_txs_mayor_v2';
+  },
+  getDebtorsKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_debtors_v2';
+  },
+  getDebtPaymentsKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_debt_payments_v2';
+  },
+
+  // Migración automática de datos antiguos para separar César a Detal y María a Mayor
+  migrateOldDataIfNeeded(): void {
+    if (typeof window === 'undefined') return;
+    const MIGRATED_FLAG = 'cambiosjk_data_split_v2_migrated';
+    if (localStorage.getItem(MIGRATED_FLAG)) return;
+
+    try {
+      // 1. Migrar Transacciones Detal (César va a detal)
+      const oldDetalRaw = localStorage.getItem('cambiosjk_detal_v1');
+      if (oldDetalRaw) {
+        const oldDetal = JSON.parse(oldDetalRaw) as TransactionDetal[];
+        if (Array.isArray(oldDetal)) {
+          const detalList: TransactionDetal[] = [];
+          const mayorList: TransactionDetal[] = [];
+          oldDetal.forEach((tx) => {
+            const clientName = (tx.client_name || '').toUpperCase();
+            if (clientName.includes('MARIA')) {
+              mayorList.push(tx);
+            } else {
+              detalList.push(tx);
+            }
+          });
+          saveToStorage(this.getTransactionsDetalKey('detal'), detalList);
+          if (mayorList.length > 0) {
+            saveToStorage(this.getTransactionsDetalKey('mayor'), mayorList);
+          }
+        }
+      }
+
+      // 2. Migrar Transacciones Mayor (María va a mayor)
+      const oldMayorRaw = localStorage.getItem('cambiosjk_mayor_v1');
+      if (oldMayorRaw) {
+        const oldMayor = JSON.parse(oldMayorRaw) as TransactionMayor[];
+        if (Array.isArray(oldMayor)) {
+          const detalList: TransactionMayor[] = [];
+          const mayorList: TransactionMayor[] = [];
+          oldMayor.forEach((tx) => {
+            const clientName = (tx.client_name || '').toUpperCase();
+            if (clientName.includes('CESAR')) {
+              detalList.push(tx);
+            } else {
+              mayorList.push(tx);
+            }
+          });
+          if (detalList.length > 0) {
+            saveToStorage(this.getTransactionsMayorKey('detal'), detalList);
+          }
+          saveToStorage(this.getTransactionsMayorKey('mayor'), mayorList);
+        }
+      }
+
+      // 3. Migrar Deudores
+      const oldDebtorsRaw = localStorage.getItem('cambiosjk_debtors_v1');
+      if (oldDebtorsRaw) {
+        const oldDebtors = JSON.parse(oldDebtorsRaw) as Debtor[];
+        if (Array.isArray(oldDebtors)) {
+          const detalDebtors = oldDebtors.filter((d) => !d.client_name.toUpperCase().includes('MARIA'));
+          const mayorDebtors = oldDebtors.filter((d) => !d.client_name.toUpperCase().includes('CESAR'));
+          saveToStorage(this.getDebtorsKey('detal'), detalDebtors);
+          saveToStorage(this.getDebtorsKey('mayor'), mayorDebtors);
+        }
+      }
+
+      // 4. Migrar Abonos
+      const oldPaymentsRaw = localStorage.getItem('cambiosjk_debt_payments_v1');
+      if (oldPaymentsRaw) {
+        const oldPayments = JSON.parse(oldPaymentsRaw) as DebtPayment[];
+        if (Array.isArray(oldPayments)) {
+          const detalPayments = oldPayments.filter((p) => !p.client_name.toUpperCase().includes('MARIA'));
+          const mayorPayments = oldPayments.filter((p) => !p.client_name.toUpperCase().includes('CESAR'));
+          saveToStorage(this.getDebtPaymentsKey('detal'), detalPayments);
+          saveToStorage(this.getDebtPaymentsKey('mayor'), mayorPayments);
+        }
+      }
+
+      localStorage.setItem(MIGRATED_FLAG, 'true');
+      console.log('[JK] Migración y separación de datos Detal / Mayor completada.');
+    } catch (err) {
+      console.error('[JK] Error durante migración de datos:', err);
+    }
+  },
 
   // Sincronización con Supabase en segundo plano
   async syncFromSupabase(mode?: AppMode): Promise<void> {
@@ -452,120 +550,128 @@ export const StorageService = {
     SupabaseSyncService.deleteSupplierPayment(id, m).catch(() => {});
   },
 
-  // Detal Transactions
-  getTransactionsDetal(): TransactionDetal[] {
-    return getFromStorage<TransactionDetal[]>('cambiosjk_detal_v1', []);
+  // Detal Transactions (Ventas Cripto / Dólar) - 100% aisladas por modo
+  getTransactionsDetal(mode?: AppMode): TransactionDetal[] {
+    const m = mode || this.getAppMode();
+    this.migrateOldDataIfNeeded();
+    return getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []);
   },
 
-  addTransactionDetal(tx: Omit<TransactionDetal, 'id' | 'created_at'>): TransactionDetal {
-    const all = this.getTransactionsDetal();
+  addTransactionDetal(tx: Omit<TransactionDetal, 'id' | 'created_at'>, mode?: AppMode): TransactionDetal {
+    const m = mode || this.getAppMode();
+    const all = this.getTransactionsDetal(m);
     const newTx: TransactionDetal = {
       ...tx,
       id: 'detal-' + Date.now(),
       created_at: new Date().toISOString(),
     };
     all.unshift(newTx);
-    saveToStorage('cambiosjk_detal_v1', all);
+    saveToStorage(this.getTransactionsDetalKey(m), all);
 
     if (newTx.received_account_id && newTx.received_account_id !== 'POR_COBRAR' && newTx.amount_received > 0) {
-      this.updateAccountBalance(newTx.received_account_id, newTx.amount_received, 'detal');
+      this.updateAccountBalance(newTx.received_account_id, newTx.amount_received, m);
     }
     if (newTx.paid_account_id && newTx.usdt_amount > 0) {
       const totalOut = newTx.usdt_amount + (newTx.bank_fee || 0);
-      this.updateAccountBalance(newTx.paid_account_id, -totalOut, 'detal');
+      this.updateAccountBalance(newTx.paid_account_id, -totalOut, m);
     }
 
     const unpaid = Number(((newTx.total_to_pay || 0) - (newTx.amount_received || 0)).toFixed(2));
     if (unpaid > 0) {
-      this.increaseClientDebt(newTx.client_name, unpaid);
+      this.increaseClientDebt(newTx.client_name, unpaid, m);
     }
 
-    SupabaseSyncService.upsertTransactionDetal(newTx).catch(() => {});
+    SupabaseSyncService.upsertTransactionDetal(newTx, m).catch(() => {});
     return newTx;
   },
 
-  deleteTransactionDetal(id: string): void {
-    const all = this.getTransactionsDetal();
+  deleteTransactionDetal(id: string, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const all = this.getTransactionsDetal(m);
     const tx = all.find((t) => t.id === id);
     if (tx) {
       const unpaid = Number(((tx.total_to_pay || 0) - (tx.amount_received || 0)).toFixed(2));
       if (unpaid > 0) {
-        this.increaseClientDebt(tx.client_name, -unpaid);
+        this.increaseClientDebt(tx.client_name, -unpaid, m);
       }
       if (tx.received_account_id && tx.received_account_id !== 'POR_COBRAR' && tx.amount_received > 0) {
-        this.updateAccountBalance(tx.received_account_id, -tx.amount_received, 'detal');
+        this.updateAccountBalance(tx.received_account_id, -tx.amount_received, m);
       }
       if (tx.paid_account_id && tx.usdt_amount > 0) {
         const totalOut = tx.usdt_amount + (tx.bank_fee || 0);
-        this.updateAccountBalance(tx.paid_account_id, totalOut, 'detal');
+        this.updateAccountBalance(tx.paid_account_id, totalOut, m);
       }
     }
-    saveToStorage('cambiosjk_detal_v1', all.filter((t) => t.id !== id));
-    SupabaseSyncService.deleteTransactionDetal(id).catch(() => {});
+    saveToStorage(this.getTransactionsDetalKey(m), all.filter((t) => t.id !== id));
+    SupabaseSyncService.deleteTransactionDetal(id, m).catch(() => {});
   },
 
-  // Mayor Transactions
-  getTransactionsMayor(): TransactionMayor[] {
-    return getFromStorage<TransactionMayor[]>('cambiosjk_mayor_v1', []);
+  // Mayor Transactions (Ventas Monedas Regionales) - 100% aisladas por modo
+  getTransactionsMayor(mode?: AppMode): TransactionMayor[] {
+    const m = mode || this.getAppMode();
+    this.migrateOldDataIfNeeded();
+    return getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []);
   },
 
-  addTransactionMayor(tx: Omit<TransactionMayor, 'id' | 'created_at'>): TransactionMayor {
-    const all = this.getTransactionsMayor();
+  addTransactionMayor(tx: Omit<TransactionMayor, 'id' | 'created_at'>, mode?: AppMode): TransactionMayor {
+    const m = mode || this.getAppMode();
+    const all = this.getTransactionsMayor(m);
     const newTx: TransactionMayor = {
       ...tx,
       id: 'mayor-' + Date.now(),
       created_at: new Date().toISOString(),
     };
     all.unshift(newTx);
-    saveToStorage('cambiosjk_mayor_v1', all);
+    saveToStorage(this.getTransactionsMayorKey(m), all);
 
     if (newTx.paid_account_id && newTx.amount_ves > 0) {
-      const accounts = this.getAccounts('mayor');
+      const accounts = this.getAccounts(m);
       const paidAcc = accounts.find((a) => a.id === newTx.paid_account_id);
       let totalOut = newTx.amount_ves;
       if (paidAcc && paidAcc.currency === 'USD') {
         totalOut += (newTx.commission || 0);
       }
-      this.updateAccountBalance(newTx.paid_account_id, -totalOut, 'mayor');
+      this.updateAccountBalance(newTx.paid_account_id, -totalOut, m);
     }
     const receivedAmt = newTx.amount_received !== undefined ? newTx.amount_received : 0;
     if (newTx.received_account_id && newTx.received_account_id !== 'POR_COBRAR' && receivedAmt > 0) {
-      this.updateAccountBalance(newTx.received_account_id, receivedAmt, 'mayor');
+      this.updateAccountBalance(newTx.received_account_id, receivedAmt, m);
     }
 
     const unpaid = Number(((newTx.total_to_pay || 0) - receivedAmt).toFixed(2));
     if (unpaid > 0) {
-      this.increaseClientDebt(newTx.client_name, unpaid);
+      this.increaseClientDebt(newTx.client_name, unpaid, m);
     }
 
-    SupabaseSyncService.upsertTransactionMayor(newTx).catch(() => {});
+    SupabaseSyncService.upsertTransactionMayor(newTx, m).catch(() => {});
     return newTx;
   },
 
-  deleteTransactionMayor(id: string): void {
-    const all = this.getTransactionsMayor();
+  deleteTransactionMayor(id: string, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const all = this.getTransactionsMayor(m);
     const tx = all.find((t) => t.id === id);
     if (tx) {
       const receivedAmt = tx.amount_received !== undefined ? tx.amount_received : 0;
       const unpaid = Number(((tx.total_to_pay || 0) - receivedAmt).toFixed(2));
       if (unpaid > 0) {
-        this.increaseClientDebt(tx.client_name, -unpaid);
+        this.increaseClientDebt(tx.client_name, -unpaid, m);
       }
       if (tx.paid_account_id && tx.amount_ves > 0) {
-        const accounts = this.getAccounts('mayor');
+        const accounts = this.getAccounts(m);
         const paidAcc = accounts.find((a) => a.id === tx.paid_account_id);
         let totalOut = tx.amount_ves;
         if (paidAcc && paidAcc.currency === 'USD') {
           totalOut += (tx.commission || 0);
         }
-        this.updateAccountBalance(tx.paid_account_id, totalOut, 'mayor');
+        this.updateAccountBalance(tx.paid_account_id, totalOut, m);
       }
       if (tx.received_account_id && tx.received_account_id !== 'POR_COBRAR' && receivedAmt > 0) {
-        this.updateAccountBalance(tx.received_account_id, -receivedAmt, 'mayor');
+        this.updateAccountBalance(tx.received_account_id, -receivedAmt, m);
       }
     }
-    saveToStorage('cambiosjk_mayor_v1', all.filter((tx) => tx.id !== id));
-    SupabaseSyncService.deleteTransactionMayor(id).catch(() => {});
+    saveToStorage(this.getTransactionsMayorKey(m), all.filter((tx) => tx.id !== id));
+    SupabaseSyncService.deleteTransactionMayor(id, m).catch(() => {});
   },
 
   // Transfers
@@ -722,13 +828,15 @@ export const StorageService = {
     SupabaseSyncService.deleteClosure(id, m).catch(() => {});
   },
 
-  // Debtors & Accounts Receivable
-  syncDebtors(): Debtor[] {
-    const rawDebtors = getFromStorage<Debtor[]>('cambiosjk_debtors_v1', []);
-    const debtors: Debtor[] = (!rawDebtors || rawDebtors.length === 0) ? [...INITIAL_DEBTORS] : [...rawDebtors].filter(Boolean);
-    const detalTxs = (getFromStorage<TransactionDetal[]>('cambiosjk_detal_v1', []) || []).filter(Boolean);
-    const mayorTxs = (getFromStorage<TransactionMayor[]>('cambiosjk_mayor_v1', []) || []).filter(Boolean);
-    const payments = (getFromStorage<DebtPayment[]>('cambiosjk_debt_payments_v1', []) || []).filter(Boolean);
+  // Debtors & Accounts Receivable - 100% aislados e independientes por modo
+  syncDebtors(mode?: AppMode): Debtor[] {
+    const m = mode || this.getAppMode();
+    this.migrateOldDataIfNeeded();
+    const rawDebtors = getFromStorage<Debtor[]>(this.getDebtorsKey(m), []);
+    const debtors: Debtor[] = (!rawDebtors || rawDebtors.length === 0) ? (m === 'detal' ? [...INITIAL_DEBTORS] : []) : [...rawDebtors].filter(Boolean);
+    const detalTxs = (getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []) || []).filter(Boolean);
+    const mayorTxs = (getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []) || []).filter(Boolean);
+    const payments = (getFromStorage<DebtPayment[]>(this.getDebtPaymentsKey(m), []) || []).filter(Boolean);
 
     const clientStats = new Map<string, { totalBought: number; totalPaidInTx: number }>();
 
@@ -778,7 +886,7 @@ export const StorageService = {
             id: 'deb-auto-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
             client_name: name,
             current_debt: calculatedDebt,
-            notes: 'Sincronizado de operaciones por cobrar',
+            notes: 'Sincronizado de operaciones por cobrar (' + m.toUpperCase() + ')',
             updated_at: new Date().toISOString(),
           });
           hasChanges = true;
@@ -791,7 +899,7 @@ export const StorageService = {
     });
 
     if (hasChanges || !rawDebtors || rawDebtors.length === 0) {
-      saveToStorage('cambiosjk_debtors_v1', debtors);
+      saveToStorage(this.getDebtorsKey(m), debtors);
     }
 
     return debtors.map((d) => ({
@@ -800,84 +908,104 @@ export const StorageService = {
     }));
   },
 
-  getDebtors(): Debtor[] {
-    return this.syncDebtors();
+  getDebtors(mode?: AppMode): Debtor[] {
+    const m = mode || this.getAppMode();
+    return this.syncDebtors(m);
   },
 
-  saveDebtors(debtors: Debtor[]): void {
-    saveToStorage('cambiosjk_debtors_v1', debtors);
+  saveDebtors(debtors: Debtor[], mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    saveToStorage(this.getDebtorsKey(m), debtors);
   },
 
-  updateDebtorDebt(debtorId: string, delta: number): void {
-    const debtors = this.getDebtors();
+  updateDebtorDebt(debtorId: string, delta: number, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const debtors = this.getDebtors(m);
+    let updatedDebtor: Debtor | null = null;
     const updated = debtors.map((d) => {
       if (d.id === debtorId) {
-        return {
+        updatedDebtor = {
           ...d,
           current_debt: Number((d.current_debt + delta).toFixed(2)),
           updated_at: new Date().toISOString(),
         };
+        return updatedDebtor;
       }
       return d;
     });
-    this.saveDebtors(updated);
-  },
-
-  increaseClientDebt(clientName: string, amount: number): void {
-    const upperName = clientName.trim().toUpperCase();
-    const debtors = this.getDebtors();
-    const existing = debtors.find((d) => d.client_name.trim().toUpperCase() === upperName);
-    if (existing) {
-      this.updateDebtorDebt(existing.id, amount);
-    } else {
-      this.addDebtor({
-        client_name: upperName,
-        current_debt: Number(amount.toFixed(2)),
-        notes: 'Generado automáticamente por venta a crédito',
-      });
+    this.saveDebtors(updated, m);
+    if (updatedDebtor) {
+      SupabaseSyncService.upsertDebtor(updatedDebtor, m).catch(() => {});
     }
   },
 
-  addDebtor(debtor: Omit<Debtor, 'id' | 'updated_at'>): Debtor {
-    const all = this.getDebtors();
+  increaseClientDebt(clientName: string, amount: number, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const upperName = clientName.trim().toUpperCase();
+    const debtors = this.getDebtors(m);
+    const existing = debtors.find((d) => d.client_name.trim().toUpperCase() === upperName);
+    if (existing) {
+      this.updateDebtorDebt(existing.id, amount, m);
+    } else {
+      this.addDebtor(
+        {
+          client_name: upperName,
+          current_debt: Number(amount.toFixed(2)),
+          notes: 'Generado automáticamente por venta a crédito (' + m.toUpperCase() + ')',
+        },
+        m
+      );
+    }
+  },
+
+  addDebtor(debtor: Omit<Debtor, 'id' | 'updated_at'>, mode?: AppMode): Debtor {
+    const m = mode || this.getAppMode();
+    const all = this.getDebtors(m);
     const newDebtor: Debtor = {
       ...debtor,
       id: 'deb-' + Date.now(),
       updated_at: new Date().toISOString(),
     };
     all.unshift(newDebtor);
-    this.saveDebtors(all);
+    this.saveDebtors(all, m);
+    SupabaseSyncService.upsertDebtor(newDebtor, m).catch(() => {});
     return newDebtor;
   },
 
-  // Debt Payments
-  getDebtPayments(): DebtPayment[] {
-    return getFromStorage<DebtPayment[]>('cambiosjk_debt_payments_v1', []);
+  // Debt Payments (Abonos de Deudores) - 100% aislados por modo
+  getDebtPayments(mode?: AppMode): DebtPayment[] {
+    const m = mode || this.getAppMode();
+    this.migrateOldDataIfNeeded();
+    return getFromStorage<DebtPayment[]>(this.getDebtPaymentsKey(m), []);
   },
 
-  addDebtPayment(payment: Omit<DebtPayment, 'id' | 'created_at'>): DebtPayment {
-    const all = this.getDebtPayments();
+  addDebtPayment(payment: Omit<DebtPayment, 'id' | 'created_at'>, mode?: AppMode): DebtPayment {
+    const m = mode || this.getAppMode();
+    const all = this.getDebtPayments(m);
     const newPayment: DebtPayment = {
       ...payment,
       id: 'debtpay-' + Date.now(),
       created_at: new Date().toISOString(),
     };
     all.unshift(newPayment);
-    saveToStorage('cambiosjk_debt_payments_v1', all);
+    saveToStorage(this.getDebtPaymentsKey(m), all);
 
     const upperName = newPayment.client_name.trim().toUpperCase();
-    const debtors = this.getDebtors();
+    const debtors = this.getDebtors(m);
     const existing = debtors.find(
       (d) => d.id === newPayment.debtor_id || d.client_name.trim().toUpperCase() === upperName
     );
     if (existing) {
-      this.updateDebtorDebt(existing.id, -newPayment.amount);
+      this.updateDebtorDebt(existing.id, -newPayment.amount, m);
     } else {
-      this.addDebtor({
-        client_name: upperName,
-        current_debt: -newPayment.amount,
-        notes: 'Creado por abono a deuda',
-      });
+      this.addDebtor(
+        {
+          client_name: upperName,
+          current_debt: -newPayment.amount,
+          notes: 'Creado por abono a deuda (' + m.toUpperCase() + ')',
+        },
+        m
+      );
     }
 
     const amountToCredit =
@@ -886,23 +1014,25 @@ export const StorageService = {
         : newPayment.amount;
 
     if (newPayment.account_id && amountToCredit > 0) {
-      this.updateAccountBalance(newPayment.account_id, amountToCredit);
+      this.updateAccountBalance(newPayment.account_id, amountToCredit, m);
     }
 
+    SupabaseSyncService.upsertDebtPayment(newPayment, m).catch(() => {});
     return newPayment;
   },
 
-  deleteDebtPayment(id: string): void {
-    const all = this.getDebtPayments();
+  deleteDebtPayment(id: string, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const all = this.getDebtPayments(m);
     const pay = all.find((p) => p.id === id);
     if (pay) {
       const upperName = pay.client_name.trim().toUpperCase();
-      const debtors = this.getDebtors();
+      const debtors = this.getDebtors(m);
       const existing = debtors.find(
         (d) => d.id === pay.debtor_id || d.client_name.trim().toUpperCase() === upperName
       );
       if (existing) {
-        this.updateDebtorDebt(existing.id, pay.amount);
+        this.updateDebtorDebt(existing.id, pay.amount, m);
       }
 
       const amountToRevert =
@@ -911,10 +1041,11 @@ export const StorageService = {
           : pay.amount;
 
       if (pay.account_id && amountToRevert > 0) {
-        this.updateAccountBalance(pay.account_id, -amountToRevert);
+        this.updateAccountBalance(pay.account_id, -amountToRevert, m);
       }
     }
-    saveToStorage('cambiosjk_debt_payments_v1', all.filter((p) => p.id !== id));
+    saveToStorage(this.getDebtPaymentsKey(m), all.filter((p) => p.id !== id));
+    SupabaseSyncService.deleteDebtPayment(id, m).catch(() => {});
   },
 
   resetToDefaults(): void {
@@ -925,10 +1056,14 @@ export const StorageService = {
     saveToStorage(this.getClientsKey('mayor'), INITIAL_CLIENTS_MAYOR);
     saveToStorage(this.getSuppliersKey('detal'), INITIAL_SUPPLIERS_DETAL);
     saveToStorage(this.getSuppliersKey('mayor'), INITIAL_SUPPLIERS_MAYOR);
-    saveToStorage('cambiosjk_debtors_v1', INITIAL_DEBTORS);
-    saveToStorage('cambiosjk_debt_payments_v1', []);
-    saveToStorage('cambiosjk_detal_v1', []);
-    saveToStorage('cambiosjk_mayor_v1', []);
+    saveToStorage(this.getDebtorsKey('detal'), INITIAL_DEBTORS);
+    saveToStorage(this.getDebtorsKey('mayor'), []);
+    saveToStorage(this.getDebtPaymentsKey('detal'), []);
+    saveToStorage(this.getDebtPaymentsKey('mayor'), []);
+    saveToStorage(this.getTransactionsDetalKey('detal'), []);
+    saveToStorage(this.getTransactionsDetalKey('mayor'), []);
+    saveToStorage(this.getTransactionsMayorKey('detal'), []);
+    saveToStorage(this.getTransactionsMayorKey('mayor'), []);
     saveToStorage(this.getTransfersKey('detal'), []);
     saveToStorage(this.getTransfersKey('mayor'), []);
     saveToStorage(this.getExpensesKey('detal'), []);
@@ -949,10 +1084,14 @@ export const StorageService = {
     saveToStorage(this.getClientsKey('mayor'), []);
     saveToStorage(this.getSuppliersKey('detal'), []);
     saveToStorage(this.getSuppliersKey('mayor'), []);
-    saveToStorage('cambiosjk_debtors_v1', []);
-    saveToStorage('cambiosjk_debt_payments_v1', []);
-    saveToStorage('cambiosjk_detal_v1', []);
-    saveToStorage('cambiosjk_mayor_v1', []);
+    saveToStorage(this.getDebtorsKey('detal'), []);
+    saveToStorage(this.getDebtorsKey('mayor'), []);
+    saveToStorage(this.getDebtPaymentsKey('detal'), []);
+    saveToStorage(this.getDebtPaymentsKey('mayor'), []);
+    saveToStorage(this.getTransactionsDetalKey('detal'), []);
+    saveToStorage(this.getTransactionsDetalKey('mayor'), []);
+    saveToStorage(this.getTransactionsMayorKey('detal'), []);
+    saveToStorage(this.getTransactionsMayorKey('mayor'), []);
     saveToStorage(this.getTransfersKey('detal'), []);
     saveToStorage(this.getTransfersKey('mayor'), []);
     saveToStorage(this.getExpensesKey('detal'), []);
@@ -966,6 +1105,10 @@ export const StorageService = {
     localStorage.removeItem('cambiosjk_accounts_v1');
     localStorage.removeItem('cambiosjk_clients_v1');
     localStorage.removeItem('cambiosjk_suppliers_v1');
+    localStorage.removeItem('cambiosjk_detal_v1');
+    localStorage.removeItem('cambiosjk_mayor_v1');
+    localStorage.removeItem('cambiosjk_debtors_v1');
+    localStorage.removeItem('cambiosjk_debt_payments_v1');
     SupabaseSyncService.truncateAllTables().catch(() => {});
   },
 
@@ -981,10 +1124,14 @@ export const StorageService = {
     saveToStorage(this.getSuppliersKey('detal'), detalSuppliers);
     saveToStorage(this.getSuppliersKey('mayor'), mayorSuppliers);
 
-    saveToStorage('cambiosjk_debtors_v1', []);
-    saveToStorage('cambiosjk_debt_payments_v1', []);
-    saveToStorage('cambiosjk_detal_v1', []);
-    saveToStorage('cambiosjk_mayor_v1', []);
+    saveToStorage(this.getDebtorsKey('detal'), []);
+    saveToStorage(this.getDebtorsKey('mayor'), []);
+    saveToStorage(this.getDebtPaymentsKey('detal'), []);
+    saveToStorage(this.getDebtPaymentsKey('mayor'), []);
+    saveToStorage(this.getTransactionsDetalKey('detal'), []);
+    saveToStorage(this.getTransactionsDetalKey('mayor'), []);
+    saveToStorage(this.getTransactionsMayorKey('detal'), []);
+    saveToStorage(this.getTransactionsMayorKey('mayor'), []);
     saveToStorage(this.getTransfersKey('detal'), []);
     saveToStorage(this.getTransfersKey('mayor'), []);
     saveToStorage(this.getExpensesKey('detal'), []);

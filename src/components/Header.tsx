@@ -17,10 +17,12 @@ import {
   Moon,
   Check,
   Settings,
+  LogOut,
 } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { AppMode } from '@/types';
 import { MasterResetModal } from './MasterResetModal';
+import { useAuth } from '@/lib/auth-context';
 
 interface HeaderProps {
   appMode?: AppMode;
@@ -39,6 +41,7 @@ export function Header({
   lastRatesSync = null,
   onResetSuccess,
 }: HeaderProps) {
+  const { user, profile, isAdmin, isOperator, signOut } = useAuth();
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isExportSubmenuOpen, setIsExportSubmenuOpen] = useState(false);
@@ -66,6 +69,11 @@ export function Header({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  const userDisplayName = profile?.nombre || user?.email?.split('@')[0] || 'Usuario JK';
+  const userInitials = profile?.nombre
+    ? profile.nombre.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+    : 'JK';
 
   return (
     <header
@@ -104,8 +112,14 @@ export function Header({
           >
             {/* Avatar circular con badge de estado */}
             <div className="relative">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-emerald-600 to-blue-600 flex items-center justify-center text-white font-black text-xs shadow-xs">
-                JK
+              <div
+                className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-xs shadow-xs ${
+                  isAdmin
+                    ? 'bg-gradient-to-tr from-blue-600 to-indigo-600'
+                    : 'bg-gradient-to-tr from-emerald-600 to-teal-600'
+                }`}
+              >
+                {userInitials}
               </div>
               <span
                 className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#061934] ${
@@ -117,11 +131,15 @@ export function Header({
 
             {/* Texto de Perfil y Modo Actual */}
             <div className="text-left hidden sm:block">
-              <div className="text-xs font-bold leading-tight group-hover:text-emerald-300 transition">
-                Admin JK
+              <div className="text-xs font-bold leading-tight group-hover:text-emerald-300 transition truncate max-w-[130px]">
+                {userDisplayName}
               </div>
-              <div className="text-[10px] text-slate-400 leading-tight">
-                {appMode === 'mayor' ? 'Modo Mayor' : 'Modo Detal'}
+              <div className="text-[10px] text-slate-400 leading-tight flex items-center gap-1">
+                <span className={isAdmin ? 'text-blue-400 font-bold' : 'text-emerald-400 font-bold'}>
+                  {isAdmin ? 'ADMIN' : 'OPERADOR'}
+                </span>
+                <span>•</span>
+                <span>{appMode === 'mayor' ? 'Mayor' : 'Detal'}</span>
               </div>
             </div>
 
@@ -137,25 +155,29 @@ export function Header({
             <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-[#0c192c] border border-slate-700/90 rounded-2xl shadow-2xl overflow-hidden z-50 text-slate-200 text-xs animate-in fade-in zoom-in-95 duration-150">
               {/* Cabecera del Menú */}
               <div className="p-3.5 bg-slate-800/60 border-b border-slate-700/80 flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-blue-600 text-white font-black text-sm flex items-center justify-center shadow-md">
-                  JK
+                <div
+                  className={`w-10 h-10 rounded-xl text-white font-black text-sm flex items-center justify-center shadow-md ${
+                    isAdmin
+                      ? 'bg-gradient-to-tr from-blue-500 to-indigo-600'
+                      : 'bg-gradient-to-tr from-emerald-500 to-teal-600'
+                  }`}
+                >
+                  {userInitials}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-white text-sm truncate">
-                    Administrador Cambios JK
+                    {userDisplayName}
                   </div>
                   <div className="flex items-center space-x-1.5 text-[11px] text-slate-400 mt-0.5">
-                    {isSupabaseConfigured ? (
-                      <>
-                        <Database className="w-3 h-3 text-emerald-400" />
-                        <span className="text-emerald-400 font-semibold">Supabase Activo</span>
-                      </>
-                    ) : (
-                      <>
-                        <ShieldCheck className="w-3 h-3 text-amber-400" />
-                        <span className="text-amber-400 font-semibold">Almacenamiento Local</span>
-                      </>
-                    )}
+                    <span
+                      className={`font-bold px-1.5 py-0.2 rounded text-[10px] ${
+                        isAdmin
+                          ? 'bg-blue-500/20 text-blue-300 border border-blue-400/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                      }`}
+                    >
+                      {isAdmin ? 'ADMINISTRADOR' : 'OPERADOR DE TAQUILLA'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -272,22 +294,43 @@ export function Header({
                   </div>
                 </div>
 
-                {/* 4. Mantenimiento del Sistema */}
+                {/* 4. Mantenimiento del Sistema (Solo Administrador) */}
+                {isAdmin && (
+                  <div className="pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        setIsResetModalOpen(true);
+                      }}
+                      className="w-full py-2 px-3 rounded-xl bg-rose-950/40 hover:bg-rose-900/70 text-rose-300 hover:text-white border border-rose-900/50 flex items-center justify-between transition cursor-pointer group"
+                      title="Reinicio Maestro del Sistema a CERO"
+                    >
+                      <div className="flex items-center space-x-2 font-bold">
+                        <RotateCcw className="w-3.5 h-3.5 text-rose-400 group-hover:-rotate-90 transition-transform" />
+                        <span>Reinicio Maestro a 0</span>
+                      </div>
+                      <span className="text-[10px] text-rose-400 font-semibold uppercase">Peligro</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* 5. Cerrar Sesión */}
                 <div className="pt-2 border-t border-slate-800">
                   <button
                     type="button"
                     onClick={() => {
                       setIsProfileMenuOpen(false);
-                      setIsResetModalOpen(true);
+                      signOut();
                     }}
-                    className="w-full py-2 px-3 rounded-xl bg-rose-950/40 hover:bg-rose-900/70 text-rose-300 hover:text-white border border-rose-900/50 flex items-center justify-between transition cursor-pointer group"
-                    title="Reinicio Maestro del Sistema a CERO"
+                    className="w-full py-2.5 px-3 rounded-xl bg-slate-800/90 hover:bg-rose-900/60 text-slate-300 hover:text-rose-100 border border-slate-700/80 flex items-center justify-between transition cursor-pointer group"
+                    title="Cerrar sesión en este dispositivo"
                   >
-                    <div className="flex items-center space-x-2 font-bold">
-                      <RotateCcw className="w-3.5 h-3.5 text-rose-400 group-hover:-rotate-90 transition-transform" />
-                      <span>Reinicio Maestro a 0</span>
+                    <div className="flex items-center space-x-2 font-bold text-xs">
+                      <LogOut className="w-4 h-4 text-slate-400 group-hover:text-rose-400 transition-colors" />
+                      <span>Cerrar Sesión</span>
                     </div>
-                    <span className="text-[10px] text-rose-400 font-semibold uppercase">Peligro</span>
+                    <span className="text-[10px] text-slate-500 group-hover:text-rose-300 font-semibold uppercase">Salir</span>
                   </button>
                 </div>
               </div>

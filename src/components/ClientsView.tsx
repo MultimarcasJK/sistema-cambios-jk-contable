@@ -32,6 +32,7 @@ interface ClientsProps {
   detalTxs: TransactionDetal[];
   mayorTxs: TransactionMayor[];
   onDataChange: () => void;
+  appMode?: import('@/types').AppMode;
 }
 
 export function ClientsView({
@@ -41,6 +42,7 @@ export function ClientsView({
   detalTxs,
   mayorTxs,
   onDataChange,
+  appMode,
 }: ClientsProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -80,8 +82,8 @@ export function ClientsView({
   });
 
   const allDebtPayments = useMemo(() => {
-    return StorageService.getDebtPayments();
-  }, [debtors]);
+    return StorageService.getDebtPayments(appMode);
+  }, [debtors, appMode]);
 
   const handleAddClient = (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +99,7 @@ export function ClientsView({
       address: formData.address.trim() || undefined,
       preferred_account: formData.preferred_account.trim() || undefined,
       notes: formData.notes.trim() || undefined,
-    });
+    }, appMode);
 
     setIsAdding(false);
     setFormData({
@@ -138,7 +140,7 @@ export function ClientsView({
       address: editFormData.address.trim() || undefined,
       preferred_account: editFormData.preferred_account.trim() || undefined,
       notes: editFormData.notes.trim() || undefined,
-    });
+    }, appMode);
 
     setEditingClient(null);
     onDataChange();
@@ -146,7 +148,7 @@ export function ClientsView({
 
   const handleDeleteClient = (client: Client) => {
     if (confirm(`¿Estás seguro de que deseas eliminar al cliente "${client.name}"? Esta acción no se puede deshacer.`)) {
-      StorageService.deleteClient(client.id);
+      StorageService.deleteClient(client.id, appMode);
       if (selectedClientForHistory?.id === client.id) {
         setSelectedClientForHistory(null);
       }
@@ -217,7 +219,7 @@ export function ClientsView({
       exchange_rate: rate,
       account_id: paymentAccountId || undefined,
       notes: paymentNotes.trim() || undefined,
-    });
+    }, appMode);
 
     setAbonoModalDebtor(null);
     setPaymentAmount('');

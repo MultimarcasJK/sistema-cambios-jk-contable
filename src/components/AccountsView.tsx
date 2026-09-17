@@ -10,6 +10,7 @@ import { ManageCurrenciesModal } from './ManageCurrenciesModal';
 import { AccountStatementModal } from './AccountStatementModal';
 import { EditAccountModal } from './EditAccountModal';
 import { Wallet, Plus, Edit2, Trash2, CheckCircle, RefreshCw, Landmark, Coins, ArrowLeft, ChevronRight, Globe, FileText } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 interface AccountsProps {
   accounts: Account[];
@@ -18,6 +19,7 @@ interface AccountsProps {
 }
 
 export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps) {
+  const { isAdmin } = useAuth();
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [selectedCurrency, setSelectedCurrency] = useState<string>('ALL');
   const [isAddingAccount, setIsAddingAccount] = useState(false);
@@ -231,24 +233,28 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                 <span>Estados de Cuenta</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setIsManagingCurrencies(true)}
-                className="flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer"
-                title="Administrar catálogo de monedas"
-              >
-                <Coins className="w-4 h-4 text-blue-600" />
-                <span>Gestionar Monedas</span>
-              </button>
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsManagingCurrencies(true)}
+                    className="flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer"
+                    title="Administrar catálogo de monedas"
+                  >
+                    <Coins className="w-4 h-4 text-blue-600" />
+                    <span>Gestionar Monedas</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => handleOpenAddAccount()}
-                className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Nueva Cuenta</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAddAccount()}
+                    className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Nueva Cuenta</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -532,14 +538,16 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={() => handleOpenAddAccount(selectedCountry)}
-                className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Nueva Cuenta en {activeCountryInfo?.name}</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenAddAccount(selectedCountry)}
+                  className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Nueva Cuenta en {activeCountryInfo?.name}</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -669,14 +677,16 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
               <p className="text-xs text-slate-500 max-w-md mx-auto">
                 Puedes registrar bancos, billeteras o cajas de efectivo en {activeCountryInfo?.name} con su moneda ({activeCountryInfo?.defaultCurrency}) para llevar su arqueo y balances en tiempo real.
               </p>
-              <button
-                type="button"
-                onClick={() => handleOpenAddAccount(selectedCountry)}
-                className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer shadow-xs"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Registrar Primera Cuenta en {activeCountryInfo?.name}</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenAddAccount(selectedCountry)}
+                  className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Registrar Primera Cuenta en {activeCountryInfo?.name}</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-3">
@@ -727,26 +737,28 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                             </p>
                           )}
                         </div>
-                        <div className="flex items-center space-x-0.5 shrink-0">
-                          <button
-                            onClick={() => setAccountToEdit(acc)}
-                            className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition cursor-pointer"
-                            title="Editar cuenta completa"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm(`¿Estás seguro de que deseas eliminar la cuenta "${acc.name}"? Esta acción no se puede deshacer.`)) {
-                                handleDeleteAccount(acc.id);
-                              }
-                            }}
-                            title="Eliminar cuenta"
-                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {isAdmin && (
+                          <div className="flex items-center space-x-0.5 shrink-0">
+                            <button
+                              onClick={() => setAccountToEdit(acc)}
+                              className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition cursor-pointer"
+                              title="Editar cuenta completa"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm(`¿Estás seguro de que deseas eliminar la cuenta "${acc.name}"? Esta acción no se puede deshacer.`)) {
+                                  handleDeleteAccount(acc.id);
+                                }
+                              }}
+                              title="Eliminar cuenta"
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">

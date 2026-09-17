@@ -30,7 +30,18 @@ export type AccountType = 'banco' | 'wallet' | 'efectivo' | 'zelle' | 'otro';
 
 export type AccountUsageRole = 'mixta' | 'cobro' | 'desembolso';
 
-export type UserRole = 'admin' | 'cajero_detal' | 'operador_mayor';
+export type UserRole = 'ADMIN' | 'OPERADOR' | 'admin' | 'cajero_detal' | 'operador_mayor';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  nombre: string;
+  rol: 'ADMIN' | 'OPERADOR';
+  modo_permitido?: 'detal' | 'mayor' | 'ambos';
+  activo: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export type AppMode = 'detal' | 'mayor';
 

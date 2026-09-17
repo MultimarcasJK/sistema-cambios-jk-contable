@@ -37,6 +37,7 @@ interface ClosuresProps {
   accounts: Account[];
   debtors: Debtor[];
   onDataChange: () => void;
+  appMode?: import('@/types').AppMode;
 }
 
 export function ClosuresView({
@@ -47,6 +48,7 @@ export function ClosuresView({
   accounts,
   debtors,
   onDataChange,
+  appMode,
 }: ClosuresProps) {
   const todayStr = new Date().toISOString().slice(0, 10);
   const [activeSubTab, setActiveSubTab] = useState<'profits' | 'accounts' | 'debtors'>('profits');
@@ -117,7 +119,8 @@ export function ClosuresView({
         notes: closureNotes || undefined,
       },
       accounts,
-      debtors
+      debtors,
+      appMode
     );
     setClosureNotes('');
     alert(`¡Cierre oficial y corte de saldos/deudores para el ${selectedDate} guardado con éxito!`);
@@ -127,7 +130,7 @@ export function ClosuresView({
   // Eliminar un cierre
   const handleDeleteClosure = (id: string, date: string) => {
     if (confirm(`¿Estás seguro de eliminar el registro de cierre del ${date}?`)) {
-      StorageService.deleteClosure(id);
+      StorageService.deleteClosure(id, appMode);
       onDataChange();
     }
   };

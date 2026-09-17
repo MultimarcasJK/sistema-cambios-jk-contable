@@ -7,6 +7,7 @@ import { RatesService } from '@/lib/rates-service';
 import { AbonoModal } from '@/components/AbonoModal';
 import { parseFormattedNumber, formatCurrency, formatRateDisplay, formatInputNumber } from '@/lib/formatters';
 import { Coins, Search, CheckCircle, Trash2, ArrowDownLeft, Sparkles, RefreshCw } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 interface DetalProps {
   accounts: Account[];
@@ -29,6 +30,7 @@ export function DetalView({
   isSyncingRates,
   lastRatesSync,
 }: DetalProps) {
+  const { isAdmin } = useAuth();
   const todayStr = new Date().toISOString().slice(0, 10);
   const [ratesVersion, setRatesVersion] = useState(0);
 
@@ -122,7 +124,7 @@ export function DetalView({
 
   const handleDeleteTx = (id: string) => {
     if (confirm('¿Deseas eliminar esta transacción de CRIPTO/DOLAR? Si generó deuda o movió saldos, se revertirá automáticamente.')) {
-      StorageService.deleteTransactionDetal(id);
+      StorageService.deleteTransactionDetal(id, appMode);
       onDataChange();
     }
   };
@@ -179,7 +181,7 @@ export function DetalView({
     if (!clientExists) {
       StorageService.addClient({
         name: formData.client_name.trim().toUpperCase(),
-      });
+      }, appMode);
     }
 
     StorageService.addTransactionDetal({
@@ -199,7 +201,7 @@ export function DetalView({
       profit_usd: calculations.profitUsd,
       reference: formData.reference,
       notes: formData.notes,
-    });
+    }, appMode);
 
     setFormData((prev) => ({
       date: prev.date,
@@ -601,16 +603,18 @@ export function DetalView({
                     : `🟡 Cobro Parcial ($${formData.amount_received})`}
                 </span>
               </div>
-              <div>
-                <span className="text-xs text-slate-500 block">Ganancia Neta</span>
-                <span
-                  className={`text-lg font-black font-mono ${
-                    calculations.profitUsd >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                  }`}
-                >
-                  {calculations.profitUsd >= 0 ? '+' : '-'}${formatCurrency(Math.abs(calculations.profitUsd))} USD
-                </span>
-              </div>
+              {isAdmin && (
+                <div>
+                  <span className="text-xs text-slate-500 block">Ganancia Neta</span>
+                  <span
+                    className={`text-lg font-black font-mono ${
+                      calculations.profitUsd >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                    }`}
+                  >
+                    {calculations.profitUsd >= 0 ? '+' : '-'}${formatCurrency(Math.abs(calculations.profitUsd))} USD
+                  </span>
+                </div>
+              )}
             </div>
 
             <button
@@ -675,17 +679,19 @@ export function DetalView({
                 <th className="py-2.5 px-3 text-right">Debe Pagar ($)</th>
                 <th className="py-2.5 px-3 text-right">Abonado / Cobrado</th>
                 <th className="py-2.5 px-3">Estado</th>
-                <th className="py-2.5 px-3 text-right">Ganancia ($)</th>
+                {isAdmin && <th className="py-2.5 px-3 text-right">Ganancia ($)</th>}
                 <th className="py-2.5 px-3">Recibido Por</th>
-                <th className="py-2.5 px-3 text-center sticky right-0 bg-slate-100 z-10 border-l border-slate-200 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
-                  Acción
-                </th>
+                {isAdmin && (
+                  <th className="py-2.5 px-3 text-center sticky right-0 bg-slate-100 z-10 border-l border-slate-200 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                    Acción
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
               {filteredTxs.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-slate-400 font-sans">
+                  <td colSpan={isAdmin ? 11 : 9} className="py-8 text-center text-slate-400 font-sans">
                     No se encontraron registros de CRIPTO/DOLAR.
                   </td>
                 </tr>
@@ -750,24 +756,26 @@ export function DetalView({
                           </span>
                         )}
                       </td>
-                      <td
-                        className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
-                          tx.profit_usd < 0
-                            ? 'text-rose-600'
-                            : 'text-emerald-600'
-                        }`}
-                      >
-                        {tx.profit_usd > 0
-                          ? `+$${formatCurrency(tx.profit_usd)}`
-                          : tx.profit_usd < 0
-                          ? `-$${formatCurrency(Math.abs(tx.profit_usd))}`
-                          : `$0.00`}
-                        {tx.bank_fee > 0 && (
-                          <span className="block text-[10px] text-slate-400 font-sans font-normal">
-                            (Comisión: -${formatCurrency(tx.bank_fee)})
-                          </span>
-                        )}
-                      </td>
+                      {isAdmin && (
+                        <td
+                          className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
+                            tx.profit_usd < 0
+                              ? 'text-rose-600'
+                              : 'text-emerald-600'
+                          }`}
+                        >
+                          {tx.profit_usd > 0
+                            ? `+$${formatCurrency(tx.profit_usd)}`
+                            : tx.profit_usd < 0
+                            ? `-$${formatCurrency(Math.abs(tx.profit_usd))}`
+                            : `$0.00`}
+                          {tx.bank_fee > 0 && (
+                            <span className="block text-[10px] text-slate-400 font-sans font-normal">
+                              (Comisión: -${formatCurrency(tx.bank_fee)})
+                            </span>
+                          )}
+                        </td>
+                      )}
                       <td className="py-2.5 px-3 font-sans text-slate-500 truncate max-w-[140px]">
                         {isPorCobrar ? (
                           <span className="text-rose-600 font-semibold text-[11px]">Por Cobrar</span>
@@ -777,15 +785,17 @@ export function DetalView({
                           '-'
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
-                        <button
-                          onClick={() => handleDeleteTx(tx.id)}
-                          title="Eliminar operación"
-                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
-                        >
-                          <Trash2 className="w-4 h-4 text-rose-600" />
-                        </button>
-                      </td>
+                      {isAdmin && (
+                        <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                          <button
+                            onClick={() => handleDeleteTx(tx.id)}
+                            title="Eliminar operación"
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
+                          >
+                            <Trash2 className="w-4 h-4 text-rose-600" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -802,7 +812,7 @@ export function DetalView({
         onSuccess={onDataChange}
         accounts={accounts}
         clients={clients}
-        debtors={StorageService.getDebtors()}
+        debtors={StorageService.getDebtors(appMode)}
       />
     </div>
   );

@@ -19,6 +19,8 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+import { AuthProvider } from '@/lib/auth-context';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,7 +29,9 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="antialiased bg-slate-50 text-slate-900 min-h-screen">
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

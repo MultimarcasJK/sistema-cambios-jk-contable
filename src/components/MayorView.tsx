@@ -9,6 +9,7 @@ import { AbonoModal } from '@/components/AbonoModal';
 import { ManageCurrenciesModal } from '@/components/ManageCurrenciesModal';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatRateDisplay, formatInputNumber } from '@/lib/formatters';
 import { TrendingUp, Search, CheckCircle, Trash2, ArrowDownLeft, Sparkles, Globe, Coins, RefreshCw } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 interface MayorProps {
   accounts: Account[];
@@ -31,6 +32,7 @@ export function MayorView({
   isSyncingRates,
   lastRatesSync,
 }: MayorProps) {
+  const { isAdmin } = useAuth();
   const todayStr = new Date().toISOString().slice(0, 10);
   const [systemCurrencies, setSystemCurrencies] = useState<CurrencyConfig[]>(
     CurrencyService.getCurrencies()
@@ -173,7 +175,7 @@ export function MayorView({
 
   const handleDeleteTx = (id: string) => {
     if (confirm('¿Deseas eliminar esta transacción de Monedas Regionales? Si generó deuda o movió saldos, se revertirá automáticamente.')) {
-      StorageService.deleteTransactionMayor(id);
+      StorageService.deleteTransactionMayor(id, appMode);
       onDataChange();
     }
   };
@@ -204,7 +206,7 @@ export function MayorView({
     if (!clientExists) {
       StorageService.addClient({
         name: formData.client_name.trim().toUpperCase(),
-      });
+      }, appMode);
     }
 
     StorageService.addTransactionMayor({
@@ -225,7 +227,7 @@ export function MayorView({
       profit_usd: calculations.profitUsd,
       reference: formData.reference,
       notes: formData.notes,
-    });
+    }, appMode);
 
     setFormData((prev) => ({
       date: prev.date,
@@ -685,16 +687,18 @@ export function MayorView({
                     : `🟡 Cobro Parcial ($${formData.amount_received})`}
                 </span>
               </div>
-              <div>
-                <span className="text-xs text-slate-500 block">Margen Ganancia Monedas Regionales</span>
-                <span
-                  className={`text-lg font-black font-mono ${
-                    calculations.profitUsd >= 0 ? 'text-indigo-600' : 'text-rose-600'
-                  }`}
-                >
-                  {calculations.profitUsd >= 0 ? '+' : '-'}${formatCurrency(Math.abs(calculations.profitUsd))} USD
-                </span>
-              </div>
+              {isAdmin && (
+                <div>
+                  <span className="text-xs text-slate-500 block">Margen Ganancia Monedas Regionales</span>
+                  <span
+                    className={`text-lg font-black font-mono ${
+                      calculations.profitUsd >= 0 ? 'text-indigo-600' : 'text-rose-600'
+                    }`}
+                  >
+                    {calculations.profitUsd >= 0 ? '+' : '-'}${formatCurrency(Math.abs(calculations.profitUsd))} USD
+                  </span>
+                </div>
+              )}
             </div>
 
             <button
@@ -715,7 +719,8 @@ export function MayorView({
             <h3 className="text-base font-bold text-slate-900">Historial de Operaciones: Monedas Regionales</h3>
             <p className="text-xs text-slate-500">
               {filteredTxs.length} transacciones • Volumen: Bs.{' '}
-              {totalVolumeVes.toLocaleString('es-VE')} • Ganancia Total: ${totalProfitFiltered.toFixed(2)}
+              {totalVolumeVes.toLocaleString('es-VE')}
+              {isAdmin && ` • Ganancia Total: $${totalProfitFiltered.toFixed(2)}`}
             </p>
           </div>
 
@@ -760,18 +765,20 @@ export function MayorView({
                 <th className="py-2.5 px-3 text-right whitespace-nowrap">Debe Pagar ($)</th>
                 <th className="py-2.5 px-3 text-right whitespace-nowrap">Abonado / Cobrado</th>
                 <th className="py-2.5 px-3 whitespace-nowrap">Estado</th>
-                <th className="py-2.5 px-3 text-right whitespace-nowrap">Ganancia ($)</th>
+                {isAdmin && <th className="py-2.5 px-3 text-right whitespace-nowrap">Ganancia ($)</th>}
                 <th className="py-2.5 px-3 whitespace-nowrap">Cuenta Salida</th>
                 <th className="py-2.5 px-3 whitespace-nowrap">Recibido Por</th>
-                <th className="py-2.5 px-3 text-center whitespace-nowrap sticky right-0 bg-slate-100 z-10 border-l border-slate-200 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
-                  Acción
-                </th>
+                {isAdmin && (
+                  <th className="py-2.5 px-3 text-center whitespace-nowrap sticky right-0 bg-slate-100 z-10 border-l border-slate-200 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                    Acción
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
               {filteredTxs.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-8 text-center text-slate-400 font-sans">
+                  <td colSpan={isAdmin ? 13 : 11} className="py-8 text-center text-slate-400 font-sans">
                     No se han registrado operaciones de Monedas Regionales aún.
                   </td>
                 </tr>
@@ -839,20 +846,22 @@ export function MayorView({
                           </span>
                         )}
                       </td>
-                      <td
-                        className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
-                          tx.profit_usd >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                        }`}
-                      >
-                        {tx.profit_usd >= 0
-                          ? `+$${formatCurrency(tx.profit_usd)}`
-                          : `-$${formatCurrency(Math.abs(tx.profit_usd))}`}
-                        {tx.commission > 0 && (
-                          <span className="block text-[10px] text-slate-400 font-sans font-normal">
-                            (Comisión: -${formatCurrency(tx.commission)})
-                          </span>
-                        )}
-                      </td>
+                      {isAdmin && (
+                        <td
+                          className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
+                            tx.profit_usd >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                          }`}
+                        >
+                          {tx.profit_usd >= 0
+                            ? `+$${formatCurrency(tx.profit_usd)}`
+                            : `-$${formatCurrency(Math.abs(tx.profit_usd))}`}
+                          {tx.commission > 0 && (
+                            <span className="block text-[10px] text-slate-400 font-sans font-normal">
+                              (Comisión: -${formatCurrency(tx.commission)})
+                            </span>
+                          )}
+                        </td>
+                      )}
                       <td className="py-2.5 px-3 font-sans text-slate-500 whitespace-nowrap">
                         {paidAcc ? paidAcc.name || paidAcc.bank_name : '-'}
                       </td>
@@ -865,15 +874,17 @@ export function MayorView({
                           '-'
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
-                        <button
-                          onClick={() => handleDeleteTx(tx.id)}
-                          title="Eliminar operación"
-                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
-                        >
-                          <Trash2 className="w-4 h-4 text-rose-600" />
-                        </button>
-                      </td>
+                      {isAdmin && (
+                        <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                          <button
+                            onClick={() => handleDeleteTx(tx.id)}
+                            title="Eliminar operación"
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
+                          >
+                            <Trash2 className="w-4 h-4 text-rose-600" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })

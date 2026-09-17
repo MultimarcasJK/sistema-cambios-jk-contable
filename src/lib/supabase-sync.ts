@@ -10,41 +10,33 @@ import {
   BalanceTransfer,
   Expense,
   DailyClosure,
+  Debtor,
+  DebtPayment,
   AppMode,
 } from '@/types';
 
-function getClient(mode: AppMode) {
-  if (!isSupabaseConfigured || !supabase) return null;
-  try {
-    return supabase.schema(mode);
-  } catch (err) {
-    console.warn('[Supabase ' + mode + '] Error obteniendo esquema:', err);
-    return null;
-  }
-}
-
 export const SupabaseSyncService = {
-  // Accounts
+  // Accounts (detal_cuentas / mayor_cuentas)
   async fetchAccounts(mode: AppMode): Promise<Account[] | null> {
-    const client = getClient(mode);
-    if (!client) return null;
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_cuentas`;
     try {
-      const { data, error } = await client.from('accounts').select('*');
+      const { data, error } = await supabase.from(table).select('*');
       if (error) {
-        console.warn('[Supabase ' + mode + '] Error fetching accounts:', error.message);
+        /* warn */
         return null;
       }
       return (data as Account[]) || [];
-    } catch (err) {
+    } catch {
       return null;
     }
   },
 
   async upsertAccount(account: Account, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_cuentas`;
     try {
-      await client.from('accounts').upsert({
+      await supabase.from(table).upsert({
         id: account.id,
         name: account.name,
         currency: account.currency,
@@ -56,324 +48,488 @@ export const SupabaseSyncService = {
         country: account.country || (mode === 'mayor' ? 'VENEZUELA' : 'ECUADOR'),
       });
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error upserting account:', err);
+      /* warn */
     }
   },
 
   async deleteAccount(id: string, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_cuentas`;
     try {
-      await client.from('accounts').delete().eq('id', id);
+      await supabase.from(table).delete().eq('id', id);
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error deleting account:', err);
+      /* warn */
     }
   },
 
-  // Clients
+  // Clients (detal_clientes / mayor_clientes)
   async fetchClients(mode: AppMode): Promise<Client[] | null> {
-    const client = getClient(mode);
-    if (!client) return null;
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_clientes`;
     try {
-      const { data, error } = await client.from('clients').select('*');
+      const { data, error } = await supabase.from(table).select('*');
       if (error) return null;
       return (data as Client[]) || [];
-    } catch (err) {
+    } catch {
       return null;
     }
   },
 
   async upsertClient(clientData: Client, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_clientes`;
     try {
-      await client.from('clients').upsert({
+      await supabase.from(table).upsert({
         id: clientData.id,
         name: clientData.name,
         phone: clientData.phone || '',
         current_debt: clientData.current_debt || 0,
       });
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error upserting client:', err);
+      /* warn */
     }
   },
 
   async deleteClient(id: string, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_clientes`;
     try {
-      await client.from('clients').delete().eq('id', id);
+      await supabase.from(table).delete().eq('id', id);
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error deleting client:', err);
+      /* warn */
     }
   },
 
-  // Transactions Detal
-  async fetchTransactionsDetal(): Promise<TransactionDetal[] | null> {
-    const client = getClient('detal');
-    if (!client) return null;
+  // Transactions Detal (detal_ventas_cripto_dolar / mayor_ventas_cripto_dolar)
+  async fetchTransactionsDetal(mode: AppMode = 'detal'): Promise<TransactionDetal[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_ventas_cripto_dolar`;
     try {
-      const { data, error } = await client.from('transactions').select('*').order('date', { ascending: false });
+      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
       return (data as TransactionDetal[]) || [];
-    } catch (err) {
+    } catch {
       return null;
     }
   },
 
-  async upsertTransactionDetal(tx: TransactionDetal): Promise<void> {
-    const client = getClient('detal');
-    if (!client) return;
+  async upsertTransactionDetal(tx: TransactionDetal, mode: AppMode = 'detal'): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_ventas_cripto_dolar`;
     try {
-      await client.from('transactions').upsert(tx);
+      await supabase.from(table).upsert({
+        id: tx.id,
+        date: tx.date,
+        client_name: tx.client_name,
+        phone: '',
+        operation_type: 'CRIPTO_DOLAR',
+        usdt_amount: tx.usdt_amount,
+        exchange_rate: tx.sell_price,
+        commission_rate: tx.buy_price,
+        received_account_id: tx.received_account_id,
+        amount_received: tx.amount_received,
+        paid_account_id: tx.paid_account_id,
+        bank_fee: tx.bank_fee,
+        total_to_pay: tx.total_to_pay,
+        net_profit: tx.profit_usd,
+        payment_status: tx.payment_status || 'PAGADO',
+        notes: tx.notes || '',
+      });
     } catch (err) {
-      console.warn('[Supabase detal] Error upserting tx:', err);
+      /* warn */
     }
   },
 
-  async deleteTransactionDetal(id: string): Promise<void> {
-    const client = getClient('detal');
-    if (!client) return;
+  async deleteTransactionDetal(id: string, mode: AppMode = 'detal'): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_ventas_cripto_dolar`;
     try {
-      await client.from('transactions').delete().eq('id', id);
+      await supabase.from(table).delete().eq('id', id);
     } catch (err) {
-      console.warn('[Supabase detal] Error deleting tx:', err);
+      /* warn */
     }
   },
 
-  // Transactions Mayor
-  async fetchTransactionsMayor(): Promise<TransactionMayor[] | null> {
-    const client = getClient('mayor');
-    if (!client) return null;
+  // Transactions Mayor (detal_ventas_regionales / mayor_ventas_regionales)
+  async fetchTransactionsMayor(mode: AppMode = 'mayor'): Promise<TransactionMayor[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_ventas_regionales`;
     try {
-      const { data, error } = await client.from('transactions').select('*').order('date', { ascending: false });
+      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
       return (data as TransactionMayor[]) || [];
-    } catch (err) {
+    } catch {
       return null;
     }
   },
 
-  async upsertTransactionMayor(tx: TransactionMayor): Promise<void> {
-    const client = getClient('mayor');
-    if (!client) return;
+  async upsertTransactionMayor(tx: TransactionMayor, mode: AppMode = 'mayor'): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_ventas_regionales`;
     try {
-      await client.from('transactions').upsert(tx);
+      await supabase.from(table).upsert({
+        id: tx.id,
+        date: tx.date,
+        client_name: tx.client_name,
+        currency: tx.currency || 'VES',
+        amount_ves: tx.amount_ves,
+        buy_price: tx.buy_price,
+        sell_price: tx.sell_price,
+        total_to_pay: tx.total_to_pay,
+        received_account_id: tx.received_account_id,
+        amount_received: tx.amount_received || 0,
+        paid_account_id: tx.paid_account_id,
+        commission: tx.commission || 0,
+        net_profit: tx.profit_usd,
+        payment_status: tx.payment_status || 'PAGADO',
+        notes: tx.notes || '',
+      });
     } catch (err) {
-      console.warn('[Supabase mayor] Error upserting tx:', err);
+      /* warn */
     }
   },
 
-  async deleteTransactionMayor(id: string): Promise<void> {
-    const client = getClient('mayor');
-    if (!client) return;
+  async deleteTransactionMayor(id: string, mode: AppMode = 'mayor'): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_ventas_regionales`;
     try {
-      await client.from('transactions').delete().eq('id', id);
+      await supabase.from(table).delete().eq('id', id);
     } catch (err) {
-      console.warn('[Supabase mayor] Error deleting tx:', err);
+      /* warn */
     }
   },
 
-  // Transfers
+  // Debtors (detal_deudores / mayor_deudores)
+  async fetchDebtors(mode: AppMode): Promise<Debtor[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_deudores`;
+    try {
+      const { data, error } = await supabase.from(table).select('*');
+      if (error) return null;
+      return (data as Debtor[]) || [];
+    } catch {
+      return null;
+    }
+  },
+
+  async upsertDebtor(debtor: Debtor, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_deudores`;
+    try {
+      await supabase.from(table).upsert({
+        id: debtor.id,
+        client_name: debtor.client_name,
+        phone: debtor.phone || '',
+        current_debt: debtor.current_debt,
+        notes: debtor.notes || '',
+        updated_at: debtor.updated_at || new Date().toISOString(),
+      });
+    } catch (err) {
+      /* warn */
+    }
+  },
+
+  async deleteDebtor(id: string, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_deudores`;
+    try {
+      await supabase.from(table).delete().eq('id', id);
+    } catch (err) {
+      /* warn */
+    }
+  },
+
+  // Debt Payments (detal_abonos_deudores / mayor_abonos_deudores)
+  async fetchDebtPayments(mode: AppMode): Promise<DebtPayment[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_abonos_deudores`;
+    try {
+      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      if (error) return null;
+      return (data as DebtPayment[]) || [];
+    } catch {
+      return null;
+    }
+  },
+
+  async upsertDebtPayment(payment: DebtPayment, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_abonos_deudores`;
+    try {
+      await supabase.from(table).upsert({
+        id: payment.id,
+        date: payment.date,
+        debtor_id: payment.debtor_id || '',
+        client_name: payment.client_name,
+        amount: payment.amount,
+        currency: payment.currency || 'USD',
+        amount_currency: payment.amount_currency || payment.amount,
+        exchange_rate: payment.exchange_rate || 1,
+        account_id: payment.account_id || '',
+        notes: payment.notes || '',
+      });
+    } catch (err) {
+      /* warn */
+    }
+  },
+
+  async deleteDebtPayment(id: string, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_abonos_deudores`;
+    try {
+      await supabase.from(table).delete().eq('id', id);
+    } catch (err) {
+      /* warn */
+    }
+  },
+
+  // Transfers (detal_cambio_saldos / mayor_cambio_saldos)
   async fetchTransfers(mode: AppMode): Promise<BalanceTransfer[] | null> {
-    const client = getClient(mode);
-    if (!client) return null;
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_cambio_saldos`;
     try {
-      const { data, error } = await client.from('transfers').select('*').order('date', { ascending: false });
+      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
       return (data as BalanceTransfer[]) || [];
-    } catch (err) {
+    } catch {
       return null;
     }
   },
 
   async upsertTransfer(transfer: BalanceTransfer, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_cambio_saldos`;
     try {
-      await client.from('transfers').upsert(transfer);
+      await supabase.from(table).upsert({
+        id: transfer.id,
+        date: transfer.date,
+        from_account_id: transfer.from_account_id,
+        to_account_id: transfer.to_account_id,
+        amount_sent: transfer.amount_sent,
+        amount_received: transfer.amount_received,
+        exchange_rate: 1,
+        commission: transfer.commission || 0,
+        notes: transfer.concept || transfer.reference || '',
+      });
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error upserting transfer:', err);
+      /* warn */
     }
   },
 
   async deleteTransfer(id: string, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_cambio_saldos`;
     try {
-      await client.from('transfers').delete().eq('id', id);
+      await supabase.from(table).delete().eq('id', id);
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error deleting transfer:', err);
+      /* warn */
     }
   },
 
-  // Expenses
+  // Expenses (detal_gastos_ingresos / mayor_gastos_ingresos)
   async fetchExpenses(mode: AppMode): Promise<Expense[] | null> {
-    const client = getClient(mode);
-    if (!client) return null;
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_gastos_ingresos`;
     try {
-      const { data, error } = await client.from('expenses').select('*').order('date', { ascending: false });
+      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
       return (data as Expense[]) || [];
-    } catch (err) {
+    } catch {
       return null;
     }
   },
 
   async upsertExpense(expense: Expense, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_gastos_ingresos`;
     try {
-      await client.from('expenses').upsert(expense);
+      await supabase.from(table).upsert({
+        id: expense.id,
+        date: expense.date,
+        type: expense.type,
+        category: expense.concept || 'GENERAL',
+        description: expense.description,
+        amount: expense.amount,
+        account_id: expense.account_id || '',
+        notes: '',
+      });
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error upserting expense:', err);
+      /* warn */
     }
   },
 
   async deleteExpense(id: string, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_gastos_ingresos`;
     try {
-      await client.from('expenses').delete().eq('id', id);
+      await supabase.from(table).delete().eq('id', id);
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error deleting expense:', err);
+      /* warn */
     }
   },
 
-  // Closures
+  // Closures (detal_cierres_diarios / mayor_cierres_diarios)
   async fetchClosures(mode: AppMode): Promise<DailyClosure[] | null> {
-    const client = getClient(mode);
-    if (!client) return null;
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_cierres_diarios`;
     try {
-      const { data, error } = await client.from('closures').select('*').order('date', { ascending: false });
+      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
       return (data as DailyClosure[]) || [];
-    } catch (err) {
+    } catch {
       return null;
     }
   },
 
   async upsertClosure(closure: DailyClosure, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_cierres_diarios`;
     try {
-      await client.from('closures').upsert(closure);
+      await supabase.from(table).upsert({
+        id: closure.id,
+        date: closure.date,
+        closed_at: closure.closed_at,
+        net_profit_day: closure.total_net_profit,
+        total_debtors_usd: closure.total_debtors_usd || 0,
+        accounts_snapshot: closure.accounts_snapshot,
+        debtors_snapshot: closure.debtors_snapshot,
+        notes: closure.notes || '',
+      });
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error upserting closure:', err);
+      /* warn */
     }
   },
 
   async deleteClosure(id: string, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_cierres_diarios`;
     try {
-      await client.from('closures').delete().eq('id', id);
+      await supabase.from(table).delete().eq('id', id);
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error deleting closure:', err);
+      /* warn */
     }
   },
 
-  // Suppliers
+  // Suppliers (detal_proveedores / mayor_proveedores)
   async fetchSuppliers(mode: AppMode): Promise<Supplier[] | null> {
-    const client = getClient(mode);
-    if (!client) return null;
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_proveedores`;
     try {
-      const { data, error } = await client.from('suppliers').select('*');
+      const { data, error } = await supabase.from(table).select('*');
       if (error) return null;
       return (data as Supplier[]) || [];
-    } catch (err) {
+    } catch {
       return null;
     }
   },
 
   async upsertSupplier(supplier: Supplier, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_proveedores`;
     try {
-      await client.from('suppliers').upsert({
+      await supabase.from(table).upsert({
         id: supplier.id,
         name: supplier.name,
         contact_info: supplier.contact_info || supplier.type || '',
         current_debt_usd: supplier.current_debt_usd || 0,
       });
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error upserting supplier:', err);
+      /* warn */
     }
   },
 
   async deleteSupplier(id: string, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_proveedores`;
     try {
-      await client.from('suppliers').delete().eq('id', id);
+      await supabase.from(table).delete().eq('id', id);
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error deleting supplier:', err);
+      /* warn */
     }
   },
 
-  // Supplier Purchases
+  // Supplier Purchases (detal_compras_proveedores / mayor_compras_proveedores)
   async fetchSupplierPurchases(mode: AppMode): Promise<SupplierPurchase[] | null> {
-    const client = getClient(mode);
-    if (!client) return null;
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_compras_proveedores`;
     try {
-      const { data, error } = await client.from('supplier_purchases').select('*').order('date', { ascending: false });
+      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
       return (data as SupplierPurchase[]) || [];
-    } catch (err) {
+    } catch {
       return null;
     }
   },
 
   async upsertSupplierPurchase(purchase: SupplierPurchase, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_compras_proveedores`;
     try {
-      await client.from('supplier_purchases').upsert(purchase);
+      await supabase.from(table).upsert({
+        id: purchase.id,
+        date: purchase.date,
+        supplier_id: purchase.supplier_id,
+        supplier_name: purchase.supplier_name,
+        currency: purchase.currency,
+        quantity: purchase.quantity,
+        cost_usd: purchase.cost_usd,
+        credited_amount: purchase.credited_amount || 0,
+        account_id: purchase.account_id || '',
+        notes: purchase.notes || '',
+      });
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error upserting purchase:', err);
+      /* warn */
     }
   },
 
   async deleteSupplierPurchase(id: string, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_compras_proveedores`;
     try {
-      await client.from('supplier_purchases').delete().eq('id', id);
+      await supabase.from(table).delete().eq('id', id);
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error deleting purchase:', err);
+      /* warn */
     }
   },
 
-  // Supplier Payments
+  // Supplier Payments (detal_pagos_proveedores / mayor_pagos_proveedores)
   async fetchSupplierPayments(mode: AppMode): Promise<SupplierPayment[] | null> {
-    const client = getClient(mode);
-    if (!client) return null;
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_pagos_proveedores`;
     try {
-      const { data, error } = await client.from('supplier_payments').select('*').order('date', { ascending: false });
+      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
       return (data as SupplierPayment[]) || [];
-    } catch (err) {
+    } catch {
       return null;
     }
   },
 
   async upsertSupplierPayment(payment: SupplierPayment, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_pagos_proveedores`;
     try {
-      await client.from('supplier_payments').upsert(payment);
+      await supabase.from(table).upsert({
+        id: payment.id,
+        date: payment.date,
+        supplier_id: payment.supplier_id,
+        supplier_name: payment.supplier_name,
+        amount_usd: payment.amount_usd,
+        account_id: payment.account_id || '',
+        notes: payment.reference || payment.notes || '',
+      });
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error upserting payment:', err);
+      /* warn */
     }
   },
 
   async deleteSupplierPayment(id: string, mode: AppMode): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_pagos_proveedores`;
     try {
-      await client.from('supplier_payments').delete().eq('id', id);
+      await supabase.from(table).delete().eq('id', id);
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Error deleting payment:', err);
+      /* warn */
     }
   },
 
@@ -384,8 +540,7 @@ export const SupabaseSyncService = {
     clients: Client[],
     suppliers: Supplier[]
   ): Promise<void> {
-    const client = getClient(mode);
-    if (!client) return;
+    if (!isSupabaseConfigured || !supabase) return;
     try {
       const existing = await this.fetchAccounts(mode);
       if (existing && existing.length === 0 && accounts.length > 0) {
@@ -400,29 +555,35 @@ export const SupabaseSyncService = {
         }
       }
     } catch (err) {
-      console.warn('[Supabase ' + mode + '] Seeding error:', err);
+      /* warn */
     }
   },
 
   async truncateAllTables(): Promise<void> {
-    const schemas: AppMode[] = ['detal', 'mayor'];
-    for (const s of schemas) {
-      const client = getClient(s);
-      if (!client) continue;
-      try {
-        await client.from('supplier_payments').delete().neq('id', '___none___');
-        await client.from('supplier_purchases').delete().neq('id', '___none___');
-        await client.from('suppliers').delete().neq('id', '___none___');
-        await client.from('closures').delete().neq('id', '___none___');
-        await client.from('expenses').delete().neq('id', '___none___');
-        await client.from('transfers').delete().neq('id', '___none___');
-        await client.from('transactions').delete().neq('id', '___none___');
-        await client.from('clients').delete().neq('id', '___none___');
-        await client.from('accounts').delete().neq('id', '___none___');
-      } catch (err) {
-        console.warn('[Supabase ' + s + '] Truncate error:', err);
+    if (!isSupabaseConfigured || !supabase) return;
+    const modes: AppMode[] = ['detal', 'mayor'];
+    for (const m of modes) {
+      const tables = [
+        `${m}_pagos_proveedores`,
+        `${m}_compras_proveedores`,
+        `${m}_proveedores`,
+        `${m}_cierres_diarios`,
+        `${m}_gastos_ingresos`,
+        `${m}_cambio_saldos`,
+        `${m}_abonos_deudores`,
+        `${m}_deudores`,
+        `${m}_ventas_cripto_dolar`,
+        `${m}_ventas_regionales`,
+        `${m}_clientes`,
+        `${m}_cuentas`,
+      ];
+      for (const t of tables) {
+        try {
+          await supabase.from(t).delete().neq('id', '___none___');
+        } catch (err) {
+          /* warn */
+        }
       }
     }
   },
 };
-

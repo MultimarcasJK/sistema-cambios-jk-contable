@@ -23,7 +23,9 @@ import {
   PlusCircle,
   Truck,
   Users,
+  CheckCircle,
 } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 interface DashboardProps {
   accounts: Account[];
@@ -46,6 +48,7 @@ export function DashboardView({
   closures,
   onNavigate,
 }: DashboardProps) {
+  const { isAdmin } = useAuth();
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const systemCurrencies = useMemo(() => CurrencyService.getCurrencies(), []);
@@ -177,23 +180,42 @@ export function DashboardView({
 
       {/* Tarjetas Principales de Saldos y Ganancias */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Ganancia Neta Hoy */}
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-4 rounded-2xl shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
-              Ganancia Neta Hoy
-            </span>
-            <div className={`text-2xl font-black mt-1 ${todayMetrics.netProfitToday >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              ${formatCurrency(todayMetrics.netProfitToday, 2)} USD
+        {/* Ganancia Neta Hoy (Solo Admin) vs Operaciones Hoy (Operador) */}
+        {isAdmin ? (
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-4 rounded-2xl shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+                Ganancia Neta Hoy
+              </span>
+              <div className={`text-2xl font-black mt-1 ${todayMetrics.netProfitToday >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                ${formatCurrency(todayMetrics.netProfitToday, 2)} USD
+              </div>
+              <span className="text-xs text-slate-400">
+                Cripto: +${formatCurrency(todayMetrics.profitDetalToday, 2)} | Reg.: +${formatCurrency(todayMetrics.profitMayorToday, 2)}
+              </span>
             </div>
-            <span className="text-xs text-slate-400">
-              Cripto: +${formatCurrency(todayMetrics.profitDetalToday, 2)} | Reg.: +${formatCurrency(todayMetrics.profitMayorToday, 2)}
-            </span>
+            <div className="w-12 h-12 rounded-xl bg-slate-800 text-emerald-400 border border-slate-700 flex items-center justify-center">
+              <TrendingUp className="w-6 h-6" />
+            </div>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-slate-800 text-emerald-400 border border-slate-700 flex items-center justify-center">
-            <TrendingUp className="w-6 h-6" />
+        ) : (
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-4 rounded-2xl shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+                Operaciones Realizadas Hoy
+              </span>
+              <div className="text-2xl font-black mt-1 text-emerald-400">
+                {detalTxs.filter((t) => t.date === todayStr).length + mayorTxs.filter((t) => t.date === todayStr).length} ventas
+              </div>
+              <span className="text-xs text-slate-400">
+                Cripto: {detalTxs.filter((t) => t.date === todayStr).length} | Reg.: {mayorTxs.filter((t) => t.date === todayStr).length}
+              </span>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-slate-800 text-emerald-400 border border-slate-700 flex items-center justify-center">
+              <CheckCircle className="w-6 h-6" />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Saldo USD */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
