@@ -87,10 +87,6 @@ export default function Home() {
     }, 1500);
 
     try {
-      if (typeof window !== 'undefined' && !localStorage.getItem('cambiosjk_v2_zero_cleaned')) {
-        localStorage.setItem('cambiosjk_v2_zero_cleaned', 'true');
-        StorageService.masterResetToZero();
-      }
       const initialMode = RatesService.getAppMode();
       StorageService.setAppMode(initialMode);
       setAppMode(initialMode);
@@ -200,15 +196,32 @@ export default function Home() {
           console.warn('Error sincronizando tasas en segundo plano:', err);
         });
 
-      // Auto-sincronizar en tiempo real cuando el usuario regresa a la pestaña
+      // Auto-sincronizar en tiempo real cuando el usuario regresa a la pestaña o cambia de ventana
       const handleWindowFocus = () => {
+        const currentMode = StorageService.getAppMode();
+        StorageService.syncFromSupabase(currentMode)
+          .then(() => refreshData(currentMode))
+          .catch(() => {});
         RatesService.syncRatesFromSheets()
           .then(() => setLastRatesSync(RatesService.getLastSyncTime()))
           .catch(() => {});
       };
       window.addEventListener('focus', handleWindowFocus);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          handleWindowFocus();
+        }
+      });
 
-      // Auto-sincronizar en segundo plano cada 60 segundos con anti-caché
+      // Auto-sincronizar Supabase en segundo plano cada 10 segundos para multi-dispositivo en vivo
+      const supabaseInterval = setInterval(() => {
+        const currentMode = StorageService.getAppMode();
+        StorageService.syncFromSupabase(currentMode)
+          .then(() => refreshData(currentMode))
+          .catch(() => {});
+      }, 10000);
+
+      // Auto-sincronizar tasas de Google Sheets cada 60 segundos con anti-caché
       const ratesInterval = setInterval(() => {
         RatesService.syncRatesFromSheets()
           .then(() => setLastRatesSync(RatesService.getLastSyncTime()))
@@ -218,6 +231,7 @@ export default function Home() {
       return () => {
         clearTimeout(safetyTimer);
         window.removeEventListener('focus', handleWindowFocus);
+        clearInterval(supabaseInterval);
         clearInterval(ratesInterval);
       };
     } catch (err) {

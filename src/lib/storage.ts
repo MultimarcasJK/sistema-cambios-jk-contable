@@ -203,42 +203,72 @@ export const StorageService = {
   async syncFromSupabase(mode?: AppMode): Promise<void> {
     const m = mode || this.getAppMode();
     try {
-      const [remoteAccs, remoteClients, remoteSuppliers, remoteTransfers, remoteExpenses, remoteClosures] =
-        await Promise.all([
-          SupabaseSyncService.fetchAccounts(m),
-          SupabaseSyncService.fetchClients(m),
-          SupabaseSyncService.fetchSuppliers(m),
-          SupabaseSyncService.fetchTransfers(m),
-          SupabaseSyncService.fetchExpenses(m),
-          SupabaseSyncService.fetchClosures(m),
-        ]);
+      const [
+        remoteAccs,
+        remoteClients,
+        remoteSuppliers,
+        remoteTransfers,
+        remoteExpenses,
+        remoteClosures,
+        remoteTxsDetal,
+        remoteTxsMayor,
+        remoteDebtors,
+        remoteDebtPayments,
+        remotePurchases,
+        remoteSupplierPayments,
+      ] = await Promise.all([
+        SupabaseSyncService.fetchAccounts(m),
+        SupabaseSyncService.fetchClients(m),
+        SupabaseSyncService.fetchSuppliers(m),
+        SupabaseSyncService.fetchTransfers(m),
+        SupabaseSyncService.fetchExpenses(m),
+        SupabaseSyncService.fetchClosures(m),
+        SupabaseSyncService.fetchTransactionsDetal(m),
+        SupabaseSyncService.fetchTransactionsMayor(m),
+        SupabaseSyncService.fetchDebtors(m),
+        SupabaseSyncService.fetchDebtPayments(m),
+        SupabaseSyncService.fetchSupplierPurchases(m),
+        SupabaseSyncService.fetchSupplierPayments(m),
+      ]);
 
-      if (remoteAccs && remoteAccs.length > 0) {
+      if (remoteAccs !== null) {
         saveToStorage(this.getAccountsKey(m), remoteAccs);
-      } else if (remoteAccs && remoteAccs.length === 0) {
-        const localAccs = this.getAccounts(m);
-        const localClients = this.getClients(m);
-        const localSuppliers = this.getSuppliers(m);
-        SupabaseSyncService.seedInitialIfEmpty(m, localAccs, localClients, localSuppliers).catch(() => {});
       }
-
-      if (remoteClients && remoteClients.length > 0) {
+      if (remoteClients !== null) {
         const sorted = [...remoteClients].sort((a, b) =>
           a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
         );
         saveToStorage(this.getClientsKey(m), sorted);
       }
-      if (remoteSuppliers && remoteSuppliers.length > 0) {
+      if (remoteSuppliers !== null) {
         saveToStorage(this.getSuppliersKey(m), remoteSuppliers);
       }
-      if (remoteTransfers && remoteTransfers.length > 0) {
+      if (remoteTransfers !== null) {
         saveToStorage(this.getTransfersKey(m), remoteTransfers);
       }
-      if (remoteExpenses && remoteExpenses.length > 0) {
+      if (remoteExpenses !== null) {
         saveToStorage(this.getExpensesKey(m), remoteExpenses);
       }
-      if (remoteClosures && remoteClosures.length > 0) {
+      if (remoteClosures !== null) {
         saveToStorage(this.getClosuresKey(m), remoteClosures);
+      }
+      if (remoteTxsDetal !== null) {
+        saveToStorage(this.getTransactionsDetalKey(m), remoteTxsDetal);
+      }
+      if (remoteTxsMayor !== null) {
+        saveToStorage(this.getTransactionsMayorKey(m), remoteTxsMayor);
+      }
+      if (remoteDebtors !== null) {
+        saveToStorage(this.getDebtorsKey(m), remoteDebtors);
+      }
+      if (remoteDebtPayments !== null) {
+        saveToStorage(this.getDebtPaymentsKey(m), remoteDebtPayments);
+      }
+      if (remotePurchases !== null) {
+        saveToStorage(this.getSupplierPurchasesKey(m), remotePurchases);
+      }
+      if (remoteSupplierPayments !== null) {
+        saveToStorage(this.getSupplierPaymentsKey(m), remoteSupplierPayments);
       }
     } catch (err) {
       console.warn('[Sync ' + m + '] Sincronización secundaria pospuesta:', err);
@@ -832,8 +862,8 @@ export const StorageService = {
   syncDebtors(mode?: AppMode): Debtor[] {
     const m = mode || this.getAppMode();
     this.migrateOldDataIfNeeded();
-    const rawDebtors = getFromStorage<Debtor[]>(this.getDebtorsKey(m), []);
-    const debtors: Debtor[] = (!rawDebtors || rawDebtors.length === 0) ? (m === 'detal' ? [...INITIAL_DEBTORS] : []) : [...rawDebtors].filter(Boolean);
+    const rawDebtors = getFromStorage<Debtor[] | null>(this.getDebtorsKey(m), null);
+    const debtors: Debtor[] = rawDebtors === null ? (m === 'detal' ? [...INITIAL_DEBTORS] : []) : [...rawDebtors].filter(Boolean);
     const detalTxs = (getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []) || []).filter(Boolean);
     const mayorTxs = (getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []) || []).filter(Boolean);
     const payments = (getFromStorage<DebtPayment[]>(this.getDebtPaymentsKey(m), []) || []).filter(Boolean);

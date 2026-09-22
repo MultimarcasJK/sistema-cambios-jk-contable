@@ -107,7 +107,22 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
-      return (data as TransactionDetal[]) || [];
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        date: row.date,
+        client_name: row.client_name,
+        usdt_amount: Number(row.usdt_amount || 0),
+        buy_price: Number(row.commission_rate ?? row.buy_price ?? 0),
+        sell_price: Number(row.exchange_rate ?? row.sell_price ?? 0),
+        received_account_id: row.received_account_id || '',
+        amount_received: Number(row.amount_received || 0),
+        paid_account_id: row.paid_account_id || '',
+        bank_fee: Number(row.bank_fee || 0),
+        total_to_pay: Number(row.total_to_pay || 0),
+        profit_usd: Number(row.net_profit ?? row.profit_usd ?? 0),
+        payment_status: row.payment_status || 'PAGADO',
+        notes: row.notes || '',
+      }));
     } catch {
       return null;
     }
@@ -157,7 +172,23 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
-      return (data as TransactionMayor[]) || [];
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        date: row.date,
+        client_name: row.client_name,
+        currency: row.currency || 'VES',
+        amount_ves: Number(row.amount_ves || 0),
+        buy_price: Number(row.buy_price || 0),
+        sell_price: Number(row.sell_price || 0),
+        total_to_pay: Number(row.total_to_pay || 0),
+        received_account_id: row.received_account_id || '',
+        amount_received: Number(row.amount_received || 0),
+        paid_account_id: row.paid_account_id || '',
+        commission: Number(row.commission || 0),
+        profit_usd: Number(row.net_profit ?? row.profit_usd ?? 0),
+        payment_status: row.payment_status || 'PAGADO',
+        notes: row.notes || '',
+      }));
     } catch {
       return null;
     }
