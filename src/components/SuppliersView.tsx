@@ -740,35 +740,37 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
             {filteredSuppliers.map((sup) => (
               <div
                 key={sup.id}
-                className="p-4 rounded-xl border border-slate-200 hover:border-slate-300 transition bg-slate-50/50 flex flex-col justify-between"
+                className="p-4 rounded-xl border border-slate-200 hover:border-slate-300 transition bg-slate-50 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <h4
                         onClick={() => setSelectedSupplierForHistory(sup)}
-                        className="font-bold text-slate-900 text-sm leading-tight hover:text-blue-600 cursor-pointer transition"
+                        className="font-bold text-slate-900 text-sm leading-tight hover:text-blue-500 cursor-pointer transition"
                         title="Clic para ver historial completo"
                       >
                         {sup.name}
                       </h4>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 mt-1 inline-block">
-                        {sup.type}
-                      </span>
+                      {sup.type && sup.type !== '-' && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 mt-1 inline-block">
+                          {sup.type}
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center space-x-1">
                       <button
                         onClick={() => handleOpenEditSupplier(sup)}
                         title="Editar proveedor"
-                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition cursor-pointer"
+                        className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-slate-200/50 rounded-lg transition cursor-pointer"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => handleDeleteSupplier(sup)}
                         title="Eliminar proveedor"
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                        className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -776,9 +778,12 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                   </div>
 
                   {sup.contact_info && (
-                    <p className="text-xs text-slate-500 mt-2 bg-white/70 p-2 rounded-lg border border-slate-100">
-                      {sup.contact_info}
-                    </p>
+                    <div className="mt-2.5 p-2 rounded-lg bg-slate-100 border border-slate-200 flex items-start space-x-2 text-xs">
+                      <Wallet className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                      <span className="font-semibold text-slate-700 break-words leading-relaxed">
+                        {sup.contact_info}
+                      </span>
+                    </div>
                   )}
                 </div>
 
@@ -788,10 +793,18 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                       <span className="text-[10px] text-slate-400 block font-semibold uppercase">Saldo que Debemos:</span>
                       <span
                         className={`font-mono font-black text-base ${
-                          sup.current_debt_usd > 0 ? 'text-rose-600' : 'text-emerald-600'
+                          sup.current_debt_usd > 0
+                            ? 'text-rose-600'
+                            : sup.current_debt_usd < 0
+                            ? 'text-emerald-500'
+                            : 'text-slate-400'
                         }`}
                       >
-                        {sup.current_debt_usd > 0 ? '-' : ''}${sup.current_debt_usd.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
+                        {sup.current_debt_usd > 0
+                          ? `-$${sup.current_debt_usd.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD`
+                          : sup.current_debt_usd < 0
+                          ? `+$${Math.abs(sup.current_debt_usd).toLocaleString('en-US', { minimumFractionDigits: 2 })} USD`
+                          : '$0.00 USD'}
                       </span>
                     </div>
                   </div>
@@ -803,7 +816,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                       className="flex-1 py-1.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 transition cursor-pointer"
                       title="Ver extracto y compras del proveedor"
                     >
-                      <FileText className="w-3.5 h-3.5 text-blue-600" />
+                      <FileText className="w-3.5 h-3.5 text-blue-500" />
                       <span>Ver Historial</span>
                     </button>
 
@@ -813,7 +826,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                       title="Compartir Comprobante por WhatsApp"
                       className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer"
                     >
-                      <Share2 className="w-3.5 h-3.5 text-blue-600" />
+                      <Share2 className="w-3.5 h-3.5 text-blue-500" />
                     </button>
 
                     <button

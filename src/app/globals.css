@@ -126,6 +126,24 @@ body {
   border-color: #334155 !important;
 }
 
+/* Fondos con opacidad o variantes claras → fondo oscuro nítido */
+[data-theme="mayor"] [class*="bg-white/"],
+[data-theme="mayor"] [class*="bg-slate-50/"],
+[data-theme="mayor"] [class*="bg-slate-100/"] {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+/* Sección de proveedores en modo Mayor: tarjetas y cajas internas contrastadas */
+[data-theme="mayor"] #seccion-proveedores .bg-slate-50 {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+}
+[data-theme="mayor"] #seccion-proveedores .bg-slate-100 {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
 /* Bordes claros → oscuros */
 [data-theme="mayor"] .border-slate-200,
 [data-theme="mayor"] .border-slate-100,
@@ -158,6 +176,10 @@ body {
 }
 [data-theme="mayor"] .text-slate-400 {
   color: #cbd5e1 !important;
+}
+[data-theme="mayor"] .text-blue-700,
+[data-theme="mayor"] .text-blue-600 {
+  color: #60a5fa !important;
 }
 [data-theme="mayor"] label {
   color: #ffffff !important;

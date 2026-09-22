@@ -914,6 +914,8 @@ export const StorageService = {
 
       const calculatedDebt = Math.max(0, Number((st.totalBought - st.totalPaidInTx - clientAbonos).toFixed(2)));
 
+      const hasTxs = st.totalBought > 0;
+
       if (existingIndex === -1) {
         if (calculatedDebt > 0) {
           debtors.unshift({
@@ -925,7 +927,8 @@ export const StorageService = {
           });
           hasChanges = true;
         }
-      } else if (debtors[existingIndex].current_debt === 0 && calculatedDebt > 0) {
+      } else if (hasTxs && debtors[existingIndex].current_debt !== calculatedDebt) {
+        // Si hay transacciones registradas, la deuda se recalcula siempre desde los datos reales
         debtors[existingIndex].current_debt = calculatedDebt;
         debtors[existingIndex].updated_at = new Date().toISOString();
         hasChanges = true;
