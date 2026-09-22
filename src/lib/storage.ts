@@ -235,7 +235,25 @@ export const StorageService = {
         saveToStorage(this.getAccountsKey(m), remoteAccs);
       }
       if (remoteClients !== null) {
-        const sorted = [...remoteClients].sort((a, b) =>
+        const uniqueMap = new Map<string, Client>();
+        remoteClients.forEach((c) => {
+          if (!c || !c.name) return;
+          const key = c.name.trim().toUpperCase();
+          if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, c);
+          } else {
+            const existing = uniqueMap.get(key)!;
+            // Preservar teléfono, cédula o deuda si la otra copia los tiene
+            const updated: Client = {
+              ...existing,
+              phone: existing.phone || c.phone || '',
+              identification: existing.identification || c.identification || '',
+              current_debt: existing.current_debt || c.current_debt || 0,
+            };
+            uniqueMap.set(key, updated);
+          }
+        });
+        const sorted = Array.from(uniqueMap.values()).sort((a, b) =>
           a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
         );
         saveToStorage(this.getClientsKey(m), sorted);
@@ -382,6 +400,12 @@ export const StorageService = {
   addClient(client: Omit<Client, 'id' | 'created_at'>, mode?: AppMode): Client {
     const m = mode || this.getAppMode();
     const all = this.getClients(m);
+    const upperName = (client.name || '').trim().toUpperCase();
+    const existing = all.find((c) => (c.name || '').trim().toUpperCase() === upperName);
+    if (existing) {
+      this.updateClient(existing.id, client, m);
+      return { ...existing, ...client };
+    }
     const newClient: Client = {
       ...client,
       id: 'cli-' + Date.now(),

@@ -115,15 +115,17 @@ export default function Home() {
           if (typeof window !== 'undefined' && !localStorage.getItem(FLAG)) {
             const existentes = StorageService.getClients('mayor');
             const nombresExistentes = new Set(
-              existentes.map((c) => c.name.trim().toUpperCase())
+              existentes.map((c) => (c.name || '').trim().toUpperCase())
             );
             const ahora = new Date().toISOString();
             const nuevos: import('@/types').Client[] = [];
             CLIENTES_EXCEL_DETAL.forEach((nombre, idx) => {
-              if (!nombresExistentes.has(nombre.trim().toUpperCase())) {
+              const norm = (nombre || '').trim().toUpperCase();
+              if (norm && !nombresExistentes.has(norm)) {
+                nombresExistentes.add(norm);
                 nuevos.push({
-                  id: 'exc-' + idx + '-' + Date.now(),
-                  name: nombre,
+                  id: 'exc-' + idx,
+                  name: nombre.trim(),
                   identification: '',
                   phone: '',
                   address: '',
@@ -137,7 +139,7 @@ export default function Home() {
             if (nuevos.length > 0) {
               const todos = [...existentes, ...nuevos];
               StorageService.saveClients(todos, 'mayor');
-              // Subir a Supabase uno por uno (sin duplicados — upsert por id)
+              // Subir a Supabase uno por uno (con ID determinista)
               for (const c of nuevos) {
                 await SupabaseSyncService.upsertClient(c, 'mayor').catch(() => {});
               }
