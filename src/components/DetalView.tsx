@@ -232,6 +232,47 @@ export function DetalView({
     });
   }, [detalTxs, searchTerm, filterDate]);
 
+  const allPayments = useMemo(() => {
+    return StorageService.getDebtPayments(appMode);
+  }, [detalTxs, appMode]);
+
+  type DetalRowItem =
+    | { type: 'tx'; data: TransactionDetal; date: string; timestamp: number }
+    | { type: 'abono'; data: import('@/types').DebtPayment; date: string; timestamp: number };
+
+  const combinedDetalItems = useMemo(() => {
+    const list: DetalRowItem[] = [
+      ...detalTxs.map((tx) => ({
+        type: 'tx' as const,
+        data: tx,
+        date: tx.date,
+        timestamp: new Date(tx.created_at || tx.date).getTime() || 0,
+      })),
+      ...allPayments.map((pay) => ({
+        type: 'abono' as const,
+        data: pay,
+        date: pay.date,
+        timestamp: new Date(pay.created_at || pay.date).getTime() || 0,
+      })),
+    ];
+
+    list.sort((a, b) => {
+      if (b.date !== a.date) return b.date.localeCompare(a.date);
+      return b.timestamp - a.timestamp;
+    });
+
+    return list.filter((item) => {
+      const search = searchTerm.toLowerCase();
+      const name = item.data.client_name.toLowerCase();
+      const matchSearch =
+        name.includes(search) ||
+        ('reference' in item.data && item.data.reference?.toLowerCase().includes(search)) ||
+        ('notes' in item.data && item.data.notes?.toLowerCase().includes(search));
+      const matchDate = filterDate ? item.date === filterDate : true;
+      return matchSearch && matchDate;
+    });
+  }, [detalTxs, allPayments, searchTerm, filterDate]);
+
   const totalVolumeFiltered = useMemo(() => {
     return filteredTxs.reduce((sum, tx) => sum + tx.usdt_amount, 0);
   }, [filteredTxs]);
@@ -253,14 +294,13 @@ export function DetalView({
             </div>
           </div>
 
-          {/* Botón morado de Abono estilo Excel */}
           <button
             type="button"
             onClick={() => setIsAbonoModalOpen(true)}
-            className="flex items-center space-x-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer self-start sm:self-auto"
+            className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-sm cursor-pointer self-start sm:self-auto"
           >
             <ArrowDownLeft className="w-4 h-4" />
-            <span>+ Registrar Abono (Excel)</span>
+            <span>↙ Registrar Abono / Saldo a Favor</span>
           </button>
         </div>
 
@@ -689,107 +729,170 @@ export function DetalView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
-              {filteredTxs.length === 0 ? (
+              {combinedDetalItems.length === 0 ? (
                 <tr>
                   <td colSpan={isAdmin ? 11 : 9} className="py-8 text-center text-slate-400 font-sans">
-                    No se encontraron registros de CRIPTO/DOLAR.
+                    No se encontraron registros ni abonos de CRIPTO/DOLAR.
                   </td>
                 </tr>
               ) : (
-                filteredTxs.map((tx) => {
-                  const recvAcc = accounts.find((a) => a.id === tx.received_account_id);
-                  const isPaid = tx.payment_status === 'PAGADO';
-                  const isPartial = tx.payment_status === 'PARCIAL';
-                  const isPorCobrar = tx.received_account_id === 'POR_COBRAR' || tx.payment_status === 'PENDIENTE' || (!isPaid && !isPartial);
-                  const amountAbonado = isPaid ? tx.total_to_pay : (tx.amount_received || 0);
+                combinedDetalItems.map((item) => {
+                  if (item.type === 'tx') {
+                    const tx = item.data;
+                    const recvAcc = accounts.find((a) => a.id === tx.received_account_id);
+                    const isPaid = tx.payment_status === 'PAGADO';
+                    const isPartial = tx.payment_status === 'PARCIAL';
+                    const isPorCobrar = tx.received_account_id === 'POR_COBRAR' || tx.payment_status === 'PENDIENTE' || (!isPaid && !isPartial);
+                    const amountAbonado = isPaid ? tx.total_to_pay : (tx.amount_received || 0);
 
-                  return (
-                    <tr key={tx.id} className="group hover:bg-slate-50 transition">
-                      <td className="py-2.5 px-3 text-slate-500 font-sans">{tx.date}</td>
-                      <td className="py-2.5 px-3 font-semibold font-sans text-slate-800">
-                        {tx.client_name}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
-                        <span className="text-[10px] font-bold text-indigo-700 mr-1.5 px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded">
-                          USDT
-                        </span>
-                        {formatCurrency(tx.usdt_amount)}
-                        {tx.bank_fee > 0 && (
-                          <span className="block text-[10px] text-rose-500 font-sans font-normal">
-                            (Debitado: -{formatCurrency(tx.usdt_amount + tx.bank_fee)})
+                    return (
+                      <tr key={tx.id} className="group hover:bg-slate-50 transition">
+                        <td className="py-2.5 px-3 text-slate-500 font-sans">{tx.date}</td>
+                        <td className="py-2.5 px-3 font-semibold font-sans text-slate-800">
+                          {tx.client_name}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
+                          <span className="text-[10px] font-bold text-indigo-700 mr-1.5 px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded">
+                            USDT
                           </span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-slate-600 font-sans whitespace-nowrap">
-                        {tx.bank_fee > 0 ? (
-                          <span>
-                            {tx.fee_percent ? (
-                              <span className="font-bold text-purple-700 mr-1">{tx.fee_percent}%</span>
-                            ) : null}
-                            <span className="font-mono text-slate-700 font-bold">
-                              (${formatCurrency(tx.bank_fee)})
-                            </span>
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-slate-600 font-mono">{formatRateDisplay(tx.sell_price)}</td>
-                      <td className="py-2.5 px-3 text-right font-black text-slate-900 whitespace-nowrap">
-                        ${formatCurrency(tx.total_to_pay)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-bold text-slate-700 whitespace-nowrap">
-                        ${formatCurrency(amountAbonado)}
-                      </td>
-                      <td className="py-2.5 px-3 font-sans">
-                        {isPaid ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                            Pagado
-                          </span>
-                        ) : isPartial ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
-                            Parcial
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
-                            Por Cobrar
-                          </span>
-                        )}
-                      </td>
-                      {isAdmin && (
-                        <td
-                          className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
-                            tx.profit_usd < 0
-                              ? 'text-rose-600'
-                              : 'text-emerald-600'
-                          }`}
-                        >
-                          {tx.profit_usd > 0
-                            ? `+$${formatCurrency(tx.profit_usd)}`
-                            : tx.profit_usd < 0
-                            ? `-$${formatCurrency(Math.abs(tx.profit_usd))}`
-                            : `$0.00`}
+                          {formatCurrency(tx.usdt_amount)}
                           {tx.bank_fee > 0 && (
-                            <span className="block text-[10px] text-slate-400 font-sans font-normal">
-                              (Comisión: -${formatCurrency(tx.bank_fee)})
+                            <span className="block text-[10px] text-rose-500 font-sans font-normal">
+                              (Debitado: -{formatCurrency(tx.usdt_amount + tx.bank_fee)})
                             </span>
                           )}
                         </td>
-                      )}
-                      <td className="py-2.5 px-3 font-sans text-slate-500 truncate max-w-[140px]">
-                        {isPorCobrar ? (
-                          <span className="text-rose-600 font-semibold text-[11px]">Por Cobrar</span>
-                        ) : recvAcc ? (
-                          recvAcc.name || recvAcc.bank_name
-                        ) : (
-                          '-'
+                        <td className="py-2.5 px-3 text-right text-slate-600 font-sans whitespace-nowrap">
+                          {tx.bank_fee > 0 ? (
+                            <span>
+                              {tx.fee_percent ? (
+                                <span className="font-bold text-purple-700 mr-1">{tx.fee_percent}%</span>
+                              ) : null}
+                              <span className="font-mono text-slate-700 font-bold">
+                                (${formatCurrency(tx.bank_fee)})
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-slate-600 font-mono">{formatRateDisplay(tx.sell_price)}</td>
+                        <td className="py-2.5 px-3 text-right font-black text-slate-900 whitespace-nowrap">
+                          ${formatCurrency(tx.total_to_pay)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-slate-700 whitespace-nowrap">
+                          ${formatCurrency(amountAbonado)}
+                        </td>
+                        <td className="py-2.5 px-3 font-sans">
+                          {isPaid ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                              Pagado
+                            </span>
+                          ) : isPartial ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                              Parcial
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                              Por Cobrar
+                            </span>
+                          )}
+                        </td>
+                        {isAdmin && (
+                          <td
+                            className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
+                              tx.profit_usd < 0
+                                ? 'text-rose-600'
+                                : 'text-emerald-600'
+                            }`}
+                          >
+                            {tx.profit_usd > 0
+                              ? `+$${formatCurrency(tx.profit_usd)}`
+                              : tx.profit_usd < 0
+                              ? `-$${formatCurrency(Math.abs(tx.profit_usd))}`
+                              : `$0.00`}
+                            {tx.bank_fee > 0 && (
+                              <span className="block text-[10px] text-slate-400 font-sans font-normal">
+                                (Comisión: -${formatCurrency(tx.bank_fee)})
+                              </span>
+                            )}
+                          </td>
                         )}
+                        <td className="py-2.5 px-3 font-sans text-slate-500 truncate max-w-[140px]">
+                          {isPorCobrar ? (
+                            <span className="text-rose-600 font-semibold text-[11px]">Por Cobrar</span>
+                          ) : recvAcc ? (
+                            recvAcc.name || recvAcc.bank_name
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        {isAdmin && (
+                          <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                            <button
+                              onClick={() => handleDeleteTx(tx.id)}
+                              title="Eliminar operación"
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
+                            >
+                              <Trash2 className="w-4 h-4 text-rose-600" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  }
+
+                  // Fila de Abono / Saldo a Favor
+                  const pay = item.data;
+                  const recvAcc = accounts.find((a) => a.id === pay.account_id);
+
+                  return (
+                    <tr key={`abono-${pay.id}`} className="group hover:bg-emerald-50/50 bg-emerald-50/20 transition border-l-4 border-l-emerald-500">
+                      <td className="py-2.5 px-3 text-slate-500 font-sans">{pay.date}</td>
+                      <td className="py-2.5 px-3 font-semibold font-sans text-slate-800">
+                        <div className="flex items-center space-x-1.5">
+                          <span>{pay.client_name}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            Abono a Favor
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-bold text-emerald-700 whitespace-nowrap">
+                        <span className="text-[10px] font-bold text-emerald-800 mr-1.5 px-1.5 py-0.5 bg-emerald-100 border border-emerald-200 rounded">
+                          {pay.currency || 'USD'}
+                        </span>
+                        +{formatCurrency(pay.amount_currency || pay.amount)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right text-slate-400 font-sans">-</td>
+                      <td className="py-2.5 px-3 text-right text-slate-400 font-mono">-</td>
+                      <td className="py-2.5 px-3 text-right text-slate-400 font-mono">-</td>
+                      <td className="py-2.5 px-3 text-right font-black text-emerald-700">
+                        +${formatCurrency(pay.amount)}
+                      </td>
+                      <td className="py-2.5 px-3 font-sans">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 inline-flex items-center space-x-1">
+                          <ArrowDownLeft className="w-3 h-3" />
+                          <span>Abono Recibido</span>
+                        </span>
                       </td>
                       {isAdmin && (
-                        <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                        <td className="py-2.5 px-3 text-right text-slate-400 font-mono">
+                          $0.00
+                        </td>
+                      )}
+                      <td className="py-2.5 px-3 font-sans text-slate-700 font-semibold whitespace-nowrap">
+                        {recvAcc ? recvAcc.name || recvAcc.bank_name : pay.account_id || 'Caja / Banco'}
+                      </td>
+                      {isAdmin && (
+                        <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-emerald-50/60 group-hover:bg-emerald-100/60 z-10 border-l border-emerald-200 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
                           <button
-                            onClick={() => handleDeleteTx(tx.id)}
-                            title="Eliminar operación"
+                            onClick={() => {
+                              if (confirm(`¿Eliminar este registro de abono de ${pay.client_name}?`)) {
+                                StorageService.deleteDebtPayment(pay.id, appMode);
+                                onDataChange();
+                              }
+                            }}
+                            title="Eliminar abono"
                             className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
                           >
                             <Trash2 className="w-4 h-4 text-rose-600" />
@@ -813,6 +916,7 @@ export function DetalView({
         accounts={accounts}
         clients={clients}
         debtors={StorageService.getDebtors(appMode)}
+        appMode={appMode}
       />
     </div>
   );

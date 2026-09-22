@@ -15,6 +15,7 @@ interface AbonoModalProps {
   debtors?: Debtor[];
   preselectedClientName?: string;
   preselectedDebtorId?: string;
+  appMode?: import('@/types').AppMode;
 }
 
 export function AbonoModal({
@@ -26,6 +27,7 @@ export function AbonoModal({
   debtors = [],
   preselectedClientName,
   preselectedDebtorId,
+  appMode,
 }: AbonoModalProps) {
   const [selectedClientName, setSelectedClientName] = useState('');
   const [paymentCurrency, setPaymentCurrency] = useState<Currency>('USD');
@@ -129,7 +131,7 @@ export function AbonoModal({
       exchange_rate: rate,
       account_id: paymentAccountId || undefined,
       notes: paymentNotes.trim() || undefined,
-    });
+    }, appMode);
 
     onSuccess();
     onClose();
@@ -197,14 +199,26 @@ export function AbonoModal({
                       <option key={name} value={name}>
                         {deb && deb.current_debt > 0
                           ? `${name} (Debe: $${deb.current_debt.toFixed(2)})`
+                          : deb && deb.current_debt < 0
+                          ? `${name} (A favor: +$${Math.abs(deb.current_debt).toFixed(2)})`
                           : name}
                       </option>
                     );
                   })}
                 </datalist>
                 {currentDebtor && (
-                  <p className="text-[11px] text-rose-600 font-semibold mt-1">
-                    Saldo deudor actual: ${currentDebtor.current_debt.toFixed(2)} USD
+                  <p className={`text-[11px] font-semibold mt-1 ${
+                    currentDebtor.current_debt > 0
+                      ? 'text-rose-600'
+                      : currentDebtor.current_debt < 0
+                      ? 'text-emerald-600'
+                      : 'text-slate-500'
+                  }`}>
+                    {currentDebtor.current_debt > 0
+                      ? `Deuda actual: -$${currentDebtor.current_debt.toFixed(2)} USD`
+                      : currentDebtor.current_debt < 0
+                      ? `Saldo a favor actual: +$${Math.abs(currentDebtor.current_debt).toFixed(2)} USD`
+                      : 'Cliente al día ($0.00)'}
                   </p>
                 )}
               </div>

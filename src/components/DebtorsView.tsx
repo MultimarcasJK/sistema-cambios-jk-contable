@@ -71,7 +71,11 @@ export function DebtorsView({
   });
 
   const totalDebt = useMemo(() => {
-    return debtors.reduce((sum, d) => sum + (d.current_debt || 0), 0);
+    return debtors.filter((d) => (d.current_debt || 0) > 0).reduce((sum, d) => sum + d.current_debt, 0);
+  }, [debtors]);
+
+  const totalCredit = useMemo(() => {
+    return debtors.filter((d) => (d.current_debt || 0) < 0).reduce((sum, d) => sum + Math.abs(d.current_debt), 0);
   }, [debtors]);
 
   const filteredDebtors = useMemo(() => {
@@ -199,17 +203,31 @@ export function DebtorsView({
   return (
     <div className="space-y-6">
       {/* Resumen Superior */}
-      <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <span className="text-xs uppercase font-semibold text-blue-200 tracking-wider">
-            Total Cuentas por Cobrar (Deudores)
-          </span>
-          <div className="text-3xl font-black font-mono mt-1">
-            ${totalDebt.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
+      <div className="bg-gradient-to-r from-blue-700 via-indigo-800 to-slate-900 text-white p-5 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-6">
+          <div>
+            <span className="text-xs uppercase font-semibold text-blue-200 tracking-wider">
+              Total Cuentas por Cobrar (Deudores)
+            </span>
+            <div className="text-2xl sm:text-3xl font-black font-mono mt-1 text-rose-300">
+              ${totalDebt.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
+            </div>
+            <p className="text-xs text-blue-200">
+              {debtors.filter((d) => d.current_debt > 0).length} clientes deben al negocio
+            </p>
           </div>
-          <p className="text-xs text-blue-200">
-            {debtors.filter((d) => d.current_debt > 0).length} clientes con saldos pendientes
-          </p>
+
+          <div className="border-l border-blue-500/40 pl-6">
+            <span className="text-xs uppercase font-semibold text-emerald-200 tracking-wider">
+              Total Saldos a Favor (Abonos)
+            </span>
+            <div className="text-2xl sm:text-3xl font-black font-mono mt-1 text-emerald-300">
+              +${totalCredit.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
+            </div>
+            <p className="text-xs text-emerald-200">
+              {debtors.filter((d) => d.current_debt < 0).length} clientes con saldo a su favor
+            </p>
+          </div>
         </div>
 
         <button
@@ -346,19 +364,19 @@ export function DebtorsView({
                       )}
                     </div>
                     <span
-                      className={`font-mono font-black text-xs px-2 py-0.5 rounded-lg shrink-0 ${
+                      className={`font-mono font-black text-xs px-2.5 py-1 rounded-lg shrink-0 ${
                         d.current_debt > 0
                           ? 'text-rose-700 bg-rose-50 border border-rose-200'
                           : d.current_debt === 0
-                          ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
-                          : 'text-blue-700 bg-blue-50 border border-blue-200'
+                          ? 'text-slate-600 bg-slate-50 border border-slate-200'
+                          : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
                       }`}
                     >
                       {d.current_debt > 0
-                        ? `-$${formatCurrency(d.current_debt)}`
+                        ? `-$${formatCurrency(d.current_debt)} (Debe)`
                         : d.current_debt === 0
                         ? '$0.00 (Al día)'
-                        : `+$${formatCurrency(Math.abs(d.current_debt))}`}
+                        : `+$${formatCurrency(Math.abs(d.current_debt))} (A favor)`}
                     </span>
                   </div>
 

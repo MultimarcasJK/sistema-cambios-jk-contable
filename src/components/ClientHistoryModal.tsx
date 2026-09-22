@@ -117,9 +117,9 @@ export function ClientHistoryModal({
       currentDebt = totalBoughtUsd;
     }
 
-    const totalOps = clientDetalHistory.length + clientMayorHistory.length;
+    const totalOps = clientDetalHistory.length + clientMayorHistory.length + clientPaymentsHistory.length;
 
-    const finalDebtor: Debtor | null = debtorEntry || (currentDebt > 0 ? {
+    const finalDebtor: Debtor | null = debtorEntry || (currentDebt !== 0 ? {
       id: 'deb-' + clean,
       client_name: clean,
       current_debt: currentDebt,
@@ -420,16 +420,48 @@ export function ClientHistoryModal({
             <span className="text-[10px] text-emerald-600">Margen neto aportado</span>
           </div>
 
-          <div className={`p-3.5 rounded-xl border flex flex-col justify-between ${clientFinancials.currentDebt > 0 ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className={`p-3.5 rounded-xl border flex flex-col justify-between ${
+            clientFinancials.currentDebt > 0
+              ? 'bg-rose-50 border-rose-200'
+              : clientFinancials.currentDebt < 0
+              ? 'bg-emerald-50 border-emerald-200'
+              : 'bg-slate-50 border-slate-200'
+          }`}>
             <div>
-              <span className={`text-[10px] uppercase font-bold block ${clientFinancials.currentDebt > 0 ? 'text-rose-700' : 'text-slate-500'}`}>
-                Deuda Pendiente
+              <span className={`text-[10px] uppercase font-bold block ${
+                clientFinancials.currentDebt > 0
+                  ? 'text-rose-700'
+                  : clientFinancials.currentDebt < 0
+                  ? 'text-emerald-700'
+                  : 'text-slate-500'
+              }`}>
+                {clientFinancials.currentDebt < 0 ? 'Saldo a Favor' : 'Deuda Pendiente'}
               </span>
-              <span className={`text-lg font-black font-mono mt-0.5 block ${clientFinancials.currentDebt > 0 ? 'text-rose-700' : 'text-emerald-600'}`}>
-                {clientFinancials.currentDebt > 0 ? '-' : ''}${clientFinancials.currentDebt.toFixed(2)}
+              <span className={`text-lg font-black font-mono mt-0.5 block ${
+                clientFinancials.currentDebt > 0
+                  ? 'text-rose-700'
+                  : clientFinancials.currentDebt < 0
+                  ? 'text-emerald-700'
+                  : 'text-slate-700'
+              }`}>
+                {clientFinancials.currentDebt > 0
+                  ? `-$${clientFinancials.currentDebt.toFixed(2)}`
+                  : clientFinancials.currentDebt < 0
+                  ? `+$${Math.abs(clientFinancials.currentDebt).toFixed(2)}`
+                  : '$0.00'}
               </span>
-              <span className={`text-[10px] ${clientFinancials.currentDebt > 0 ? 'text-rose-600' : 'text-emerald-600 font-semibold'}`}>
-                {clientFinancials.currentDebt > 0 ? 'Saldo por cobrar' : 'Al día ($0.00)'}
+              <span className={`text-[10px] ${
+                clientFinancials.currentDebt > 0
+                  ? 'text-rose-600 font-semibold'
+                  : clientFinancials.currentDebt < 0
+                  ? 'text-emerald-600 font-semibold'
+                  : 'text-slate-400'
+              }`}>
+                {clientFinancials.currentDebt > 0
+                  ? 'Saldo por cobrar'
+                  : clientFinancials.currentDebt < 0
+                  ? 'Crédito disponible a favor'
+                  : 'Al día ($0.00)'}
               </span>
             </div>
 
@@ -444,7 +476,7 @@ export function ClientHistoryModal({
                 className="mt-2 py-1 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center justify-center space-x-1 transition cursor-pointer"
               >
                 <ArrowDownLeft className="w-3 h-3" />
-                <span>Abonar Pago</span>
+                <span>{clientFinancials.currentDebt < 0 ? 'Abonar más' : 'Abonar Pago'}</span>
               </button>
             )}
           </div>

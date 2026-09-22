@@ -902,6 +902,16 @@ export const StorageService = {
       clientStats.set(name, st);
     });
 
+    // Incluir también clientes que tienen abonos registrados
+    payments.forEach((p) => {
+      if (!p) return;
+      const name = (p.client_name || '').trim().toUpperCase();
+      if (!name) return;
+      if (!clientStats.has(name)) {
+        clientStats.set(name, { totalBought: 0, totalPaidInTx: 0 });
+      }
+    });
+
     let hasChanges = false;
     clientStats.forEach((st, name) => {
       const clientAbonos = payments
@@ -912,24 +922,25 @@ export const StorageService = {
         (d) => d && (d.client_name || '').trim().toUpperCase() === name
       );
 
-      const calculatedDebt = Math.max(0, Number((st.totalBought - st.totalPaidInTx - clientAbonos).toFixed(2)));
-
-      const hasTxs = st.totalBought > 0;
+      // Saldo neto: > 0 = Deuda por cobrar (cliente debe); < 0 = Saldo a Favor (crédito del cliente)
+      const calculatedNetDebt = Number((st.totalBought - st.totalPaidInTx - clientAbonos).toFixed(2));
+      const hasActivity = st.totalBought > 0 || clientAbonos > 0;
 
       if (existingIndex === -1) {
-        if (calculatedDebt > 0) {
+        if (calculatedNetDebt !== 0) {
           debtors.unshift({
             id: 'deb-auto-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
             client_name: name,
-            current_debt: calculatedDebt,
-            notes: 'Sincronizado de operaciones por cobrar (' + m.toUpperCase() + ')',
+            current_debt: calculatedNetDebt,
+            notes: calculatedNetDebt > 0
+              ? 'Sincronizado de operaciones por cobrar (' + m.toUpperCase() + ')'
+              : 'Abono a favor registrado (' + m.toUpperCase() + ')',
             updated_at: new Date().toISOString(),
           });
           hasChanges = true;
         }
-      } else if (hasTxs && debtors[existingIndex].current_debt !== calculatedDebt) {
-        // Si hay transacciones registradas, la deuda se recalcula siempre desde los datos reales
-        debtors[existingIndex].current_debt = calculatedDebt;
+      } else if (hasActivity && debtors[existingIndex].current_debt !== calculatedNetDebt) {
+        debtors[existingIndex].current_debt = calculatedNetDebt;
         debtors[existingIndex].updated_at = new Date().toISOString();
         hasChanges = true;
       }
