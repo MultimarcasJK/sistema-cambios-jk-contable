@@ -718,7 +718,7 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                                 {acc.account_subtype}
                               </span>
                             )}
-                            {!acc.is_active && (
+                            {acc.is_active === false && (
                               <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">
                                 Inactiva
                               </span>

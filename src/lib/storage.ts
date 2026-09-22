@@ -284,8 +284,12 @@ export const StorageService = {
       if (item !== null) {
         try {
           const parsed = JSON.parse(item);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
+          if (Array.isArray(parsed)) {
+            return parsed.map((acc: any) => ({
+              ...acc,
+              current_balance: Number(acc.current_balance) || 0,
+              is_active: acc.is_active !== undefined && acc.is_active !== null ? Boolean(acc.is_active) : true,
+            }));
           }
         } catch {
           // ignore

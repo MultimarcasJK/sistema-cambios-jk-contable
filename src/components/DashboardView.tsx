@@ -367,7 +367,7 @@ export function DashboardView({
 
           <div className="divide-y divide-slate-100">
             {accounts
-              .filter((a) => a.is_active && a.current_balance !== 0)
+              .filter((a) => a.is_active !== false && a.current_balance !== 0)
               .sort((a, b) => Math.abs(b.current_balance) - Math.abs(a.current_balance))
               .slice(0, 6)
               .map((acc) => (

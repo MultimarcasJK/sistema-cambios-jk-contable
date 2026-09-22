@@ -26,7 +26,12 @@ export const SupabaseSyncService = {
         /* warn */
         return null;
       }
-      return (data as Account[]) || [];
+      return ((data || []) as any[]).map((row) => ({
+        ...row,
+        current_balance: Number(row.current_balance) || 0,
+        initial_balance: Number(row.initial_balance) || 0,
+        is_active: row.is_active !== undefined && row.is_active !== null ? Boolean(row.is_active) : true,
+      })) as Account[];
     } catch {
       return null;
     }
@@ -237,7 +242,10 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*');
       if (error) return null;
-      return (data as Debtor[]) || [];
+      return ((data || []) as any[]).map((row) => ({
+        ...row,
+        current_debt: Number(row.current_debt) || 0,
+      })) as Debtor[];
     } catch {
       return null;
     }
@@ -277,7 +285,12 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
-      return (data as DebtPayment[]) || [];
+      return ((data || []) as any[]).map((row) => ({
+        ...row,
+        amount: Number(row.amount) || 0,
+        amount_currency: Number(row.amount_currency ?? row.amount) || 0,
+        exchange_rate: Number(row.exchange_rate) || 1,
+      })) as DebtPayment[];
     } catch {
       return null;
     }
@@ -448,7 +461,10 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*');
       if (error) return null;
-      return (data as Supplier[]) || [];
+      return ((data || []) as any[]).map((row) => ({
+        ...row,
+        current_debt_usd: Number(row.current_debt_usd) || 0,
+      })) as Supplier[];
     } catch {
       return null;
     }
