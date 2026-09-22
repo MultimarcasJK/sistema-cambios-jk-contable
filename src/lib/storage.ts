@@ -935,8 +935,24 @@ export const StorageService = {
       }
     });
 
+    const correctedDebtors: typeof debtors = [];
+
     if (hasChanges || !rawDebtors || rawDebtors.length === 0) {
       saveToStorage(this.getDebtorsKey(m), debtors);
+      // Subir a Supabase los deudores corregidos para que no se sobreescriban
+      debtors.forEach((d) => {
+        if (d.updated_at && rawDebtors) {
+          const old = rawDebtors.find((r) => r && r.id === d.id);
+          if (!old || old.current_debt !== d.current_debt) {
+            correctedDebtors.push(d);
+          }
+        } else if (!rawDebtors) {
+          correctedDebtors.push(d);
+        }
+      });
+      correctedDebtors.forEach((d) => {
+        SupabaseSyncService.upsertDebtor(d, m).catch(() => {});
+      });
     }
 
     return debtors.map((d) => ({
