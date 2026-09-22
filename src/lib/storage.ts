@@ -271,16 +271,46 @@ export const StorageService = {
         saveToStorage(this.getClosuresKey(m), remoteClosures);
       }
       if (remoteTxsDetal !== null) {
-        saveToStorage(this.getTransactionsDetalKey(m), remoteTxsDetal);
+        const local = getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []);
+        const remoteIds = new Set(remoteTxsDetal.map((t) => t.id));
+        const localPending = local.filter((t) => !remoteIds.has(t.id));
+        localPending.forEach((tx) => {
+          SupabaseSyncService.upsertTransactionDetal(tx, m).catch(() => {});
+        });
+        const merged = [...remoteTxsDetal, ...localPending].sort((a, b) => {
+          if (b.date !== a.date) return b.date.localeCompare(a.date);
+          return (b.created_at || '').localeCompare(a.created_at || '');
+        });
+        saveToStorage(this.getTransactionsDetalKey(m), merged);
       }
       if (remoteTxsMayor !== null) {
-        saveToStorage(this.getTransactionsMayorKey(m), remoteTxsMayor);
+        const local = getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []);
+        const remoteIds = new Set(remoteTxsMayor.map((t) => t.id));
+        const localPending = local.filter((t) => !remoteIds.has(t.id));
+        localPending.forEach((tx) => {
+          SupabaseSyncService.upsertTransactionMayor(tx, m).catch(() => {});
+        });
+        const merged = [...remoteTxsMayor, ...localPending].sort((a, b) => {
+          if (b.date !== a.date) return b.date.localeCompare(a.date);
+          return (b.created_at || '').localeCompare(a.created_at || '');
+        });
+        saveToStorage(this.getTransactionsMayorKey(m), merged);
       }
       if (remoteDebtors !== null) {
         saveToStorage(this.getDebtorsKey(m), remoteDebtors);
       }
       if (remoteDebtPayments !== null) {
-        saveToStorage(this.getDebtPaymentsKey(m), remoteDebtPayments);
+        const local = getFromStorage<DebtPayment[]>(this.getDebtPaymentsKey(m), []);
+        const remoteIds = new Set(remoteDebtPayments.map((p) => p.id));
+        const localPending = local.filter((p) => !remoteIds.has(p.id));
+        localPending.forEach((p) => {
+          SupabaseSyncService.upsertDebtPayment(p, m).catch(() => {});
+        });
+        const merged = [...remoteDebtPayments, ...localPending].sort((a, b) => {
+          if (b.date !== a.date) return b.date.localeCompare(a.date);
+          return (b.created_at || '').localeCompare(a.created_at || '');
+        });
+        saveToStorage(this.getDebtPaymentsKey(m), merged);
       }
       if (remotePurchases !== null) {
         saveToStorage(this.getSupplierPurchasesKey(m), remotePurchases);

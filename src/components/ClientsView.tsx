@@ -23,6 +23,7 @@ import {
   Coins,
   Edit2,
   Trash2,
+  Wallet,
 } from 'lucide-react';
 
 interface ClientsProps {
@@ -702,10 +703,12 @@ export function ClientsView({
                         <span className="truncate">{client.address}</span>
                       </div>
                     )}
-                    {client.preferred_account && (
-                      <div className="mt-1 flex items-center space-x-1 bg-blue-50/80 text-blue-900 px-2 py-1 rounded-lg border border-blue-100/80 text-[10px]">
-                        <CreditCard className="w-3 h-3 text-blue-600 shrink-0" />
-                        <span className="font-semibold truncate">Cuenta: {client.preferred_account}</span>
+                    {(client.preferred_account || client.notes) && (
+                      <div className="mt-2 p-2 rounded-lg contact-payment-box flex items-start space-x-2 text-xs">
+                        <Wallet className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                        <span className="font-semibold break-words leading-relaxed text-[11px]">
+                          {[client.preferred_account ? `Cuenta / Pago: ${client.preferred_account}` : null, client.notes].filter(Boolean).join(' • ')}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -1016,7 +1019,18 @@ export function ClientsView({
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
             <h3 className="text-base font-bold text-slate-900 mb-1">Registrar Abono a Deuda</h3>
             <p className="text-xs text-slate-500 mb-4">
-              Cliente: <span className="font-bold text-slate-800">{abonoModalDebtor.client_name}</span> • Saldo actual: <span className="font-mono font-bold text-rose-600">${abonoModalDebtor.current_debt.toFixed(2)} USD</span>
+              Cliente: <span className="font-bold text-slate-800">{abonoModalDebtor.client_name}</span> •{' '}
+              {abonoModalDebtor.current_debt < 0 ? (
+                <span className="font-semibold text-emerald-600">
+                  Saldo a favor: <span className="font-mono font-bold text-emerald-600">+${Math.abs(abonoModalDebtor.current_debt).toFixed(2)} USD</span> (Crédito disponible)
+                </span>
+              ) : abonoModalDebtor.current_debt > 0 ? (
+                <span className="font-semibold text-rose-600">
+                  Deuda pendiente: <span className="font-mono font-bold text-rose-600">${abonoModalDebtor.current_debt.toFixed(2)} USD</span>
+                </span>
+              ) : (
+                <span className="font-semibold text-slate-500">Al día ($0.00 USD)</span>
+              )}
             </p>
 
             <form

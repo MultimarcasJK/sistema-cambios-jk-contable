@@ -272,9 +272,16 @@ export function SupplierHistoryModal({
                 {supplier.type}
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {supplier.contact_info || 'Sin datos de contacto o cuenta registrada'}
-            </p>
+            {supplier.contact_info ? (
+              <div className="mt-2.5 p-2 rounded-lg contact-payment-box flex items-start space-x-2 text-xs">
+                <Wallet className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                <span className="font-semibold break-words leading-relaxed">
+                  {supplier.contact_info}
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 mt-1">Sin datos de contacto o cuenta registrada</p>
+            )}
           </div>
 
           <div className="flex items-center space-x-2 self-end sm:self-auto">

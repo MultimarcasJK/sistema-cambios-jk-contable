@@ -778,9 +778,9 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                   </div>
 
                   {sup.contact_info && (
-                    <div className="mt-2.5 p-2 rounded-lg bg-slate-100 border border-slate-200 flex items-start space-x-2 text-xs">
+                    <div className="mt-2.5 p-2 rounded-lg contact-payment-box flex items-start space-x-2 text-xs">
                       <Wallet className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
-                      <span className="font-semibold text-slate-700 break-words leading-relaxed">
+                      <span className="font-semibold break-words leading-relaxed">
                         {sup.contact_info}
                       </span>
                     </div>

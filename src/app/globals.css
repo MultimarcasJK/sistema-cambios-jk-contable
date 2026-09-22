@@ -263,4 +263,28 @@ body {
   color: #f43f5e !important;
 }
 
+/* ══════════════════════════════════════════════
+   RECUADRO DE CONTACTO / DATOS DE PAGO / NOTAS
+   Modo Detal (claro): fondo gris slate suave con borde y texto de alto contraste
+   Modo Mayor (oscuro): fondo #1e293b, borde #334155 y texto en blanco brillante #ffffff
+══════════════════════════════════════════════ */
+.contact-payment-box {
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+.contact-payment-box span,
+.contact-payment-box p {
+  color: #0f172a !important;
+}
+[data-theme="mayor"] .contact-payment-box {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #ffffff !important;
+}
+[data-theme="mayor"] .contact-payment-box span,
+[data-theme="mayor"] .contact-payment-box p {
+  color: #ffffff !important;
+}
+
 

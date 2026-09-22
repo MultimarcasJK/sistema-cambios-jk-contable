@@ -18,6 +18,7 @@ import {
   ArrowDownLeft,
   X,
   FileText,
+  Wallet,
 } from 'lucide-react';
 
 export interface ClientHistoryModalProps {
@@ -350,11 +351,13 @@ export function ClientHistoryModal({
             <p className="text-xs text-slate-500 mt-0.5">
               RUC/Cédula: <span className="font-mono font-medium text-slate-700">{currentClient?.identification || 'No registrado'}</span> • Tel: {currentClient?.phone || 'No registrado'} • {currentClient?.address || 'Sin dirección'}
             </p>
-            {currentClient?.preferred_account && (
-              <p className="text-xs font-semibold text-blue-700 mt-1 flex items-center space-x-1">
-                <CreditCard className="w-3.5 h-3.5" />
-                <span>Cuenta Habitual: {currentClient.preferred_account}</span>
-              </p>
+            {(currentClient?.preferred_account || currentClient?.notes) && (
+              <div className="mt-2.5 p-2 rounded-lg contact-payment-box flex items-start space-x-2 text-xs">
+                <Wallet className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                <span className="font-semibold break-words leading-relaxed text-[11px]">
+                  {[currentClient.preferred_account ? `Cuenta / Pago: ${currentClient.preferred_account}` : null, currentClient.notes].filter(Boolean).join(' • ')}
+                </span>
+              </div>
             )}
           </div>
 

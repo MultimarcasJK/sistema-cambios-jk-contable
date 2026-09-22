@@ -249,7 +249,12 @@ export function MayorView({
   };
 
   const allPayments = useMemo(() => {
-    return StorageService.getDebtPayments(appMode);
+    const all = StorageService.getDebtPayments(appMode);
+    return all.filter((p) => {
+      const notes = (p.notes || '').toUpperCase();
+      if (notes.includes('[CRIPTO]')) return false;
+      return true;
+    });
   }, [mayorTxs, appMode, ratesVersion]);
 
   type MayorRowItem =
@@ -938,31 +943,31 @@ export function MayorView({
                   const isForeign = pay.currency && pay.currency !== 'USD' && pay.currency !== 'USDT';
 
                   return (
-                    <tr key={`abono-${pay.id}`} className="group hover:bg-emerald-50/50 bg-emerald-50/20 transition border-l-4 border-l-emerald-500">
+                    <tr key={`abono-${pay.id}`} className="group hover:bg-slate-50 transition">
                       <td className="py-2.5 px-3 text-slate-500 font-sans">{pay.date}</td>
                       <td className="py-2.5 px-3 font-semibold font-sans text-slate-800">
                         <div className="flex items-center space-x-1.5">
                           <span>{pay.client_name}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                            Abono a Favor
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Abono
                           </span>
                         </div>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-bold text-emerald-700 whitespace-nowrap">
-                        <span className="text-[10px] font-bold text-emerald-800 mr-1.5 px-1.5 py-0.5 bg-emerald-100 border border-emerald-200 rounded">
+                      <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
+                        <span className="text-[10px] font-bold text-slate-600 mr-1.5 px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded">
                           {pay.currency || 'USD'}
                         </span>
-                        +{formatCurrency(pay.amount_currency || pay.amount)}
+                        {formatCurrency(pay.amount_currency || pay.amount)}
                       </td>
                       <td className="py-2.5 px-3 text-right text-slate-400 font-sans">-</td>
                       <td className="py-2.5 px-3 text-right text-slate-400 font-mono">-</td>
                       <td className="py-2.5 px-3 text-right text-slate-400 font-mono">-</td>
                       <td className="py-2.5 px-3 text-right text-slate-400 font-mono">-</td>
-                      <td className="py-2.5 px-3 text-right font-black text-emerald-700">
+                      <td className="py-2.5 px-3 text-right font-bold text-emerald-600 whitespace-nowrap">
                         +${formatCurrency(pay.amount)}
                       </td>
                       <td className="py-2.5 px-3 font-sans">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 inline-flex items-center space-x-1">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 inline-flex items-center space-x-1">
                           <ArrowDownLeft className="w-3 h-3" />
                           <span>Abono Recibido</span>
                         </span>
@@ -973,11 +978,11 @@ export function MayorView({
                         </td>
                       )}
                       <td className="py-2.5 px-3 text-slate-400 font-sans">-</td>
-                      <td className="py-2.5 px-3 font-sans text-slate-700 font-semibold whitespace-nowrap">
+                      <td className="py-2.5 px-3 font-sans text-slate-600 truncate max-w-[140px]">
                         {recvAcc ? recvAcc.name || recvAcc.bank_name : pay.account_id || 'Caja / Banco'}
                       </td>
                       {isAdmin && (
-                        <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-emerald-50/60 group-hover:bg-emerald-100/60 z-10 border-l border-emerald-200 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                        <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
                           <button
                             onClick={() => {
                               if (confirm(`¿Eliminar este registro de abono de ${pay.client_name}?`)) {
@@ -1010,6 +1015,7 @@ export function MayorView({
         clients={clients}
         debtors={StorageService.getDebtors(appMode)}
         appMode={appMode}
+        sourceModule="regionales"
       />
 
       {/* Modal de Gestión de Monedas */}

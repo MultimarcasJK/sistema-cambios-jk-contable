@@ -111,7 +111,10 @@ export const SupabaseSyncService = {
     const table = `${mode}_ventas_cripto_dolar`;
     try {
       const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
-      if (error) return null;
+      if (error) {
+        console.error(`[SupabaseSync] Error fetching ${table}:`, error);
+        return null;
+      }
       return (data || []).map((row: any) => ({
         id: row.id,
         date: row.date,
@@ -122,7 +125,8 @@ export const SupabaseSyncService = {
         received_account_id: row.received_account_id || '',
         amount_received: Number(row.amount_received || 0),
         paid_account_id: row.paid_account_id || '',
-        bank_fee: Number(row.bank_fee || 0),
+        bank_fee: Number(row.bank_fee ?? row.commission ?? 0),
+        fee_percent: Number(row.percentage ?? 0) || undefined,
         total_to_pay: Number(row.total_to_pay || 0),
         profit_usd: Number(row.net_profit ?? row.profit_usd ?? 0),
         payment_status: row.payment_status || 'PAGADO',
@@ -137,7 +141,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return;
     const table = `${mode}_ventas_cripto_dolar`;
     try {
-      await supabase.from(table).upsert({
+      const payload: Record<string, any> = {
         id: tx.id,
         date: tx.date,
         client_name: tx.client_name,
@@ -145,18 +149,30 @@ export const SupabaseSyncService = {
         operation_type: 'CRIPTO_DOLAR',
         usdt_amount: tx.usdt_amount,
         exchange_rate: tx.sell_price,
-        commission_rate: tx.buy_price,
         received_account_id: tx.received_account_id,
         amount_received: tx.amount_received,
         paid_account_id: tx.paid_account_id,
-        bank_fee: tx.bank_fee,
         total_to_pay: tx.total_to_pay,
         net_profit: tx.profit_usd,
         payment_status: tx.payment_status || 'PAGADO',
         notes: tx.notes || '',
-      });
+      };
+
+      if (mode === 'mayor') {
+        payload.amount_ves = 0;
+        payload.commission = tx.bank_fee || 0;
+        payload.percentage = tx.fee_percent || 0;
+      } else {
+        payload.commission_rate = tx.buy_price;
+        payload.bank_fee = tx.bank_fee;
+      }
+
+      const { error } = await supabase.from(table).upsert(payload);
+      if (error) {
+        console.error(`[SupabaseSync] Error upserting ${table}:`, error);
+      }
     } catch (err) {
-      /* warn */
+      console.error(`[SupabaseSync] Exception in upsertTransactionDetal:`, err);
     }
   },
 

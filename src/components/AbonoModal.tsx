@@ -16,6 +16,7 @@ interface AbonoModalProps {
   preselectedClientName?: string;
   preselectedDebtorId?: string;
   appMode?: import('@/types').AppMode;
+  sourceModule?: 'cripto' | 'regionales';
 }
 
 export function AbonoModal({
@@ -28,6 +29,7 @@ export function AbonoModal({
   preselectedClientName,
   preselectedDebtorId,
   appMode,
+  sourceModule,
 }: AbonoModalProps) {
   const [selectedClientName, setSelectedClientName] = useState('');
   const [paymentCurrency, setPaymentCurrency] = useState<Currency>('USD');
@@ -121,6 +123,10 @@ export function AbonoModal({
     const amountCurr = isForeign ? parseFloat(paymentAmountCurrency) || amountUsd : amountUsd;
     const rate = isForeign ? parseFloat(paymentRate) || 1 : 1;
 
+    const prefix = sourceModule === 'regionales' ? '[REGIONALES] ' : sourceModule === 'cripto' ? '[CRIPTO] ' : '';
+    const cleanNotes = paymentNotes.trim();
+    const finalNotes = prefix ? (cleanNotes ? `${prefix}${cleanNotes}` : `${prefix}Abono / Saldo a favor recibido`) : (cleanNotes || undefined);
+
     StorageService.addDebtPayment({
       debtor_id: currentDebtor ? currentDebtor.id : 'deb-' + Date.now(),
       client_name: finalClientName,
@@ -130,7 +136,7 @@ export function AbonoModal({
       amount_currency: amountCurr,
       exchange_rate: rate,
       account_id: paymentAccountId || undefined,
-      notes: paymentNotes.trim() || undefined,
+      notes: finalNotes,
     }, appMode);
 
     onSuccess();

@@ -380,7 +380,12 @@ export function DebtorsView({
                     </span>
                   </div>
 
-                  {d.notes && <p className="text-[10px] text-slate-400 mt-1.5 italic bg-slate-50 p-1.5 rounded truncate" title={d.notes}>{d.notes}</p>}
+                  {d.notes && (
+                    <div className="mt-2 p-1.5 rounded-lg contact-payment-box flex items-start space-x-1.5 text-[10px]" title={d.notes}>
+                      <Wallet className="w-3 h-3 text-blue-500 mt-0.5 shrink-0" />
+                      <span className="font-semibold break-words leading-tight truncate">{d.notes}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1">
@@ -531,7 +536,18 @@ export function DebtorsView({
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
             <h3 className="text-base font-bold text-slate-900 mb-1">Registrar Abono a Deuda</h3>
             <p className="text-xs text-slate-500 mb-4">
-              Cliente: <span className="font-bold text-slate-800">{paymentModalDebtor.client_name}</span> • Saldo actual: <span className="font-mono font-bold text-rose-600">${paymentModalDebtor.current_debt.toFixed(2)} USD</span>
+              Cliente: <span className="font-bold text-slate-800">{paymentModalDebtor.client_name}</span> •{' '}
+              {paymentModalDebtor.current_debt < 0 ? (
+                <span className="font-semibold text-emerald-600">
+                  Saldo a favor: <span className="font-mono font-bold text-emerald-600">+${Math.abs(paymentModalDebtor.current_debt).toFixed(2)} USD</span> (Crédito disponible)
+                </span>
+              ) : paymentModalDebtor.current_debt > 0 ? (
+                <span className="font-semibold text-rose-600">
+                  Deuda pendiente: <span className="font-mono font-bold text-rose-600">${paymentModalDebtor.current_debt.toFixed(2)} USD</span>
+                </span>
+              ) : (
+                <span className="font-semibold text-slate-500">Al día ($0.00 USD)</span>
+              )}
             </p>
 
             <form
