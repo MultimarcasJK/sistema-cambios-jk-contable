@@ -151,16 +151,19 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
     });
 
     return [...filtered].sort((a, b) => {
-      // Si ambos tienen order_index definido por el usuario, respetar ese orden
-      const hasOrderA = a.order_index !== undefined && a.order_index !== null;
-      const hasOrderB = b.order_index !== undefined && b.order_index !== null;
-      if (hasOrderA && hasOrderB) {
-        return (a.order_index ?? 0) - (b.order_index ?? 0);
-      }
-      if (hasOrderA) return -1;
-      if (hasOrderB) return 1;
+      // 1. Si tienen order_index diferente asignado manualmente (distinto de 0 o distintos entre sí)
+      const orderA = a.order_index;
+      const orderB = b.order_index;
+      const hasCustomA = orderA !== undefined && orderA !== null && orderA > 0;
+      const hasCustomB = orderB !== undefined && orderB !== null && orderB > 0;
 
-      // Si no tienen order_index explícito, usar el orden de referencia del Excel
+      if (hasCustomA && hasCustomB && orderA !== orderB) {
+        return orderA - orderB;
+      }
+      if (hasCustomA && !hasCustomB) return -1;
+      if (!hasCustomA && hasCustomB) return 1;
+
+      // 2. Orden de referencia exacto del Excel (por ID 'acc-mayor-001' o Nombre)
       const idxA = excelOrderMap.has(a.id)
         ? excelOrderMap.get(a.id)!
         : excelOrderMap.has(a.name.trim().toUpperCase())
@@ -171,7 +174,13 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
         : excelOrderMap.has(b.name.trim().toUpperCase())
         ? excelOrderMap.get(b.name.trim().toUpperCase())!
         : 9999;
-      return idxA - idxB;
+
+      if (idxA !== idxB) {
+        return idxA - idxB;
+      }
+
+      // 3. Fallback numérico por ID si tiene formato acc-mayor-XXX
+      return a.id.localeCompare(b.id, undefined, { numeric: true });
     });
   }, [accounts, selectedCountry]);
 
@@ -198,10 +207,10 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
     const [moved] = list.splice(fromIndex, 1);
     list.splice(toIndex, 0, moved);
 
-    // Asignar order_index secuencial a la lista del país
+    // Asignar order_index secuencial (1-based: 1, 2, 3...) a la lista del país
     const orderIndexMap = new Map<string, number>();
     list.forEach((acc, idx) => {
-      orderIndexMap.set(acc.id, idx);
+      orderIndexMap.set(acc.id, idx + 1);
     });
 
     // Actualizar en la lista general de cuentas
@@ -216,8 +225,7 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
     // Guardar en Storage y sincronizar a Supabase
     StorageService.saveAccounts(updatedAll, currentMode);
     list.forEach((acc, idx) => {
-      const updatedAccountWithOrder = { ...acc, order_index: idx };
-      StorageService.updateAccount(acc.id, { order_index: idx }, currentMode);
+      StorageService.updateAccount(acc.id, { order_index: idx + 1 }, currentMode);
     });
 
     setDraggedAccountId(null);
