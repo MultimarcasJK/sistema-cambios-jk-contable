@@ -247,6 +247,7 @@ export const StorageService = {
             account_number: remote.account_number || loc?.account_number || '',
             notes: remote.notes || loc?.notes || '',
             scope: remote.scope || loc?.scope || m,
+            order_index: remote.order_index !== undefined ? remote.order_index : loc?.order_index,
           };
         });
 

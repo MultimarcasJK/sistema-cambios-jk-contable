@@ -31,6 +31,7 @@ export const SupabaseSyncService = {
         account_subtype: row.account_subtype || '',
         account_number: row.account_number || '',
         notes: row.notes || '',
+        order_index: row.order_index !== undefined && row.order_index !== null ? Number(row.order_index) : undefined,
         current_balance: Number(row.current_balance) || 0,
         initial_balance: Number(row.initial_balance) || 0,
         is_active: row.is_active !== undefined && row.is_active !== null ? Boolean(row.is_active) : true,
@@ -44,7 +45,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return;
     const table = `${mode}_cuentas`;
     try {
-      await supabase.from(table).upsert({
+      const payload: any = {
         id: account.id,
         name: account.name,
         currency: account.currency,
@@ -57,7 +58,11 @@ export const SupabaseSyncService = {
         account_number: account.account_number || '',
         notes: account.notes || '',
         country: account.country || (mode === 'mayor' ? 'VENEZUELA' : 'ECUADOR'),
-      });
+      };
+      if (account.order_index !== undefined && account.order_index !== null) {
+        payload.order_index = account.order_index;
+      }
+      await supabase.from(table).upsert(payload);
     } catch (err) {
       /* warn */
     }

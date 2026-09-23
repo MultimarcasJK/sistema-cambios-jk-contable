@@ -9,7 +9,7 @@ import { INITIAL_ACCOUNTS_MAYOR } from '@/lib/initial-data';
 import { ManageCurrenciesModal } from './ManageCurrenciesModal';
 import { AccountStatementModal } from './AccountStatementModal';
 import { EditAccountModal } from './EditAccountModal';
-import { Wallet, Plus, Edit2, Trash2, CheckCircle, RefreshCw, Landmark, Coins, ArrowLeft, ChevronRight, Globe, FileText } from 'lucide-react';
+import { Wallet, Plus, Edit2, Trash2, CheckCircle, RefreshCw, Landmark, Coins, ArrowLeft, ChevronRight, Globe, FileText, GripVertical } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
 interface AccountsProps {
@@ -135,7 +135,10 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
     onDataChange();
   };
 
-  // Cuentas pertenecientes al país seleccionado (ordenadas según el Excel original si aplica)
+  const [draggedAccountId, setDraggedAccountId] = useState<string | null>(null);
+  const [dragOverAccountId, setDragOverAccountId] = useState<string | null>(null);
+
+  // Cuentas pertenecientes al país seleccionado (ordenadas por order_index personalizado o Excel original)
   const accountsInActiveCountry = useMemo(() => {
     if (!selectedCountry) return [];
     const filtered = accounts.filter((a) => getAccountCountry(a) === selectedCountry);
@@ -148,6 +151,16 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
     });
 
     return [...filtered].sort((a, b) => {
+      // Si ambos tienen order_index definido por el usuario, respetar ese orden
+      const hasOrderA = a.order_index !== undefined && a.order_index !== null;
+      const hasOrderB = b.order_index !== undefined && b.order_index !== null;
+      if (hasOrderA && hasOrderB) {
+        return (a.order_index ?? 0) - (b.order_index ?? 0);
+      }
+      if (hasOrderA) return -1;
+      if (hasOrderB) return 1;
+
+      // Si no tienen order_index explícito, usar el orden de referencia del Excel
       const idxA = excelOrderMap.has(a.id)
         ? excelOrderMap.get(a.id)!
         : excelOrderMap.has(a.name.trim().toUpperCase())
@@ -161,6 +174,56 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
       return idxA - idxB;
     });
   }, [accounts, selectedCountry]);
+
+  // Manejador para reordenar cuentas al soltar (Drag and Drop)
+  const handleDropAccount = (targetAccountId: string) => {
+    if (!draggedAccountId || draggedAccountId === targetAccountId) {
+      setDraggedAccountId(null);
+      setDragOverAccountId(null);
+      return;
+    }
+
+    const currentMode = appMode || StorageService.getAppMode();
+    const list = [...accountsInActiveCountry];
+    const fromIndex = list.findIndex((a) => a.id === draggedAccountId);
+    const toIndex = list.findIndex((a) => a.id === targetAccountId);
+
+    if (fromIndex === -1 || toIndex === -1) {
+      setDraggedAccountId(null);
+      setDragOverAccountId(null);
+      return;
+    }
+
+    // Reubicar el elemento arrastrado a la nueva posición
+    const [moved] = list.splice(fromIndex, 1);
+    list.splice(toIndex, 0, moved);
+
+    // Asignar order_index secuencial a la lista del país
+    const orderIndexMap = new Map<string, number>();
+    list.forEach((acc, idx) => {
+      orderIndexMap.set(acc.id, idx);
+    });
+
+    // Actualizar en la lista general de cuentas
+    const allAccounts = StorageService.getAccounts(currentMode);
+    const updatedAll = allAccounts.map((acc) => {
+      if (orderIndexMap.has(acc.id)) {
+        return { ...acc, order_index: orderIndexMap.get(acc.id)! };
+      }
+      return acc;
+    });
+
+    // Guardar en Storage y sincronizar a Supabase
+    StorageService.saveAccounts(updatedAll, currentMode);
+    list.forEach((acc, idx) => {
+      const updatedAccountWithOrder = { ...acc, order_index: idx };
+      StorageService.updateAccount(acc.id, { order_index: idx }, currentMode);
+    });
+
+    setDraggedAccountId(null);
+    setDragOverAccountId(null);
+    onDataChange();
+  };
 
   // Cuentas filtradas por moneda dentro del país (o global)
   const displayedAccounts = useMemo(() => {
@@ -511,8 +574,14 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                   <h2 className="text-base font-black text-slate-900 leading-tight">
                     Cuentas de {activeCountryInfo?.name.toUpperCase()}
                   </h2>
-                  <p className="text-[11px] text-slate-500">
-                    {accountsInActiveCountry.length} {accountsInActiveCountry.length === 1 ? 'cuenta activa' : 'cuentas activas'}
+                  <p className="text-[11px] text-slate-500 flex items-center space-x-2">
+                    <span>{accountsInActiveCountry.length} {accountsInActiveCountry.length === 1 ? 'cuenta activa' : 'cuentas activas'}</span>
+                    {isAdmin && (
+                      <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-semibold border border-blue-100 flex items-center space-x-1">
+                        <GripVertical className="w-3 h-3 text-blue-500" />
+                        <span>Puedes arrastrar las tarjetas para cambiar su orden</span>
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -692,15 +761,61 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-3">
               {displayedAccounts.map((acc) => {
                 const isEditing = editingAccountId === acc.id;
+                const isDragging = draggedAccountId === acc.id;
+                const isDragOver = dragOverAccountId === acc.id;
+
                 return (
                   <div
                     key={acc.id}
-                    className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200 shadow-2xs hover:border-blue-300 hover:shadow-xs transition flex flex-col justify-between"
+                    draggable={isAdmin}
+                    onDragStart={(e) => {
+                      if (!isAdmin) return;
+                      setDraggedAccountId(acc.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', acc.id);
+                    }}
+                    onDragOver={(e) => {
+                      if (!isAdmin || !draggedAccountId || draggedAccountId === acc.id) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      if (dragOverAccountId !== acc.id) {
+                        setDragOverAccountId(acc.id);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverAccountId === acc.id) {
+                        setDragOverAccountId(null);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      if (!isAdmin) return;
+                      e.preventDefault();
+                      handleDropAccount(acc.id);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedAccountId(null);
+                      setDragOverAccountId(null);
+                    }}
+                    className={`bg-white p-3 sm:p-3.5 rounded-xl border shadow-2xs transition-all duration-150 flex flex-col justify-between ${
+                      isDragging
+                        ? 'opacity-40 scale-95 border-blue-400 dashed border-2 shadow-inner'
+                        : isDragOver
+                        ? 'border-blue-500 ring-2 ring-blue-400/40 shadow-md scale-[1.02] bg-blue-50/20'
+                        : 'border-slate-200 hover:border-blue-300 hover:shadow-xs'
+                    }`}
                   >
                     <div>
                       <div className="flex items-start justify-between gap-1">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center space-x-1 flex-wrap gap-y-0.5">
+                            {isAdmin && (
+                              <div
+                                className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-blue-500 transition mr-0.5"
+                                title="Arrastrar para reordenar esta cuenta"
+                              >
+                                <GripVertical className="w-3.5 h-3.5" />
+                              </div>
+                            )}
                             {activeCountryInfo?.iso2 ? (
                               <img
                                 src={`https://flagcdn.com/w80/${activeCountryInfo.iso2}.png`}

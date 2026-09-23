@@ -77,6 +77,7 @@ export interface Account {
   notes?: string;
   usage_role?: AccountUsageRole;
   scope?: 'detal' | 'mayor' | 'ambos'; // Para clasificar cuentas por unidad de negocio
+  order_index?: number;
   is_active: boolean;
   created_at?: string;
 }
