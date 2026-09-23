@@ -638,8 +638,22 @@ export const SupabaseSyncService = {
     const modes: AppMode[] = ['detal', 'mayor'];
     for (const m of modes) {
       try {
-        await supabase.from(`${m}_cuentas`).update({ current_balance: 0, initial_balance: 0 }).neq('id', '___none___');
-        await supabase.from(`${m}_proveedores`).update({ current_debt_usd: 0 }).neq('id', '___none___');
+        const { data: accs } = await supabase.from(`${m}_cuentas`).select('id');
+        if (accs && accs.length > 0) {
+          const ids = accs.map((r: any) => r.id);
+          for (let i = 0; i < ids.length; i += 50) {
+            await supabase.from(`${m}_cuentas`).update({ current_balance: 0, initial_balance: 0 }).in('id', ids.slice(i, i + 50));
+          }
+        }
+
+        const { data: provs } = await supabase.from(`${m}_proveedores`).select('id');
+        if (provs && provs.length > 0) {
+          const ids = provs.map((r: any) => r.id);
+          for (let i = 0; i < ids.length; i += 50) {
+            await supabase.from(`${m}_proveedores`).update({ current_debt_usd: 0 }).in('id', ids.slice(i, i + 50));
+          }
+        }
+
         const deleteTables = [
           `${m}_pagos_proveedores`,
           `${m}_compras_proveedores`,
@@ -652,7 +666,13 @@ export const SupabaseSyncService = {
           `${m}_ventas_regionales`,
         ];
         for (const t of deleteTables) {
-          await supabase.from(t).delete().neq('id', '___none___');
+          const { data: rows } = await supabase.from(t).select('id');
+          if (rows && rows.length > 0) {
+            const ids = rows.map((r: any) => r.id);
+            for (let i = 0; i < ids.length; i += 50) {
+              await supabase.from(t).delete().in('id', ids.slice(i, i + 50));
+            }
+          }
         }
       } catch (err) {
         console.error(`[SupabaseSync] Error resetting balances in Supabase for ${m}:`, err);
@@ -680,7 +700,13 @@ export const SupabaseSyncService = {
       ];
       for (const t of tables) {
         try {
-          await supabase.from(t).delete().neq('id', '___none___');
+          const { data: rows } = await supabase.from(t).select('id');
+          if (rows && rows.length > 0) {
+            const ids = rows.map((r: any) => r.id);
+            for (let i = 0; i < ids.length; i += 50) {
+              await supabase.from(t).delete().in('id', ids.slice(i, i + 50));
+            }
+          }
         } catch (err) {
           /* warn */
         }
@@ -688,3 +714,4 @@ export const SupabaseSyncService = {
     }
   },
 };
+

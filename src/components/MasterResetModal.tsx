@@ -39,7 +39,10 @@ export function MasterResetModal({ isOpen, onClose, onSuccess }: MasterResetModa
         setSuccessMessage(null);
         setConfirmationInput('');
         onClose();
-      }, 1000);
+        if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
+      }, 1200);
     } catch (err) {
       console.error('Error en reinicio maestro:', err);
       setIsProcessing(false);

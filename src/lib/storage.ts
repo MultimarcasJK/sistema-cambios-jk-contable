@@ -1276,9 +1276,15 @@ export const StorageService = {
     saveToStorage(this.getClosuresKey('detal'), []);
     saveToStorage(this.getClosuresKey('mayor'), []);
     saveToStorage(this.getSupplierPurchasesKey('detal'), []);
-    saveToStorage(this.getSupplierPurchasesKey('mayor'), []);
     saveToStorage(this.getSupplierPaymentsKey('detal'), []);
     saveToStorage(this.getSupplierPaymentsKey('mayor'), []);
+    localStorage.removeItem('cambiosjk_accounts_v1');
+    localStorage.removeItem('cambiosjk_clients_v1');
+    localStorage.removeItem('cambiosjk_suppliers_v1');
+    localStorage.removeItem('cambiosjk_detal_v1');
+    localStorage.removeItem('cambiosjk_mayor_v1');
+    localStorage.removeItem('cambiosjk_debtors_v1');
+    localStorage.removeItem('cambiosjk_debt_payments_v1');
     await SupabaseSyncService.resetBalancesToZeroInSupabase().catch(() => {});
   },
 };
