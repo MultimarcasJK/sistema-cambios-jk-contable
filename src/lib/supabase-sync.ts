@@ -28,6 +28,9 @@ export const SupabaseSyncService = {
       }
       return ((data || []) as any[]).map((row) => ({
         ...row,
+        account_subtype: row.account_subtype || '',
+        account_number: row.account_number || '',
+        notes: row.notes || '',
         current_balance: Number(row.current_balance) || 0,
         initial_balance: Number(row.initial_balance) || 0,
         is_active: row.is_active !== undefined && row.is_active !== null ? Boolean(row.is_active) : true,
@@ -50,6 +53,9 @@ export const SupabaseSyncService = {
         type: account.type || 'banco',
         bank_name: account.bank_name || '',
         responsible: account.responsible || '',
+        account_subtype: account.account_subtype || '',
+        account_number: account.account_number || '',
+        notes: account.notes || '',
         country: account.country || (mode === 'mayor' ? 'VENEZUELA' : 'ECUADOR'),
       });
     } catch (err) {

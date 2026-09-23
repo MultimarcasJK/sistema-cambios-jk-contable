@@ -232,7 +232,25 @@ export const StorageService = {
       ]);
 
       if (remoteAccs !== null) {
-        saveToStorage(this.getAccountsKey(m), remoteAccs);
+        const local = this.getAccounts(m);
+        const localMap = new Map<string, Account>();
+        local.forEach((a) => {
+          if (a && a.id) localMap.set(a.id, a);
+          if (a && a.name) localMap.set(a.name.trim().toUpperCase(), a);
+        });
+
+        const mergedAccounts = remoteAccs.map((remote) => {
+          const loc = localMap.get(remote.id) || localMap.get(remote.name.trim().toUpperCase());
+          return {
+            ...remote,
+            account_subtype: remote.account_subtype || loc?.account_subtype || '',
+            account_number: remote.account_number || loc?.account_number || '',
+            notes: remote.notes || loc?.notes || '',
+            scope: remote.scope || loc?.scope || m,
+          };
+        });
+
+        saveToStorage(this.getAccountsKey(m), mergedAccounts);
       }
       if (remoteClients !== null) {
         const uniqueMap = new Map<string, Client>();
