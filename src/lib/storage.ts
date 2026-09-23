@@ -319,17 +319,7 @@ export const StorageService = {
         saveToStorage(this.getDebtorsKey(m), remoteDebtors);
       }
       if (remoteDebtPayments !== null) {
-        const local = getFromStorage<DebtPayment[]>(this.getDebtPaymentsKey(m), []);
-        const remoteIds = new Set(remoteDebtPayments.map((p) => p.id));
-        const localPending = local.filter((p) => !remoteIds.has(p.id));
-        localPending.forEach((p) => {
-          SupabaseSyncService.upsertDebtPayment(p, m).catch(() => {});
-        });
-        const merged = [...remoteDebtPayments, ...localPending].sort((a, b) => {
-          if (b.date !== a.date) return b.date.localeCompare(a.date);
-          return (b.created_at || '').localeCompare(a.created_at || '');
-        });
-        saveToStorage(this.getDebtPaymentsKey(m), merged);
+        saveToStorage(this.getDebtPaymentsKey(m), remoteDebtPayments);
       }
       if (remotePurchases !== null) {
         saveToStorage(this.getSupplierPurchasesKey(m), remotePurchases);
