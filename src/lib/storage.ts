@@ -1212,7 +1212,7 @@ export const StorageService = {
     saveToStorage(this.getSupplierPaymentsKey('mayor'), []);
   },
 
-  masterResetToZero(): void {
+  async masterResetToZero(): Promise<void> {
     if (typeof window === 'undefined') return;
     saveToStorage(this.getAccountsKey('detal'), []);
     saveToStorage(this.getAccountsKey('mayor'), []);
@@ -1245,13 +1245,13 @@ export const StorageService = {
     localStorage.removeItem('cambiosjk_mayor_v1');
     localStorage.removeItem('cambiosjk_debtors_v1');
     localStorage.removeItem('cambiosjk_debt_payments_v1');
-    SupabaseSyncService.truncateAllTables().catch(() => {});
+    await SupabaseSyncService.truncateAllTables().catch(() => {});
   },
 
-  resetBalancesToZero(): void {
+  async resetBalancesToZero(): Promise<void> {
     if (typeof window === 'undefined') return;
-    const detalAccs = this.getAccounts('detal').map((a) => ({ ...a, current_balance: 0 }));
-    const mayorAccs = this.getAccounts('mayor').map((a) => ({ ...a, current_balance: 0 }));
+    const detalAccs = this.getAccounts('detal').map((a) => ({ ...a, current_balance: 0, initial_balance: 0 }));
+    const mayorAccs = this.getAccounts('mayor').map((a) => ({ ...a, current_balance: 0, initial_balance: 0 }));
     saveToStorage(this.getAccountsKey('detal'), detalAccs);
     saveToStorage(this.getAccountsKey('mayor'), mayorAccs);
 
@@ -1278,7 +1278,7 @@ export const StorageService = {
     saveToStorage(this.getSupplierPurchasesKey('mayor'), []);
     saveToStorage(this.getSupplierPaymentsKey('detal'), []);
     saveToStorage(this.getSupplierPaymentsKey('mayor'), []);
-    SupabaseSyncService.truncateAllTables().catch(() => {});
+    await SupabaseSyncService.resetBalancesToZeroInSupabase().catch(() => {});
   },
 };
 

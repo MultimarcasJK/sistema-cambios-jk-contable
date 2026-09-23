@@ -628,6 +628,33 @@ export const SupabaseSyncService = {
     }
   },
 
+  async resetBalancesToZeroInSupabase(): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const modes: AppMode[] = ['detal', 'mayor'];
+    for (const m of modes) {
+      try {
+        await supabase.from(`${m}_cuentas`).update({ current_balance: 0, initial_balance: 0 }).neq('id', '___none___');
+        await supabase.from(`${m}_proveedores`).update({ current_debt_usd: 0 }).neq('id', '___none___');
+        const deleteTables = [
+          `${m}_pagos_proveedores`,
+          `${m}_compras_proveedores`,
+          `${m}_cierres_diarios`,
+          `${m}_gastos_ingresos`,
+          `${m}_cambio_saldos`,
+          `${m}_abonos_deudores`,
+          `${m}_deudores`,
+          `${m}_ventas_cripto_dolar`,
+          `${m}_ventas_regionales`,
+        ];
+        for (const t of deleteTables) {
+          await supabase.from(t).delete().neq('id', '___none___');
+        }
+      } catch (err) {
+        console.error(`[SupabaseSync] Error resetting balances in Supabase for ${m}:`, err);
+      }
+    }
+  },
+
   async truncateAllTables(): Promise<void> {
     if (!isSupabaseConfigured || !supabase) return;
     const modes: AppMode[] = ['detal', 'mayor'];

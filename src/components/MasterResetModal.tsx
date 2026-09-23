@@ -26,20 +26,20 @@ export function MasterResetModal({ isOpen, onClose, onSuccess }: MasterResetModa
     setIsProcessing(true);
     try {
       if (resetType === 'blank') {
-        StorageService.masterResetToZero();
-        setSuccessMessage('?Sistema reiniciado a CERO absoluto (lienzo en blanco) con ?xito!');
+        await StorageService.masterResetToZero();
+        setSuccessMessage('¡Sistema reiniciado a CERO absoluto (lienzo en blanco) con éxito!');
       } else {
-        StorageService.resetBalancesToZero();
-        setSuccessMessage('?Todos los saldos y deudas se han puesto en 0.00 con ?xito!');
+        await StorageService.resetBalancesToZero();
+        setSuccessMessage('¡Todos los saldos y deudas se han puesto en 0.00 con éxito!');
       }
 
+      onSuccess();
       setTimeout(() => {
-        onSuccess();
         setIsProcessing(false);
         setSuccessMessage(null);
         setConfirmationInput('');
         onClose();
-      }, 1200);
+      }, 1000);
     } catch (err) {
       console.error('Error en reinicio maestro:', err);
       setIsProcessing(false);
