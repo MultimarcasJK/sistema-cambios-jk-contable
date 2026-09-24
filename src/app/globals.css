@@ -121,7 +121,13 @@ body {
 [data-theme="mayor"] .bg-indigo-50,
 [data-theme="mayor"] .bg-purple-50,
 [data-theme="mayor"] .bg-amber-50,
-[data-theme="mayor"] .bg-rose-50 {
+[data-theme="mayor"] .bg-rose-50,
+[data-theme="mayor"] [class*="bg-emerald-50/"],
+[data-theme="mayor"] [class*="bg-blue-50/"],
+[data-theme="mayor"] [class*="bg-indigo-50/"],
+[data-theme="mayor"] [class*="bg-purple-50/"],
+[data-theme="mayor"] [class*="bg-amber-50/"],
+[data-theme="mayor"] [class*="bg-rose-50/"] {
   background-color: #1e293b !important;
   border-color: #334155 !important;
 }

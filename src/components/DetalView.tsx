@@ -312,51 +312,66 @@ export function DetalView({
         </div>
 
         {/* Banner Tasa Oficial Cambios JK */}
-        {officialUsdtRate && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 bg-emerald-50/80 border border-emerald-300 rounded-xl text-xs text-black shadow-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center space-x-1.5">
-                <Sparkles className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                <span className="font-bold text-black">
-                  Tasa Oficial App JK ({appMode === 'mayor' ? 'MAYOR' : 'DETAL'}):
-                </span>
+        {officialUsdtRate && (() => {
+          const isDark = appMode === 'mayor';
+          return (
+            <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl text-xs shadow-sm ${
+              isDark
+                ? 'bg-slate-800/90 border border-slate-700 text-white'
+                : 'bg-emerald-50/80 border border-emerald-300 text-slate-900'
+            }`}>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className={`flex items-center space-x-1.5 font-bold ${isDark ? 'text-white' : 'text-black'}`}>
+                  <Sparkles className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                  <span>
+                    Tasa Oficial App JK ({isDark ? 'MAYOR' : 'DETAL'}):
+                  </span>
+                </div>
+                <div className={`flex flex-wrap items-center gap-2 ${isDark ? 'text-slate-200' : 'text-black'}`}>
+                  <span>
+                    Venta: <strong className={`font-mono font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>{officialUsdtRate.sellRate}</strong> | 
+                    Costo: <strong className={`font-mono font-bold ${isDark ? 'text-slate-200' : 'text-black'}`}>{officialUsdtRate.costRate}</strong>{' '}
+                    {officialUsdtRate.provider && (
+                      <span className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>({officialUsdtRate.provider})</span>
+                    )}
+                  </span>
+                  {lastRatesSync && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                      isDark ? 'bg-slate-900 text-emerald-400 border border-slate-700' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      ● En vivo {new Date(lastRatesSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
               </div>
-              <span className="text-black font-medium">
-                Venta: <strong className="text-emerald-700 font-mono font-bold">{officialUsdtRate.sellRate}</strong> | 
-                Costo: <strong className="text-black font-mono font-bold">{officialUsdtRate.costRate}</strong>{' '}
-                {officialUsdtRate.provider && (
-                  <span className="text-slate-600 text-[11px]">({officialUsdtRate.provider})</span>
+              <div className="flex items-center space-x-2 shrink-0 self-start sm:self-auto">
+                {onSyncRates && (
+                  <button
+                    type="button"
+                    onClick={onSyncRates}
+                    disabled={isSyncingRates}
+                    className={`flex items-center space-x-1 font-semibold px-2.5 py-1.5 rounded-lg text-[11px] transition cursor-pointer shadow-2xs ${
+                      isDark
+                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white border border-slate-600'
+                        : 'bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200'
+                    }`}
+                    title="Sincronizar tasas frescas desde Google Sheets / App"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingRates ? 'animate-spin text-emerald-400' : 'text-slate-500'}`} />
+                    <span>{isSyncingRates ? 'Sincronizando...' : 'Actualizar Ahora'}</span>
+                  </button>
                 )}
-              </span>
-              {lastRatesSync && (
-                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">
-                  ● En vivo {new Date(lastRatesSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center space-x-2 shrink-0">
-              {onSyncRates && (
                 <button
                   type="button"
-                  onClick={onSyncRates}
-                  disabled={isSyncingRates}
-                  className="flex items-center space-x-1 font-semibold px-2.5 py-1.5 rounded-lg text-[11px] bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200 shadow-2xs transition cursor-pointer"
-                  title="Sincronizar tasas frescas desde Google Sheets / App"
+                  onClick={handleApplyOfficialRate}
+                  className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg transition shadow-xs cursor-pointer text-xs"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingRates ? 'animate-spin text-emerald-600' : 'text-slate-500'}`} />
-                  <span>{isSyncingRates ? 'Sincronizando...' : 'Actualizar Ahora'}</span>
+                  <span>Aplicar Tasa Oficial ({officialUsdtRate.sellRate})</span>
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={handleApplyOfficialRate}
-                className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg transition shadow-xs cursor-pointer text-xs"
-              >
-                <span>Aplicar Tasa Oficial ({officialUsdtRate.sellRate})</span>
-              </button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         <form
           onSubmit={handleSubmit}

@@ -50,6 +50,7 @@ export function ClosuresView({
   onDataChange,
   appMode,
 }: ClosuresProps) {
+  const isDark = appMode === 'mayor';
   const todayStr = new Date().toISOString().slice(0, 10);
   const [activeSubTab, setActiveSubTab] = useState<'profits' | 'accounts' | 'debtors'>('profits');
 
@@ -283,13 +284,17 @@ export function ClosuresView({
   return (
     <div className="space-y-5">
       {/* Selector de Sub-pestañas Compactas */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
+      <div className={`flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl border shadow-sm ${
+        isDark ? 'bg-slate-900/90 border-slate-700/80' : 'bg-white border-slate-200'
+      }`}>
         <div className="flex items-center space-x-1 sm:space-x-2">
           <button
             onClick={() => setActiveSubTab('profits')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
               activeSubTab === 'profits'
                 ? 'bg-emerald-600 text-white shadow-sm'
+                : isDark
+                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -299,9 +304,11 @@ export function ClosuresView({
 
           <button
             onClick={() => setActiveSubTab('accounts')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
               activeSubTab === 'accounts'
                 ? 'bg-blue-600 text-white shadow-sm'
+                : isDark
+                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -311,9 +318,11 @@ export function ClosuresView({
 
           <button
             onClick={() => setActiveSubTab('debtors')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
               activeSubTab === 'debtors'
                 ? 'bg-purple-600 text-white shadow-sm'
+                : isDark
+                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -322,7 +331,7 @@ export function ClosuresView({
           </button>
         </div>
 
-        <div className="text-[11px] text-slate-400 font-medium hidden md:block">
+        <div className={`text-[11px] font-medium hidden md:block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
           Cierres inmutables históricos • Saldos y deudores operativos en tiempo real
         </div>
       </div>
@@ -333,25 +342,31 @@ export function ClosuresView({
       {activeSubTab === 'profits' && (
         <div className="space-y-6">
           {/* Tarjeta de Cálculo y Guardado */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+          <div className={`p-5 rounded-2xl border shadow-sm ${
+            isDark ? 'bg-slate-900/90 border-slate-700/80' : 'bg-white border-slate-200'
+          }`}>
+            <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b ${
+              isDark ? 'border-slate-800' : 'border-slate-100'
+            }`}>
               <div>
-                <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-                  <CalendarCheck2 className="w-5 h-5 text-emerald-600" />
+                <h2 className={`text-base font-bold flex items-center space-x-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  <CalendarCheck2 className={`w-5 h-5 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
                   <span>Cierre Diario y Cuadre de Ganancias</span>
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                   Fórmula oficial: CRIPTO/DOLAR + MONEDAS REGIONALES + Ingresos Extra - Gastos = Ganancia Neta
                 </p>
               </div>
 
               <div className="flex items-center space-x-2">
-                <span className="text-xs font-semibold text-slate-600">Fecha del Cierre:</span>
+                <span className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>Fecha del Cierre:</span>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="text-xs font-semibold border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className={`text-xs font-semibold border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                    isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                  }`}
                 />
               </div>
             </div>
@@ -359,59 +374,103 @@ export function ClosuresView({
             {/* Desglose de Ganancias del Día */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 my-5">
               {/* Ganancia Detal */}
-              <div className="bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-100">
-                <span className="text-[11px] font-semibold text-emerald-700 uppercase">
+              <div className={`p-3.5 rounded-xl border transition ${
+                isDark
+                  ? 'bg-slate-800/90 border-slate-700/80'
+                  : 'bg-emerald-50/60 border-emerald-100'
+              }`}>
+                <span className={`text-[11px] font-semibold uppercase ${
+                  isDark ? 'text-emerald-400' : 'text-emerald-700'
+                }`}>
                   1. CRIPTO/DOLAR
                 </span>
-                <div className="text-xl font-black font-mono text-emerald-900 mt-1">
+                <div className={`text-xl font-black font-mono mt-1 ${
+                  isDark ? 'text-white' : 'text-emerald-900'
+                }`}>
                   +${daySummary.profitDetal.toFixed(2)}
                 </div>
-                <span className="text-[10px] text-emerald-600">
+                <span className={`text-[10px] ${
+                  isDark ? 'text-slate-400' : 'text-emerald-600'
+                }`}>
                   {daySummary.detalCount} operaciones
                 </span>
               </div>
 
               {/* Ganancia Mayor */}
-              <div className="bg-indigo-50/60 p-3.5 rounded-xl border border-indigo-100">
-                <span className="text-[11px] font-semibold text-indigo-700 uppercase">
+              <div className={`p-3.5 rounded-xl border transition ${
+                isDark
+                  ? 'bg-slate-800/90 border-slate-700/80'
+                  : 'bg-indigo-50/60 border-indigo-100'
+              }`}>
+                <span className={`text-[11px] font-semibold uppercase ${
+                  isDark ? 'text-indigo-400' : 'text-indigo-700'
+                }`}>
                   2. MONEDAS REGIONALES
                 </span>
-                <div className="text-xl font-black font-mono text-indigo-900 mt-1">
+                <div className={`text-xl font-black font-mono mt-1 ${
+                  isDark ? 'text-white' : 'text-indigo-900'
+                }`}>
                   +${daySummary.profitMayor.toFixed(2)}
                 </div>
-                <span className="text-[10px] text-indigo-600">
+                <span className={`text-[10px] ${
+                  isDark ? 'text-slate-400' : 'text-indigo-600'
+                }`}>
                   {daySummary.mayorCount} operaciones
                 </span>
               </div>
 
               {/* Ingresos Extra */}
-              <div className="bg-blue-50/60 p-3.5 rounded-xl border border-blue-100">
-                <span className="text-[11px] font-semibold text-blue-700 uppercase">
+              <div className={`p-3.5 rounded-xl border transition ${
+                isDark
+                  ? 'bg-slate-800/90 border-slate-700/80'
+                  : 'bg-blue-50/60 border-blue-100'
+              }`}>
+                <span className={`text-[11px] font-semibold uppercase ${
+                  isDark ? 'text-blue-400' : 'text-blue-700'
+                }`}>
                   3. Ingresos Extra
                 </span>
-                <div className="text-xl font-black font-mono text-blue-900 mt-1">
+                <div className={`text-xl font-black font-mono mt-1 ${
+                  isDark ? 'text-white' : 'text-blue-900'
+                }`}>
                   +${daySummary.extraIncome.toFixed(2)}
                 </div>
-                <span className="text-[10px] text-blue-600">
+                <span className={`text-[10px] ${
+                  isDark ? 'text-slate-400' : 'text-blue-600'
+                }`}>
                   {daySummary.extraCount} adicionales
                 </span>
               </div>
 
               {/* Gastos del Día */}
-              <div className="bg-rose-50/60 p-3.5 rounded-xl border border-rose-100">
-                <span className="text-[11px] font-semibold text-rose-700 uppercase">
+              <div className={`p-3.5 rounded-xl border transition ${
+                isDark
+                  ? 'bg-slate-800/90 border-slate-700/80'
+                  : 'bg-rose-50/60 border-rose-100'
+              }`}>
+                <span className={`text-[11px] font-semibold uppercase ${
+                  isDark ? 'text-rose-400' : 'text-rose-700'
+                }`}>
                   4. Gastos
                 </span>
-                <div className="text-xl font-black font-mono text-rose-900 mt-1">
+                <div className={`text-xl font-black font-mono mt-1 ${
+                  isDark ? 'text-rose-300' : 'text-rose-900'
+                }`}>
                   -${daySummary.totalExpenses.toFixed(2)}
                 </div>
-                <span className="text-[10px] text-rose-600">
+                <span className={`text-[10px] ${
+                  isDark ? 'text-slate-400' : 'text-rose-600'
+                }`}>
                   {daySummary.expensesCount} egresos
                 </span>
               </div>
 
               {/* Ganancia Neta Total */}
-              <div className="bg-slate-900 text-white p-3.5 rounded-xl shadow-sm">
+              <div className={`p-3.5 rounded-xl shadow-sm border ${
+                isDark
+                  ? 'bg-slate-900/90 border-slate-700 text-white'
+                  : 'bg-slate-900 text-white border-transparent'
+              }`}>
                 <span className="text-[11px] font-semibold text-slate-400 uppercase">
                   = Ganancia Neta
                 </span>
@@ -427,14 +486,22 @@ export function ClosuresView({
             </div>
 
             {/* Guardar Cierre Oficial */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+              isDark
+                ? 'bg-slate-800/90 border-slate-700'
+                : 'bg-slate-50 border-slate-200'
+            }`}>
               <div className="flex-1">
                 <input
                   type="text"
                   placeholder="Notas u observaciones del cierre (opcional)..."
                   value={closureNotes}
                   onChange={(e) => setClosureNotes(e.target.value)}
-                  className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none"
+                  className={`w-full text-xs border rounded-lg px-3 py-2 focus:outline-none ${
+                    isDark
+                      ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-500'
+                      : 'bg-white border-slate-300 text-slate-900'
+                  }`}
                 />
               </div>
 
@@ -448,7 +515,7 @@ export function ClosuresView({
 
                 <button
                   onClick={handleSaveClosure}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-sm transition flex items-center space-x-1.5"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-sm transition flex items-center space-x-1.5 cursor-pointer"
                 >
                   <Camera className="w-4 h-4" />
                   <span>Guardar Cierre Oficial (Foto Cuentas + Deudores)</span>
