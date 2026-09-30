@@ -62,9 +62,12 @@ export const SupabaseSyncService = {
       if (account.order_index !== undefined && account.order_index !== null) {
         payload.order_index = account.order_index;
       }
-      await supabase.from(table).upsert(payload);
+      const { error } = await supabase.from(table).upsert(payload);
+      if (error) {
+        console.error(`[SupabaseSync] Error al guardar cuenta ${account.name} en ${table}:`, error);
+      }
     } catch (err) {
-      /* warn */
+      console.error(`[SupabaseSync] Excepción al guardar cuenta en ${table}:`, err);
     }
   },
 

@@ -233,27 +233,42 @@ export const StorageService = {
 
       if (remoteAccs !== null) {
         const local = this.getAccounts(m);
+        const remoteIds = new Set(remoteAccs.map((a) => a.id));
+        const remoteNames = new Set(remoteAccs.map((a) => a.name.trim().toUpperCase()));
+
+        // Preservar cuentas creadas localmente que aún no hayan llegado a Supabase
+        const localPending = local.filter(
+          (a) => a && !remoteIds.has(a.id) && !remoteNames.has((a.name || '').trim().toUpperCase())
+        );
+        localPending.forEach((a) => {
+          SupabaseSyncService.upsertAccount(a, m).catch(() => {});
+        });
+
         const localMap = new Map<string, Account>();
         local.forEach((a) => {
           if (a && a.id) localMap.set(a.id, a);
           if (a && a.name) localMap.set(a.name.trim().toUpperCase(), a);
         });
 
-        const mergedAccounts = remoteAccs.map((remote) => {
-          const loc = localMap.get(remote.id) || localMap.get(remote.name.trim().toUpperCase());
-          return {
-            ...remote,
-            account_subtype: remote.account_subtype || loc?.account_subtype || '',
-            account_number: remote.account_number || loc?.account_number || '',
-            notes: remote.notes || loc?.notes || '',
-            scope: remote.scope || loc?.scope || m,
-            order_index: remote.order_index !== undefined ? remote.order_index : loc?.order_index,
-          };
-        });
+        const mergedAccounts = [
+          ...remoteAccs.map((remote) => {
+            const loc = localMap.get(remote.id) || localMap.get(remote.name.trim().toUpperCase());
+            return {
+              ...remote,
+              account_subtype: remote.account_subtype || loc?.account_subtype || '',
+              account_number: remote.account_number || loc?.account_number || '',
+              notes: remote.notes || loc?.notes || '',
+              scope: remote.scope || loc?.scope || m,
+              order_index: remote.order_index !== undefined ? remote.order_index : loc?.order_index,
+            };
+          }),
+          ...localPending,
+        ];
 
         saveToStorage(this.getAccountsKey(m), mergedAccounts);
       }
       if (remoteClients !== null) {
+        const local = this.getClients(m);
         const uniqueMap = new Map<string, Client>();
         remoteClients.forEach((c) => {
           if (!c || !c.name) return;
@@ -272,22 +287,57 @@ export const StorageService = {
             uniqueMap.set(key, updated);
           }
         });
+
+        // Preservar clientes creados localmente aún no sincronizados
+        const remoteIds = new Set(remoteClients.map((c) => c.id));
+        const localPending = local.filter(
+          (c) => c && !remoteIds.has(c.id) && !uniqueMap.has((c.name || '').trim().toUpperCase())
+        );
+        localPending.forEach((c) => {
+          SupabaseSyncService.upsertClient(c, m).catch(() => {});
+          uniqueMap.set(c.name.trim().toUpperCase(), c);
+        });
+
         const sorted = Array.from(uniqueMap.values()).sort((a, b) =>
           a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
         );
         saveToStorage(this.getClientsKey(m), sorted);
       }
       if (remoteSuppliers !== null) {
-        saveToStorage(this.getSuppliersKey(m), remoteSuppliers);
+        const local = this.getSuppliers(m);
+        const remoteIds = new Set(remoteSuppliers.map((s) => s.id));
+        const localPending = local.filter((s) => s && !remoteIds.has(s.id));
+        localPending.forEach((s) => {
+          SupabaseSyncService.upsertSupplier(s, m).catch(() => {});
+        });
+        saveToStorage(this.getSuppliersKey(m), [...remoteSuppliers, ...localPending]);
       }
       if (remoteTransfers !== null) {
-        saveToStorage(this.getTransfersKey(m), remoteTransfers);
+        const local = this.getTransfers(m);
+        const remoteIds = new Set(remoteTransfers.map((t) => t.id));
+        const localPending = local.filter((t) => t && !remoteIds.has(t.id));
+        localPending.forEach((t) => {
+          SupabaseSyncService.upsertTransfer(t, m).catch(() => {});
+        });
+        saveToStorage(this.getTransfersKey(m), [...remoteTransfers, ...localPending]);
       }
       if (remoteExpenses !== null) {
-        saveToStorage(this.getExpensesKey(m), remoteExpenses);
+        const local = this.getExpenses(m);
+        const remoteIds = new Set(remoteExpenses.map((e) => e.id));
+        const localPending = local.filter((e) => e && !remoteIds.has(e.id));
+        localPending.forEach((e) => {
+          SupabaseSyncService.upsertExpense(e, m).catch(() => {});
+        });
+        saveToStorage(this.getExpensesKey(m), [...remoteExpenses, ...localPending]);
       }
       if (remoteClosures !== null) {
-        saveToStorage(this.getClosuresKey(m), remoteClosures);
+        const local = this.getClosures(m);
+        const remoteIds = new Set(remoteClosures.map((c) => c.id));
+        const localPending = local.filter((c) => c && !remoteIds.has(c.id));
+        localPending.forEach((c) => {
+          SupabaseSyncService.upsertClosure(c, m).catch(() => {});
+        });
+        saveToStorage(this.getClosuresKey(m), [...remoteClosures, ...localPending]);
       }
       if (remoteTxsDetal !== null) {
         const local = getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []);
@@ -316,16 +366,40 @@ export const StorageService = {
         saveToStorage(this.getTransactionsMayorKey(m), merged);
       }
       if (remoteDebtors !== null) {
-        saveToStorage(this.getDebtorsKey(m), remoteDebtors);
+        const local = this.getDebtors(m);
+        const remoteIds = new Set(remoteDebtors.map((d) => d.id));
+        const localPending = local.filter((d) => d && !remoteIds.has(d.id));
+        localPending.forEach((d) => {
+          SupabaseSyncService.upsertDebtor(d, m).catch(() => {});
+        });
+        saveToStorage(this.getDebtorsKey(m), [...remoteDebtors, ...localPending]);
       }
       if (remoteDebtPayments !== null) {
-        saveToStorage(this.getDebtPaymentsKey(m), remoteDebtPayments);
+        const local = this.getDebtPayments(m);
+        const remoteIds = new Set(remoteDebtPayments.map((p) => p.id));
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id));
+        localPending.forEach((p) => {
+          SupabaseSyncService.upsertDebtPayment(p, m).catch(() => {});
+        });
+        saveToStorage(this.getDebtPaymentsKey(m), [...remoteDebtPayments, ...localPending]);
       }
       if (remotePurchases !== null) {
-        saveToStorage(this.getSupplierPurchasesKey(m), remotePurchases);
+        const local = this.getSupplierPurchases(m);
+        const remoteIds = new Set(remotePurchases.map((p) => p.id));
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id));
+        localPending.forEach((p) => {
+          SupabaseSyncService.upsertSupplierPurchase(p, m).catch(() => {});
+        });
+        saveToStorage(this.getSupplierPurchasesKey(m), [...remotePurchases, ...localPending]);
       }
       if (remoteSupplierPayments !== null) {
-        saveToStorage(this.getSupplierPaymentsKey(m), remoteSupplierPayments);
+        const local = this.getSupplierPayments(m);
+        const remoteIds = new Set(remoteSupplierPayments.map((p) => p.id));
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id));
+        localPending.forEach((p) => {
+          SupabaseSyncService.upsertSupplierPayment(p, m).catch(() => {});
+        });
+        saveToStorage(this.getSupplierPaymentsKey(m), [...remoteSupplierPayments, ...localPending]);
       }
     } catch (err) {
       console.warn('[Sync ' + m + '] Sincronización secundaria pospuesta:', err);
@@ -366,6 +440,28 @@ export const StorageService = {
   saveAccounts(accounts: Account[], mode?: AppMode): void {
     const m = mode || this.getAppMode();
     saveToStorage(this.getAccountsKey(m), accounts);
+  },
+
+  addAccount(account: Account, mode?: AppMode): Account {
+    const m = mode || this.getAppMode();
+    const accounts = this.getAccounts(m);
+    const existingIndex = accounts.findIndex(
+      (a) =>
+        a.id === account.id ||
+        (a.name && account.name && a.name.trim().toUpperCase() === account.name.trim().toUpperCase())
+    );
+    let updated: Account[];
+    if (existingIndex >= 0) {
+      updated = [...accounts];
+      updated[existingIndex] = { ...accounts[existingIndex], ...account };
+    } else {
+      updated = [...accounts, account];
+    }
+    this.saveAccounts(updated, m);
+    SupabaseSyncService.upsertAccount(account, m).catch((err) => {
+      console.error(`[SupabaseSync] Error al subir cuenta ${account.name} a Supabase:`, err);
+    });
+    return account;
   },
 
   updateAccount(accountId: string, updates: Partial<Account>, mode?: AppMode): void {

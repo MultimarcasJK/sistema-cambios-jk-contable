@@ -83,7 +83,6 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
     }
 
     const currentMode = appMode || StorageService.getAppMode();
-    const currentAccounts = StorageService.getAccounts(currentMode);
     const created: Account = {
       id: 'acc-' + Date.now(),
       name: newAccount.name.trim().toUpperCase(),
@@ -95,12 +94,13 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
       account_subtype: newAccount.account_subtype.trim(),
       notes: newAccount.notes.trim(),
       current_balance: parseFloat(newAccount.initial_balance) || 0,
+      initial_balance: parseFloat(newAccount.initial_balance) || 0,
       is_active: true,
       country: newAccount.country,
       scope: currentMode,
     } as Account;
 
-    StorageService.saveAccounts([...currentAccounts, created], currentMode);
+    StorageService.addAccount(created, currentMode);
     setIsAddingAccount(false);
     onDataChange();
   };
@@ -127,9 +127,8 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
     const val = parseFloat(adjustBalanceValue);
     if (isNaN(val)) return;
 
-    const all = StorageService.getAccounts();
-    const updated = all.map((a) => (a.id === accId ? { ...a, current_balance: val } : a));
-    StorageService.saveAccounts(updated);
+    const currentMode = appMode || StorageService.getAppMode();
+    StorageService.updateAccount(accId, { current_balance: val }, currentMode);
     setEditingAccountId(null);
     setAdjustBalanceValue('');
     onDataChange();
