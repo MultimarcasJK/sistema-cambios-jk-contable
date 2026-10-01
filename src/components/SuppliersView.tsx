@@ -259,16 +259,16 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
     setIsSupplierModalOpen(true);
   };
 
-  const handleDeleteSupplier = (sup: Supplier) => {
+  const handleDeleteSupplier = async (sup: Supplier) => {
     if (confirm(`¿Estás seguro de que deseas eliminar al proveedor "${sup.name}"?`)) {
-      StorageService.deleteSupplier(sup.id);
+      await StorageService.deleteSupplier(sup.id);
       onDataChange();
     }
   };
 
-  const handleDeletePurchase = (id: string) => {
+  const handleDeletePurchase = async (id: string) => {
     if (confirm('¿Deseas eliminar esta compra de inventario? Se revertirá la deuda al proveedor y el saldo ingresado a la cuenta.')) {
-      StorageService.deleteSupplierPurchase(id);
+      await StorageService.deleteSupplierPurchase(id);
       onDataChange();
     }
   };

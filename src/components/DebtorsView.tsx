@@ -114,9 +114,9 @@ export function DebtorsView({
     setPaymentNotes('');
   };
 
-  const handleDeletePayment = (id: string) => {
+  const handleDeletePayment = async (id: string) => {
     if (confirm('¿Deseas eliminar este registro de abono? Se revertirá el saldo de la cuenta receptora y se volverá a sumar la deuda al cliente.')) {
-      StorageService.deleteDebtPayment(id, appMode);
+      await StorageService.deleteDebtPayment(id, appMode);
       onDataChange();
     }
   };

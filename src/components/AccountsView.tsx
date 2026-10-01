@@ -116,9 +116,9 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
     onDataChange();
   };
 
-  const handleDeleteAccount = (accountId: string) => {
+  const handleDeleteAccount = async (accountId: string) => {
     const currentMode = appMode || StorageService.getAppMode();
-    StorageService.deleteAccount(accountId, currentMode);
+    await StorageService.deleteAccount(accountId, currentMode);
     setAccountToEdit(null);
     onDataChange();
   };

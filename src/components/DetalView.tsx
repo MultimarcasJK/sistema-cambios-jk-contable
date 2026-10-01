@@ -122,9 +122,9 @@ export function DetalView({
     };
   }, [formData.usdt_amount, formData.sell_price, formData.buy_price, formData.bank_fee, feeMode, feePercent]);
 
-  const handleDeleteTx = (id: string) => {
+  const handleDeleteTx = async (id: string) => {
     if (confirm('¿Deseas eliminar esta transacción de CRIPTO/DOLAR? Si generó deuda o movió saldos, se revertirá automáticamente.')) {
-      StorageService.deleteTransactionDetal(id, appMode);
+      await StorageService.deleteTransactionDetal(id, appMode);
       onDataChange();
     }
   };
@@ -908,9 +908,9 @@ export function DetalView({
                       {isAdmin && (
                         <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               if (confirm(`¿Eliminar este registro de abono de ${pay.client_name}?`)) {
-                                StorageService.deleteDebtPayment(pay.id, appMode);
+                                await StorageService.deleteDebtPayment(pay.id, appMode);
                                 onDataChange();
                               }
                             }}

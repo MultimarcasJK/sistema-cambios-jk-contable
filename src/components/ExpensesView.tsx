@@ -79,9 +79,9 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
     return rate > 0 ? Number((amt / rate).toFixed(2)) : amt;
   }, [formData.amount, formData.rate_to_usd, formData.currency]);
 
-  const handleDeleteExpense = (id: string) => {
+  const handleDeleteExpense = async (id: string) => {
     if (confirm('¿Deseas eliminar este registro de ingreso/egreso? Si afectó el saldo de una cuenta bancaria, se revertirá automáticamente.')) {
-      StorageService.deleteExpense(id);
+      await StorageService.deleteExpense(id);
       onDataChange();
     }
   };

@@ -245,15 +245,15 @@ export function SupplierHistoryModal({
     });
   };
 
-  const handleDeleteMovement = (mov: { type: 'COMPRA' | 'PAGO'; originalId: string }) => {
+  const handleDeleteMovement = async (mov: { type: 'COMPRA' | 'PAGO'; originalId: string }) => {
     if (mov.type === 'COMPRA') {
       if (confirm('¿Deseas revertir y eliminar esta compra de inventario? Se ajustarán saldos y la deuda del proveedor.')) {
-        StorageService.deleteSupplierPurchase(mov.originalId);
+        await StorageService.deleteSupplierPurchase(mov.originalId);
         if (onDataChange) onDataChange();
       }
     } else {
       if (confirm('¿Deseas revertir y eliminar este pago al proveedor? Se restaurará la deuda y el saldo de la cuenta.')) {
-        StorageService.deleteSupplierPayment(mov.originalId);
+        await StorageService.deleteSupplierPayment(mov.originalId);
         if (onDataChange) onDataChange();
       }
     }

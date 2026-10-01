@@ -129,9 +129,9 @@ export function ClosuresView({
   };
 
   // Eliminar un cierre
-  const handleDeleteClosure = (id: string, date: string) => {
+  const handleDeleteClosure = async (id: string, date: string) => {
     if (confirm(`¿Estás seguro de eliminar el registro de cierre del ${date}?`)) {
-      StorageService.deleteClosure(id, appMode);
+      await StorageService.deleteClosure(id, appMode);
       onDataChange();
     }
   };

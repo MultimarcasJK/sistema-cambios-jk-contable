@@ -147,9 +147,9 @@ export function ClientsView({
     onDataChange();
   };
 
-  const handleDeleteClient = (client: Client) => {
+  const handleDeleteClient = async (client: Client) => {
     if (confirm(`¿Estás seguro de que deseas eliminar al cliente "${client.name}"? Esta acción no se puede deshacer.`)) {
-      StorageService.deleteClient(client.id, appMode);
+      await StorageService.deleteClient(client.id, appMode);
       if (selectedClientForHistory?.id === client.id) {
         setSelectedClientForHistory(null);
       }

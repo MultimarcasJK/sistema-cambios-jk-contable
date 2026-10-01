@@ -30,9 +30,9 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
 
   const [searchTerm, setSearchTerm] = useState('');
 
-  const handleDeleteTransfer = (id: string) => {
+  const handleDeleteTransfer = async (id: string) => {
     if (confirm('¿Deseas eliminar este registro de CAMBIO SALDOS? Se revertirán los saldos de la cuenta origen y cuenta destino automáticamente.')) {
-      StorageService.deleteTransfer(id);
+      await StorageService.deleteTransfer(id);
       onDataChange();
     }
   };

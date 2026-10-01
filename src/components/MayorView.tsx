@@ -173,9 +173,9 @@ export function MayorView({
     }
   };
 
-  const handleDeleteTx = (id: string) => {
+  const handleDeleteTx = async (id: string) => {
     if (confirm('¿Deseas eliminar esta transacción de Monedas Regionales? Si generó deuda o movió saldos, se revertirá automáticamente.')) {
-      StorageService.deleteTransactionMayor(id, appMode);
+      await StorageService.deleteTransactionMayor(id, appMode);
       onDataChange();
     }
   };
@@ -984,9 +984,9 @@ export function MayorView({
                       {isAdmin && (
                         <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               if (confirm(`¿Eliminar este registro de abono de ${pay.client_name}?`)) {
-                                StorageService.deleteDebtPayment(pay.id, appMode);
+                                await StorageService.deleteDebtPayment(pay.id, appMode);
                                 onDataChange();
                               }
                             }}

@@ -51,6 +51,48 @@ function saveToStorage<T>(key: string, value: T): void {
   }
 }
 
+const DELETED_IDS_KEY = 'cambiosjk_deleted_ids_v1';
+
+function getDeletedIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(DELETED_IDS_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function markAsDeleted(id: string): void {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const set = getDeletedIds();
+    set.add(id);
+    const arr = Array.from(set).slice(-500);
+    localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(arr));
+  } catch (err) {
+    console.error('Error recording deleted id:', err);
+  }
+}
+
+function unmarkDeleted(id: string): void {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const set = getDeletedIds();
+    if (set.has(id)) {
+      set.delete(id);
+      localStorage.setItem(DELETED_IDS_KEY, JSON.stringify(Array.from(set)));
+    }
+  } catch {}
+}
+
+function isDeleted(id: string): boolean {
+  if (!id) return false;
+  return getDeletedIds().has(id);
+}
+
 export const StorageService = {
   getAppMode(): AppMode {
     if (typeof window !== 'undefined') {
@@ -232,13 +274,25 @@ export const StorageService = {
       ]);
 
       if (remoteAccs !== null) {
-        const local = this.getAccounts(m);
-        const remoteIds = new Set(remoteAccs.map((a) => a.id));
-        const remoteNames = new Set(remoteAccs.map((a) => a.name.trim().toUpperCase()));
+        const validRemote = remoteAccs.filter((a) => {
+          if (isDeleted(a.id)) {
+            SupabaseSyncService.deleteAccount(a.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
 
-        // Preservar cuentas creadas localmente que aún no hayan llegado a Supabase
+        const local = this.getAccounts(m);
+        const remoteIds = new Set(validRemote.map((a) => a.id));
+        const remoteNames = new Set(validRemote.map((a) => a.name.trim().toUpperCase()));
+
+        // Preservar cuentas creadas localmente que aún no hayan llegado a Supabase y no hayan sido borradas
         const localPending = local.filter(
-          (a) => a && !remoteIds.has(a.id) && !remoteNames.has((a.name || '').trim().toUpperCase())
+          (a) =>
+            a &&
+            !remoteIds.has(a.id) &&
+            !remoteNames.has((a.name || '').trim().toUpperCase()) &&
+            !isDeleted(a.id)
         );
         localPending.forEach((a) => {
           SupabaseSyncService.upsertAccount(a, m).catch(() => {});
@@ -246,12 +300,12 @@ export const StorageService = {
 
         const localMap = new Map<string, Account>();
         local.forEach((a) => {
-          if (a && a.id) localMap.set(a.id, a);
-          if (a && a.name) localMap.set(a.name.trim().toUpperCase(), a);
+          if (a && a.id && !isDeleted(a.id)) localMap.set(a.id, a);
+          if (a && a.name && !isDeleted(a.id)) localMap.set(a.name.trim().toUpperCase(), a);
         });
 
         const mergedAccounts = [
-          ...remoteAccs.map((remote) => {
+          ...validRemote.map((remote) => {
             const loc = localMap.get(remote.id) || localMap.get(remote.name.trim().toUpperCase());
             return {
               ...remote,
@@ -268,9 +322,17 @@ export const StorageService = {
         saveToStorage(this.getAccountsKey(m), mergedAccounts);
       }
       if (remoteClients !== null) {
+        const validRemote = remoteClients.filter((c) => {
+          if (isDeleted(c.id)) {
+            SupabaseSyncService.deleteClient(c.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
+
         const local = this.getClients(m);
         const uniqueMap = new Map<string, Client>();
-        remoteClients.forEach((c) => {
+        validRemote.forEach((c) => {
           if (!c || !c.name) return;
           const key = c.name.trim().toUpperCase();
           if (!uniqueMap.has(key)) {
@@ -289,9 +351,9 @@ export const StorageService = {
         });
 
         // Preservar clientes creados localmente aún no sincronizados
-        const remoteIds = new Set(remoteClients.map((c) => c.id));
+        const remoteIds = new Set(validRemote.map((c) => c.id));
         const localPending = local.filter(
-          (c) => c && !remoteIds.has(c.id) && !uniqueMap.has((c.name || '').trim().toUpperCase())
+          (c) => c && !remoteIds.has(c.id) && !uniqueMap.has((c.name || '').trim().toUpperCase()) && !isDeleted(c.id)
         );
         localPending.forEach((c) => {
           SupabaseSyncService.upsertClient(c, m).catch(() => {});
@@ -304,102 +366,166 @@ export const StorageService = {
         saveToStorage(this.getClientsKey(m), sorted);
       }
       if (remoteSuppliers !== null) {
+        const validRemote = remoteSuppliers.filter((s) => {
+          if (isDeleted(s.id)) {
+            SupabaseSyncService.deleteSupplier(s.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
         const local = this.getSuppliers(m);
-        const remoteIds = new Set(remoteSuppliers.map((s) => s.id));
-        const localPending = local.filter((s) => s && !remoteIds.has(s.id));
+        const remoteIds = new Set(validRemote.map((s) => s.id));
+        const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id));
         localPending.forEach((s) => {
           SupabaseSyncService.upsertSupplier(s, m).catch(() => {});
         });
-        saveToStorage(this.getSuppliersKey(m), [...remoteSuppliers, ...localPending]);
+        saveToStorage(this.getSuppliersKey(m), [...validRemote, ...localPending]);
       }
       if (remoteTransfers !== null) {
+        const validRemote = remoteTransfers.filter((t) => {
+          if (isDeleted(t.id)) {
+            SupabaseSyncService.deleteTransfer(t.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
         const local = this.getTransfers(m);
-        const remoteIds = new Set(remoteTransfers.map((t) => t.id));
-        const localPending = local.filter((t) => t && !remoteIds.has(t.id));
+        const remoteIds = new Set(validRemote.map((t) => t.id));
+        const localPending = local.filter((t) => t && !remoteIds.has(t.id) && !isDeleted(t.id));
         localPending.forEach((t) => {
           SupabaseSyncService.upsertTransfer(t, m).catch(() => {});
         });
-        saveToStorage(this.getTransfersKey(m), [...remoteTransfers, ...localPending]);
+        saveToStorage(this.getTransfersKey(m), [...validRemote, ...localPending]);
       }
       if (remoteExpenses !== null) {
+        const validRemote = remoteExpenses.filter((e) => {
+          if (isDeleted(e.id)) {
+            SupabaseSyncService.deleteExpense(e.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
         const local = this.getExpenses(m);
-        const remoteIds = new Set(remoteExpenses.map((e) => e.id));
-        const localPending = local.filter((e) => e && !remoteIds.has(e.id));
+        const remoteIds = new Set(validRemote.map((e) => e.id));
+        const localPending = local.filter((e) => e && !remoteIds.has(e.id) && !isDeleted(e.id));
         localPending.forEach((e) => {
           SupabaseSyncService.upsertExpense(e, m).catch(() => {});
         });
-        saveToStorage(this.getExpensesKey(m), [...remoteExpenses, ...localPending]);
+        saveToStorage(this.getExpensesKey(m), [...validRemote, ...localPending]);
       }
       if (remoteClosures !== null) {
+        const validRemote = remoteClosures.filter((c) => {
+          if (isDeleted(c.id)) {
+            SupabaseSyncService.deleteClosure(c.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
         const local = this.getClosures(m);
-        const remoteIds = new Set(remoteClosures.map((c) => c.id));
-        const localPending = local.filter((c) => c && !remoteIds.has(c.id));
+        const remoteIds = new Set(validRemote.map((c) => c.id));
+        const localPending = local.filter((c) => c && !remoteIds.has(c.id) && !isDeleted(c.id));
         localPending.forEach((c) => {
           SupabaseSyncService.upsertClosure(c, m).catch(() => {});
         });
-        saveToStorage(this.getClosuresKey(m), [...remoteClosures, ...localPending]);
+        saveToStorage(this.getClosuresKey(m), [...validRemote, ...localPending]);
       }
       if (remoteTxsDetal !== null) {
+        const validRemote = remoteTxsDetal.filter((t) => {
+          if (isDeleted(t.id)) {
+            SupabaseSyncService.deleteTransactionDetal(t.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
         const local = getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []);
-        const remoteIds = new Set(remoteTxsDetal.map((t) => t.id));
-        const localPending = local.filter((t) => !remoteIds.has(t.id));
+        const remoteIds = new Set(validRemote.map((t) => t.id));
+        const localPending = local.filter((t) => !remoteIds.has(t.id) && !isDeleted(t.id));
         localPending.forEach((tx) => {
           SupabaseSyncService.upsertTransactionDetal(tx, m).catch(() => {});
         });
-        const merged = [...remoteTxsDetal, ...localPending].sort((a, b) => {
+        const merged = [...validRemote, ...localPending].sort((a, b) => {
           if (b.date !== a.date) return b.date.localeCompare(a.date);
           return (b.created_at || '').localeCompare(a.created_at || '');
         });
         saveToStorage(this.getTransactionsDetalKey(m), merged);
       }
       if (remoteTxsMayor !== null) {
+        const validRemote = remoteTxsMayor.filter((t) => {
+          if (isDeleted(t.id)) {
+            SupabaseSyncService.deleteTransactionMayor(t.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
         const local = getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []);
-        const remoteIds = new Set(remoteTxsMayor.map((t) => t.id));
-        const localPending = local.filter((t) => !remoteIds.has(t.id));
+        const remoteIds = new Set(validRemote.map((t) => t.id));
+        const localPending = local.filter((t) => !remoteIds.has(t.id) && !isDeleted(t.id));
         localPending.forEach((tx) => {
           SupabaseSyncService.upsertTransactionMayor(tx, m).catch(() => {});
         });
-        const merged = [...remoteTxsMayor, ...localPending].sort((a, b) => {
+        const merged = [...validRemote, ...localPending].sort((a, b) => {
           if (b.date !== a.date) return b.date.localeCompare(a.date);
           return (b.created_at || '').localeCompare(a.created_at || '');
         });
         saveToStorage(this.getTransactionsMayorKey(m), merged);
       }
       if (remoteDebtors !== null) {
+        const validRemote = remoteDebtors.filter((d) => !isDeleted(d.id));
         const local = this.getDebtors(m);
-        const remoteIds = new Set(remoteDebtors.map((d) => d.id));
-        const localPending = local.filter((d) => d && !remoteIds.has(d.id));
+        const remoteIds = new Set(validRemote.map((d) => d.id));
+        const localPending = local.filter((d) => d && !remoteIds.has(d.id) && !isDeleted(d.id));
         localPending.forEach((d) => {
           SupabaseSyncService.upsertDebtor(d, m).catch(() => {});
         });
-        saveToStorage(this.getDebtorsKey(m), [...remoteDebtors, ...localPending]);
+        saveToStorage(this.getDebtorsKey(m), [...validRemote, ...localPending]);
       }
       if (remoteDebtPayments !== null) {
+        const validRemote = remoteDebtPayments.filter((p) => {
+          if (isDeleted(p.id)) {
+            SupabaseSyncService.deleteDebtPayment(p.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
         const local = this.getDebtPayments(m);
-        const remoteIds = new Set(remoteDebtPayments.map((p) => p.id));
-        const localPending = local.filter((p) => p && !remoteIds.has(p.id));
+        const remoteIds = new Set(validRemote.map((p) => p.id));
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id));
         localPending.forEach((p) => {
           SupabaseSyncService.upsertDebtPayment(p, m).catch(() => {});
         });
-        saveToStorage(this.getDebtPaymentsKey(m), [...remoteDebtPayments, ...localPending]);
+        saveToStorage(this.getDebtPaymentsKey(m), [...validRemote, ...localPending]);
       }
       if (remotePurchases !== null) {
+        const validRemote = remotePurchases.filter((p) => {
+          if (isDeleted(p.id)) {
+            SupabaseSyncService.deleteSupplierPurchase(p.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
         const local = this.getSupplierPurchases(m);
-        const remoteIds = new Set(remotePurchases.map((p) => p.id));
-        const localPending = local.filter((p) => p && !remoteIds.has(p.id));
+        const remoteIds = new Set(validRemote.map((p) => p.id));
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id));
         localPending.forEach((p) => {
           SupabaseSyncService.upsertSupplierPurchase(p, m).catch(() => {});
         });
-        saveToStorage(this.getSupplierPurchasesKey(m), [...remotePurchases, ...localPending]);
+        saveToStorage(this.getSupplierPurchasesKey(m), [...validRemote, ...localPending]);
       }
       if (remoteSupplierPayments !== null) {
+        const validRemote = remoteSupplierPayments.filter((p) => {
+          if (isDeleted(p.id)) {
+            SupabaseSyncService.deleteSupplierPayment(p.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
         const local = this.getSupplierPayments(m);
-        const remoteIds = new Set(remoteSupplierPayments.map((p) => p.id));
-        const localPending = local.filter((p) => p && !remoteIds.has(p.id));
+        const remoteIds = new Set(validRemote.map((p) => p.id));
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id));
         localPending.forEach((p) => {
           SupabaseSyncService.upsertSupplierPayment(p, m).catch(() => {});
         });
-        saveToStorage(this.getSupplierPaymentsKey(m), [...remoteSupplierPayments, ...localPending]);
+        saveToStorage(this.getSupplierPaymentsKey(m), [...validRemote, ...localPending]);
       }
     } catch (err) {
       console.warn('[Sync ' + m + '] Sincronización secundaria pospuesta:', err);
@@ -443,6 +569,7 @@ export const StorageService = {
   },
 
   addAccount(account: Account, mode?: AppMode): Account {
+    unmarkDeleted(account.id);
     const m = mode || this.getAppMode();
     const accounts = this.getAccounts(m);
     const existingIndex = accounts.findIndex(
@@ -481,12 +608,13 @@ export const StorageService = {
     }
   },
 
-  deleteAccount(accountId: string, mode?: AppMode): void {
+  async deleteAccount(accountId: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(accountId);
     const m = mode || this.getAppMode();
     const accounts = this.getAccounts(m);
     const updated = accounts.filter((acc) => acc.id !== accountId);
     this.saveAccounts(updated, m);
-    SupabaseSyncService.deleteAccount(accountId, m).catch(() => {});
+    await SupabaseSyncService.deleteAccount(accountId, m).catch(() => {});
   },
 
   updateAccountBalance(accountId: string, delta: number, mode?: AppMode): void {
@@ -538,6 +666,7 @@ export const StorageService = {
     const upperName = (client.name || '').trim().toUpperCase();
     const existing = all.find((c) => (c.name || '').trim().toUpperCase() === upperName);
     if (existing) {
+      unmarkDeleted(existing.id);
       this.updateClient(existing.id, client, m);
       return { ...existing, ...client };
     }
@@ -546,6 +675,7 @@ export const StorageService = {
       id: 'cli-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newClient.id);
     all.unshift(newClient);
     this.saveClients(all, m);
     SupabaseSyncService.upsertClient(newClient, m).catch(() => {});
@@ -569,12 +699,13 @@ export const StorageService = {
     }
   },
 
-  deleteClient(clientId: string, mode?: AppMode): void {
+  async deleteClient(clientId: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(clientId);
     const m = mode || this.getAppMode();
     const all = this.getClients(m);
     const updated = all.filter((c) => c.id !== clientId);
     this.saveClients(updated, m);
-    SupabaseSyncService.deleteClient(clientId, m).catch(() => {});
+    await SupabaseSyncService.deleteClient(clientId, m).catch(() => {});
   },
 
   // Suppliers & Purchases
@@ -630,6 +761,7 @@ export const StorageService = {
       id: 'sup-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newSupplier.id);
     all.unshift(newSupplier);
     this.saveSuppliers(all, m);
     SupabaseSyncService.upsertSupplier(newSupplier, m).catch(() => {});
@@ -653,12 +785,13 @@ export const StorageService = {
     }
   },
 
-  deleteSupplier(supplierId: string, mode?: AppMode): void {
+  async deleteSupplier(supplierId: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(supplierId);
     const m = mode || this.getAppMode();
     const all = this.getSuppliers(m);
     const updated = all.filter((s) => s.id !== supplierId);
     this.saveSuppliers(updated, m);
-    SupabaseSyncService.deleteSupplier(supplierId, m).catch(() => {});
+    await SupabaseSyncService.deleteSupplier(supplierId, m).catch(() => {});
   },
 
   getSupplierPurchases(mode?: AppMode): SupplierPurchase[] {
@@ -674,6 +807,7 @@ export const StorageService = {
       id: 'pur-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newPurchase.id);
     all.unshift(newPurchase);
     saveToStorage(this.getSupplierPurchasesKey(m), all);
 
@@ -701,6 +835,7 @@ export const StorageService = {
       id: 'pay-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newPayment.id);
     all.unshift(newPayment);
     saveToStorage(this.getSupplierPaymentsKey(m), all);
 
@@ -714,7 +849,8 @@ export const StorageService = {
     return newPayment;
   },
 
-  deleteSupplierPurchase(id: string, mode?: AppMode): void {
+  async deleteSupplierPurchase(id: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getSupplierPurchases(m);
     const purchase = all.find((p) => p.id === id);
@@ -726,10 +862,11 @@ export const StorageService = {
       }
     }
     saveToStorage(this.getSupplierPurchasesKey(m), all.filter((p) => p.id !== id));
-    SupabaseSyncService.deleteSupplierPurchase(id, m).catch(() => {});
+    await SupabaseSyncService.deleteSupplierPurchase(id, m).catch(() => {});
   },
 
-  deleteSupplierPayment(id: string, mode?: AppMode): void {
+  async deleteSupplierPayment(id: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getSupplierPayments(m);
     const payment = all.find((p) => p.id === id);
@@ -740,7 +877,7 @@ export const StorageService = {
       }
     }
     saveToStorage(this.getSupplierPaymentsKey(m), all.filter((p) => p.id !== id));
-    SupabaseSyncService.deleteSupplierPayment(id, m).catch(() => {});
+    await SupabaseSyncService.deleteSupplierPayment(id, m).catch(() => {});
   },
 
   // Detal Transactions (Ventas Cripto / Dólar) - 100% aisladas por modo
@@ -758,6 +895,7 @@ export const StorageService = {
       id: 'detal-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newTx.id);
     all.unshift(newTx);
     saveToStorage(this.getTransactionsDetalKey(m), all);
 
@@ -778,7 +916,8 @@ export const StorageService = {
     return newTx;
   },
 
-  deleteTransactionDetal(id: string, mode?: AppMode): void {
+  async deleteTransactionDetal(id: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getTransactionsDetal(m);
     const tx = all.find((t) => t.id === id);
@@ -796,7 +935,7 @@ export const StorageService = {
       }
     }
     saveToStorage(this.getTransactionsDetalKey(m), all.filter((t) => t.id !== id));
-    SupabaseSyncService.deleteTransactionDetal(id, m).catch(() => {});
+    await SupabaseSyncService.deleteTransactionDetal(id, m).catch(() => {});
   },
 
   // Mayor Transactions (Ventas Monedas Regionales) - 100% aisladas por modo
@@ -814,6 +953,7 @@ export const StorageService = {
       id: 'mayor-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newTx.id);
     all.unshift(newTx);
     saveToStorage(this.getTransactionsMayorKey(m), all);
 
@@ -840,7 +980,8 @@ export const StorageService = {
     return newTx;
   },
 
-  deleteTransactionMayor(id: string, mode?: AppMode): void {
+  async deleteTransactionMayor(id: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getTransactionsMayor(m);
     const tx = all.find((t) => t.id === id);
@@ -864,7 +1005,7 @@ export const StorageService = {
       }
     }
     saveToStorage(this.getTransactionsMayorKey(m), all.filter((tx) => tx.id !== id));
-    SupabaseSyncService.deleteTransactionMayor(id, m).catch(() => {});
+    await SupabaseSyncService.deleteTransactionMayor(id, m).catch(() => {});
   },
 
   // Transfers
@@ -881,6 +1022,7 @@ export const StorageService = {
       id: 'trf-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newTransfer.id);
     all.unshift(newTransfer);
     saveToStorage(this.getTransfersKey(m), all);
 
@@ -892,7 +1034,8 @@ export const StorageService = {
     return newTransfer;
   },
 
-  deleteTransfer(id: string, mode?: AppMode): void {
+  async deleteTransfer(id: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getTransfers(m);
     const transfer = all.find((t) => t.id === id);
@@ -902,7 +1045,7 @@ export const StorageService = {
       this.updateAccountBalance(transfer.to_account_id, -transfer.amount_received, m);
     }
     saveToStorage(this.getTransfersKey(m), all.filter((t) => t.id !== id));
-    SupabaseSyncService.deleteTransfer(id, m).catch(() => {});
+    await SupabaseSyncService.deleteTransfer(id, m).catch(() => {});
   },
 
   // Expenses & Extra Income
@@ -919,6 +1062,7 @@ export const StorageService = {
       id: 'exp-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newExp.id);
     all.unshift(newExp);
     saveToStorage(this.getExpensesKey(m), all);
 
@@ -934,7 +1078,8 @@ export const StorageService = {
     return newExp;
   },
 
-  deleteExpense(id: string, mode?: AppMode): void {
+  async deleteExpense(id: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getExpenses(m);
     const exp = all.find((e) => e.id === id);
@@ -946,7 +1091,7 @@ export const StorageService = {
       }
     }
     saveToStorage(this.getExpensesKey(m), all.filter((e) => e.id !== id));
-    SupabaseSyncService.deleteExpense(id, m).catch(() => {});
+    await SupabaseSyncService.deleteExpense(id, m).catch(() => {});
   },
 
   // Daily Closures
@@ -1003,6 +1148,7 @@ export const StorageService = {
       debtors_snapshot,
       total_debtors_usd: Number(total_debtors_usd.toFixed(2)),
     };
+    unmarkDeleted(newClosure.id);
     const filtered = all.filter((c) => c.date !== closure.date);
     filtered.unshift(newClosure);
     saveToStorage(this.getClosuresKey(m), filtered);
@@ -1011,14 +1157,15 @@ export const StorageService = {
     return newClosure;
   },
 
-  deleteClosure(id: string, mode?: AppMode): void {
+  async deleteClosure(id: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getClosures(m);
     saveToStorage(
       this.getClosuresKey(m),
       all.filter((c) => c.id !== id)
     );
-    SupabaseSyncService.deleteClosure(id, m).catch(() => {});
+    await SupabaseSyncService.deleteClosure(id, m).catch(() => {});
   },
 
   // Debtors & Accounts Receivable - 100% aislados e independientes por modo
@@ -1189,6 +1336,7 @@ export const StorageService = {
       id: 'deb-' + Date.now(),
       updated_at: new Date().toISOString(),
     };
+    unmarkDeleted(newDebtor.id);
     all.unshift(newDebtor);
     this.saveDebtors(all, m);
     SupabaseSyncService.upsertDebtor(newDebtor, m).catch(() => {});
@@ -1210,6 +1358,7 @@ export const StorageService = {
       id: 'debtpay-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newPayment.id);
     all.unshift(newPayment);
     saveToStorage(this.getDebtPaymentsKey(m), all);
 
@@ -1244,7 +1393,8 @@ export const StorageService = {
     return newPayment;
   },
 
-  deleteDebtPayment(id: string, mode?: AppMode): void {
+  async deleteDebtPayment(id: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getDebtPayments(m);
     const pay = all.find((p) => p.id === id);
@@ -1268,7 +1418,7 @@ export const StorageService = {
       }
     }
     saveToStorage(this.getDebtPaymentsKey(m), all.filter((p) => p.id !== id));
-    SupabaseSyncService.deleteDebtPayment(id, m).catch(() => {});
+    await SupabaseSyncService.deleteDebtPayment(id, m).catch(() => {});
   },
 
   resetToDefaults(): void {
