@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Account,
   TransactionDetal,
@@ -374,9 +374,9 @@ export function AccountStatementModal({
     // para construir el saldo progresivo acumulativo exacto
     items.sort((a, b) => (a.sortKey > b.sortKey ? 1 : a.sortKey < b.sortKey ? -1 : 0));
 
-    // Saldo base histórico antes de los movimientos registrados
-    const totalDeltas = items.reduce((sum, item) => sum + item.netAmount, 0);
-    const baseBalance = Number((currentAccount.current_balance - totalDeltas).toFixed(4));
+    // Saldo base histórico antes de los movimientos registrados:
+    // Parte estrictamente del saldo inicial configurado de la cuenta (initial_balance) o 0.00
+    const baseBalance = Number((currentAccount.initial_balance ?? 0).toFixed(4));
 
     // Calcular el saldo resultante progresivo línea por línea
     let runningBalance = baseBalance;
@@ -393,6 +393,21 @@ export function AccountStatementModal({
       initialBaseBalance: baseBalance,
     };
   }, [currentAccount, allAccounts]);
+
+  // Reconciliación automática: si el saldo guardado en la cuenta difiere del saldo real acumulado de sus movimientos,
+  // actualizarlo automáticamente para mantener la integridad contable en todo el sistema.
+  useEffect(() => {
+    if (!currentAccount) return;
+    const finalCalculated =
+      allMovements.length > 0
+        ? allMovements[allMovements.length - 1].balanceAfter
+        : Number((currentAccount.initial_balance ?? 0).toFixed(4));
+
+    if (Math.abs((currentAccount.current_balance ?? 0) - finalCalculated) > 0.0001) {
+      const m = (currentAccount.scope as any) || StorageService.getAppMode();
+      StorageService.updateAccount(currentAccount.id, { current_balance: finalCalculated }, m);
+    }
+  }, [currentAccount, allMovements]);
 
   // Manejador de botones rápidos de fechas
   const handleApplyDatePreset = (
@@ -483,7 +498,7 @@ export function AccountStatementModal({
     }
 
     // Saldo final del período: el saldo después del último movimiento filtrado
-    let finalPeriodBalance = currentAccount ? currentAccount.current_balance : 0;
+    let finalPeriodBalance = initialPeriodBalance;
     if (filteredMovements.length > 0) {
       const lastMovement = filteredMovements[filteredMovements.length - 1];
       finalPeriodBalance = lastMovement.balanceAfter;

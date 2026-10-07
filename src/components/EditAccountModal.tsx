@@ -45,6 +45,7 @@ export function EditAccountModal({
     type: 'banco' as AccountType,
     country: 'ECUADOR',
     currency: 'USD' as Currency,
+    initial_balance: '0',
     current_balance: '0',
     notes: '',
     is_active: true,
@@ -63,6 +64,7 @@ export function EditAccountModal({
         type: account.type || 'banco',
         country: getAccountCountry(account) || 'ECUADOR',
         currency: account.currency || 'USD',
+        initial_balance: String(account.initial_balance ?? 0),
         current_balance: String(account.current_balance ?? 0),
         notes: account.notes || '',
         is_active: account.is_active ?? true,
@@ -90,6 +92,7 @@ export function EditAccountModal({
       type: formData.type,
       country: formData.country,
       currency: formData.currency,
+      initial_balance: parseFloat(formData.initial_balance) || 0,
       current_balance: parseFloat(formData.current_balance) || 0,
       notes: formData.notes.trim(),
       is_active: formData.is_active,
@@ -284,6 +287,27 @@ export function EditAccountModal({
                 className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 focus:border-blue-500 focus:outline-none"
               />
               <span className="text-[10px] text-slate-400 mt-0.5 block">Subtipo o red blockchain</span>
+            </div>
+
+            {/* Saldo Inicial / Apertura */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center space-x-1.5">
+                <Wallet className="w-3.5 h-3.5 text-blue-600" />
+                <span>Saldo Inicial (Apertura)</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                  {formData.currency}
+                </span>
+                <input
+                  type="number"
+                  step="any"
+                  value={formData.initial_balance}
+                  onChange={(e) => setFormData({ ...formData, initial_balance: e.target.value })}
+                  className="w-full text-xs font-mono font-bold border border-slate-300 rounded-xl pl-12 pr-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <span className="text-[10px] text-slate-400 mt-0.5 block">Saldo con el que inició la cuenta (0.00 por defecto)</span>
             </div>
 
             {/* Saldo Actual / Ajuste Directo */}
