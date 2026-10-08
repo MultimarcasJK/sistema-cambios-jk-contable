@@ -59,6 +59,14 @@ body {
 [data-theme="detal"] .text-slate-400 {
   color: #334155 !important;
 }
+/* La barra superior (header) siempre tiene fondo oscuro, mantener textos legibles */
+[data-theme="detal"] header .text-slate-400,
+[data-theme="detal"] header [class*="text-slate-400"] {
+  color: #94a3b8 !important;
+}
+[data-theme="detal"] header label {
+  color: #94a3b8 !important;
+}
 [data-theme="detal"] label {
   color: #000000 !important;
   font-weight: 600;

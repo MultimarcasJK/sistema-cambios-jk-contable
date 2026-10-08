@@ -131,20 +131,28 @@ export function Header({
 
             {/* Texto de Perfil y Modo Actual */}
             <div className="text-left hidden sm:block">
-              <div className="text-xs font-bold leading-tight group-hover:text-emerald-300 transition truncate max-w-[130px]">
+              <div className="text-xs font-bold leading-tight text-white group-hover:text-emerald-300 transition truncate max-w-[160px]">
                 {userDisplayName}
               </div>
-              <div className="text-[10px] text-slate-400 leading-tight flex items-center gap-1">
+              <div className="text-[10px] leading-tight flex items-center gap-1.5 mt-0.5">
                 <span className={isAdmin ? 'text-blue-400 font-bold' : 'text-emerald-400 font-bold'}>
                   {isAdmin ? 'ADMIN' : 'OPERADOR'}
                 </span>
-                <span>•</span>
-                <span>{appMode === 'mayor' ? 'Mayor' : 'Detal'}</span>
+                <span className="text-slate-400">•</span>
+                <span
+                  className={`font-black uppercase tracking-wider text-[9px] px-1.5 py-0.5 rounded shadow-xs ${
+                    appMode === 'mayor'
+                      ? 'bg-blue-500/25 text-blue-300 border border-blue-400/40'
+                      : 'bg-emerald-500/25 text-emerald-300 border border-emerald-400/40'
+                  }`}
+                >
+                  {appMode === 'mayor' ? 'Mayor' : 'Detal'}
+                </span>
               </div>
             </div>
 
             <ChevronDown
-              className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+              className={`w-3.5 h-3.5 text-slate-300 group-hover:text-white transition-transform duration-200 ${
                 isProfileMenuOpen ? 'rotate-180 text-white' : ''
               }`}
             />
@@ -184,46 +192,66 @@ export function Header({
 
               <div className="p-3 space-y-3">
                 {/* 1. Selector de Modo: Detal vs Mayor */}
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Modo del Sistema
-                  </label>
-                  <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-900 rounded-xl border border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onModeChange('detal');
-                        setIsProfileMenuOpen(false);
-                      }}
-                      className={`py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer ${
-                        appMode === 'detal'
-                          ? 'bg-emerald-600 text-white shadow-md'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                      }`}
-                    >
-                      <Sun className="w-3.5 h-3.5" />
-                      <span>Modo Detal</span>
-                      {appMode === 'detal' && <Check className="w-3 h-3 ml-0.5" />}
-                    </button>
+                {(!profile?.modo_permitido || profile.modo_permitido === 'ambos') ? (
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Modo del Sistema
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-900 rounded-xl border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onModeChange('detal');
+                          setIsProfileMenuOpen(false);
+                        }}
+                        className={`py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer ${
+                          appMode === 'detal'
+                            ? 'bg-emerald-600 text-white shadow-md'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        <Sun className="w-3.5 h-3.5" />
+                        <span>Modo Detal</span>
+                        {appMode === 'detal' && <Check className="w-3 h-3 ml-0.5" />}
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onModeChange('mayor');
-                        setIsProfileMenuOpen(false);
-                      }}
-                      className={`py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer ${
-                        appMode === 'mayor'
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                      }`}
-                    >
-                      <Moon className="w-3.5 h-3.5" />
-                      <span>Modo Mayor</span>
-                      {appMode === 'mayor' && <Check className="w-3 h-3 ml-0.5" />}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onModeChange('mayor');
+                          setIsProfileMenuOpen(false);
+                        }}
+                        className={`py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer ${
+                          appMode === 'mayor'
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        <Moon className="w-3.5 h-3.5" />
+                        <span>Modo Mayor</span>
+                        {appMode === 'mayor' && <Check className="w-3 h-3 ml-0.5" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Módulo Asignado
+                    </label>
+                    <div className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center space-x-2 ${
+                      profile.modo_permitido === 'detal'
+                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                        : 'bg-blue-950/40 border-blue-500/40 text-blue-300'
+                    }`}>
+                      {profile.modo_permitido === 'detal' ? (
+                        <Sun className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <Moon className="w-4 h-4 text-blue-400" />
+                      )}
+                      <span>Acceso Exclusivo: Modo {profile.modo_permitido === 'detal' ? 'Detal' : 'Mayor'}</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* 2. Sincronización de Tasas JK */}
                 <div className="pt-2 border-t border-slate-800">
