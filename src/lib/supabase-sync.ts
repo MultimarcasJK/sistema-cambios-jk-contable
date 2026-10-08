@@ -12,6 +12,9 @@ import {
   DailyClosure,
   Debtor,
   DebtPayment,
+  Employee,
+  PayrollPayment,
+  ServiceExpense,
   AppMode,
 } from '@/types';
 
@@ -610,6 +613,195 @@ export const SupabaseSyncService = {
     }
   },
 
+  // Employees (detal_empleados / mayor_empleados)
+  async fetchEmployees(mode: AppMode): Promise<Employee[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_empleados`;
+    try {
+      const { data, error } = await supabase.from(table).select('*').order('name', { ascending: true });
+      if (error) return null;
+      return ((data || []) as any[]).map((row) => ({
+        id: row.id,
+        name: row.name,
+        identification: row.identification || '',
+        phone: row.phone || '',
+        position: row.position || '',
+        base_salary: Number(row.base_salary) || 0,
+        salary_currency: row.salary_currency || 'USD',
+        payment_frequency: row.payment_frequency || 'quincenal',
+        payment_details: row.payment_details || '',
+        is_active: row.is_active !== undefined && row.is_active !== null ? Boolean(row.is_active) : true,
+        created_at: row.created_at || new Date().toISOString(),
+      })) as Employee[];
+    } catch {
+      return null;
+    }
+  },
+
+  async upsertEmployee(employee: Employee, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_empleados`;
+    try {
+      await supabase.from(table).upsert({
+        id: employee.id,
+        name: employee.name,
+        identification: employee.identification || '',
+        phone: employee.phone || '',
+        position: employee.position,
+        base_salary: employee.base_salary,
+        salary_currency: employee.salary_currency,
+        payment_frequency: employee.payment_frequency,
+        payment_details: employee.payment_details || '',
+        is_active: employee.is_active !== undefined ? employee.is_active : true,
+        created_at: employee.created_at || new Date().toISOString(),
+      });
+    } catch (err) {
+      /* warn */
+    }
+  },
+
+  async deleteEmployee(id: string, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_empleados`;
+    try {
+      await supabase.from(table).delete().eq('id', id);
+    } catch (err) {
+      /* warn */
+    }
+  },
+
+  // Payroll Payments (detal_pagos_nomina / mayor_pagos_nomina)
+  async fetchPayrollPayments(mode: AppMode): Promise<PayrollPayment[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_pagos_nomina`;
+    try {
+      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      if (error) return null;
+      return ((data || []) as any[]).map((row) => ({
+        id: row.id,
+        date: row.date,
+        employee_id: row.employee_id,
+        employee_name: row.employee_name,
+        period: row.period,
+        base_amount: Number(row.base_amount) || 0,
+        bonuses: Number(row.bonuses) || 0,
+        deductions: Number(row.deductions) || 0,
+        net_amount: Number(row.net_amount) || 0,
+        currency: row.currency || 'USD',
+        amount_currency: Number(row.amount_currency) || 0,
+        exchange_rate: Number(row.exchange_rate) || 1,
+        amount_usd: Number(row.amount_usd) || 0,
+        account_id: row.account_id || '',
+        expense_id: row.expense_id || '',
+        reference: row.reference || '',
+        notes: row.notes || '',
+        created_at: row.created_at || new Date().toISOString(),
+      })) as PayrollPayment[];
+    } catch {
+      return null;
+    }
+  },
+
+  async upsertPayrollPayment(payment: PayrollPayment, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_pagos_nomina`;
+    try {
+      await supabase.from(table).upsert({
+        id: payment.id,
+        date: payment.date,
+        employee_id: payment.employee_id,
+        employee_name: payment.employee_name,
+        period: payment.period,
+        base_amount: payment.base_amount,
+        bonuses: payment.bonuses,
+        deductions: payment.deductions,
+        net_amount: payment.net_amount,
+        currency: payment.currency,
+        amount_currency: payment.amount_currency,
+        exchange_rate: payment.exchange_rate,
+        amount_usd: payment.amount_usd,
+        account_id: payment.account_id || '',
+        expense_id: payment.expense_id || '',
+        reference: payment.reference || '',
+        notes: payment.notes || '',
+        created_at: payment.created_at || new Date().toISOString(),
+      });
+    } catch (err) {
+      /* warn */
+    }
+  },
+
+  async deletePayrollPayment(id: string, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_pagos_nomina`;
+    try {
+      await supabase.from(table).delete().eq('id', id);
+    } catch (err) {
+      /* warn */
+    }
+  },
+
+  // Service Expenses (detal_gastos_servicios / mayor_gastos_servicios)
+  async fetchServiceExpenses(mode: AppMode): Promise<ServiceExpense[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_gastos_servicios`;
+    try {
+      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      if (error) return null;
+      return ((data || []) as any[]).map((row) => ({
+        id: row.id,
+        date: row.date,
+        category: row.category,
+        description: row.description,
+        invoice_number: row.invoice_number || '',
+        amount: Number(row.amount) || 0,
+        currency: row.currency || 'USD',
+        exchange_rate: Number(row.exchange_rate) || 1,
+        amount_usd: Number(row.amount_usd) || 0,
+        account_id: row.account_id || '',
+        expense_id: row.expense_id || '',
+        notes: row.notes || '',
+        created_at: row.created_at || new Date().toISOString(),
+      })) as ServiceExpense[];
+    } catch {
+      return null;
+    }
+  },
+
+  async upsertServiceExpense(service: ServiceExpense, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_gastos_servicios`;
+    try {
+      await supabase.from(table).upsert({
+        id: service.id,
+        date: service.date,
+        category: service.category,
+        description: service.description,
+        invoice_number: service.invoice_number || '',
+        amount: service.amount,
+        currency: service.currency,
+        exchange_rate: service.exchange_rate,
+        amount_usd: service.amount_usd,
+        account_id: service.account_id || '',
+        expense_id: service.expense_id || '',
+        notes: service.notes || '',
+        created_at: service.created_at || new Date().toISOString(),
+      });
+    } catch (err) {
+      /* warn */
+    }
+  },
+
+  async deleteServiceExpense(id: string, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const table = `${mode}_gastos_servicios`;
+    try {
+      await supabase.from(table).delete().eq('id', id);
+    } catch (err) {
+      /* warn */
+    }
+  },
+
   // Initial Data Seeding
   async seedInitialIfEmpty(
     mode: AppMode,
@@ -658,6 +850,8 @@ export const SupabaseSyncService = {
         }
 
         const deleteTables = [
+          `${m}_gastos_servicios`,
+          `${m}_pagos_nomina`,
           `${m}_pagos_proveedores`,
           `${m}_compras_proveedores`,
           `${m}_cierres_diarios`,
@@ -688,6 +882,9 @@ export const SupabaseSyncService = {
     const modes: AppMode[] = ['detal', 'mayor'];
     for (const m of modes) {
       const tables = [
+        `${m}_gastos_servicios`,
+        `${m}_pagos_nomina`,
+        `${m}_empleados`,
         `${m}_pagos_proveedores`,
         `${m}_compras_proveedores`,
         `${m}_proveedores`,

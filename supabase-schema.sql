@@ -301,6 +301,114 @@ CREATE TABLE IF NOT EXISTS mayor_supplier_payments (
  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 1.10 Empleados Detal
+CREATE TABLE IF NOT EXISTS detal_empleados (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  identification TEXT,
+  phone TEXT,
+  position TEXT NOT NULL,
+  base_salary NUMERIC NOT NULL DEFAULT 0,
+  salary_currency TEXT NOT NULL DEFAULT 'USD',
+  payment_frequency TEXT NOT NULL DEFAULT 'quincenal',
+  payment_details TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 1.11 Pagos de Nómina Detal
+CREATE TABLE IF NOT EXISTS detal_pagos_nomina (
+  id TEXT PRIMARY KEY,
+  date DATE NOT NULL,
+  employee_id TEXT NOT NULL,
+  employee_name TEXT NOT NULL,
+  period TEXT NOT NULL,
+  base_amount NUMERIC NOT NULL DEFAULT 0,
+  bonuses NUMERIC NOT NULL DEFAULT 0,
+  deductions NUMERIC NOT NULL DEFAULT 0,
+  net_amount NUMERIC NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  amount_currency NUMERIC NOT NULL DEFAULT 0,
+  exchange_rate NUMERIC NOT NULL DEFAULT 1,
+  amount_usd NUMERIC NOT NULL DEFAULT 0,
+  account_id TEXT,
+  expense_id TEXT,
+  reference TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 1.12 Gastos de Servicios Detal
+CREATE TABLE IF NOT EXISTS detal_gastos_servicios (
+  id TEXT PRIMARY KEY,
+  date DATE NOT NULL,
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  invoice_number TEXT,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  exchange_rate NUMERIC NOT NULL DEFAULT 1,
+  amount_usd NUMERIC NOT NULL DEFAULT 0,
+  account_id TEXT,
+  expense_id TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2.10 Empleados Mayor
+CREATE TABLE IF NOT EXISTS mayor_empleados (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  identification TEXT,
+  phone TEXT,
+  position TEXT NOT NULL,
+  base_salary NUMERIC NOT NULL DEFAULT 0,
+  salary_currency TEXT NOT NULL DEFAULT 'USD',
+  payment_frequency TEXT NOT NULL DEFAULT 'quincenal',
+  payment_details TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2.11 Pagos de Nómina Mayor
+CREATE TABLE IF NOT EXISTS mayor_pagos_nomina (
+  id TEXT PRIMARY KEY,
+  date DATE NOT NULL,
+  employee_id TEXT NOT NULL,
+  employee_name TEXT NOT NULL,
+  period TEXT NOT NULL,
+  base_amount NUMERIC NOT NULL DEFAULT 0,
+  bonuses NUMERIC NOT NULL DEFAULT 0,
+  deductions NUMERIC NOT NULL DEFAULT 0,
+  net_amount NUMERIC NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  amount_currency NUMERIC NOT NULL DEFAULT 0,
+  exchange_rate NUMERIC NOT NULL DEFAULT 1,
+  amount_usd NUMERIC NOT NULL DEFAULT 0,
+  account_id TEXT,
+  expense_id TEXT,
+  reference TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2.12 Gastos de Servicios Mayor
+CREATE TABLE IF NOT EXISTS mayor_gastos_servicios (
+  id TEXT PRIMARY KEY,
+  date DATE NOT NULL,
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  invoice_number TEXT,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  exchange_rate NUMERIC NOT NULL DEFAULT 1,
+  amount_usd NUMERIC NOT NULL DEFAULT 0,
+  account_id TEXT,
+  expense_id TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- =========================================================================
 -- 3. POLÍTICAS DE ACCESO (ROW LEVEL SECURITY - RLS)
 -- Permite acceso público con la clave Publishable/Anon para operar sin bloqueo
@@ -312,9 +420,11 @@ DECLARE
         -- Grupo Detal
         'detal_accounts', 'detal_clients', 'detal_transactions', 'detal_transfers', 'detal_expenses', 'detal_closures',
         'detal_currencies', 'detal_rates', 'detal_suppliers', 'detal_supplier_purchases', 'detal_supplier_payments',
+        'detal_empleados', 'detal_pagos_nomina', 'detal_gastos_servicios',
         -- Grupo Mayor
         'mayor_accounts', 'mayor_clients', 'mayor_transactions', 'mayor_transfers', 'mayor_expenses', 'mayor_closures',
-        'mayor_currencies', 'mayor_rates', 'mayor_suppliers', 'mayor_supplier_purchases', 'mayor_supplier_payments'
+        'mayor_currencies', 'mayor_rates', 'mayor_suppliers', 'mayor_supplier_purchases', 'mayor_supplier_payments',
+        'mayor_empleados', 'mayor_pagos_nomina', 'mayor_gastos_servicios'
     ];
 BEGIN
     FOREACH tbl IN ARRAY tables LOOP

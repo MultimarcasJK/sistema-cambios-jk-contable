@@ -273,6 +273,9 @@ export const StorageService = {
         remoteDebtPayments,
         remotePurchases,
         remoteSupplierPayments,
+        remoteEmployees,
+        remotePayrollPayments,
+        remoteServiceExpenses,
       ] = await Promise.all([
         SupabaseSyncService.fetchAccounts(m),
         SupabaseSyncService.fetchClients(m),
@@ -286,6 +289,9 @@ export const StorageService = {
         SupabaseSyncService.fetchDebtPayments(m),
         SupabaseSyncService.fetchSupplierPurchases(m),
         SupabaseSyncService.fetchSupplierPayments(m),
+        SupabaseSyncService.fetchEmployees(m),
+        SupabaseSyncService.fetchPayrollPayments(m),
+        SupabaseSyncService.fetchServiceExpenses(m),
       ]);
 
       if (remoteAccs !== null) {
@@ -541,6 +547,62 @@ export const StorageService = {
           SupabaseSyncService.upsertSupplierPayment(p, m).catch(() => {});
         });
         saveToStorage(this.getSupplierPaymentsKey(m), [...validRemote, ...localPending]);
+      }
+      if (remoteEmployees !== null) {
+        const validRemote = remoteEmployees.filter((e) => {
+          if (isDeleted(e.id)) {
+            SupabaseSyncService.deleteEmployee(e.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
+        const local = this.getEmployees(m);
+        const remoteIds = new Set(validRemote.map((e) => e.id));
+        const localPending = local.filter((e) => e && !remoteIds.has(e.id) && !isDeleted(e.id));
+        localPending.forEach((e) => {
+          SupabaseSyncService.upsertEmployee(e, m).catch(() => {});
+        });
+        this.saveEmployees([...validRemote, ...localPending], m);
+      }
+      if (remotePayrollPayments !== null) {
+        const validRemote = remotePayrollPayments.filter((p) => {
+          if (isDeleted(p.id)) {
+            SupabaseSyncService.deletePayrollPayment(p.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
+        const local = this.getPayrollPayments(m);
+        const remoteIds = new Set(validRemote.map((p) => p.id));
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id));
+        localPending.forEach((p) => {
+          SupabaseSyncService.upsertPayrollPayment(p, m).catch(() => {});
+        });
+        const merged = [...validRemote, ...localPending].sort((a, b) => {
+          if (b.date !== a.date) return b.date.localeCompare(a.date);
+          return (b.created_at || '').localeCompare(a.created_at || '');
+        });
+        saveToStorage(this.getPayrollPaymentsKey(m), merged);
+      }
+      if (remoteServiceExpenses !== null) {
+        const validRemote = remoteServiceExpenses.filter((s) => {
+          if (isDeleted(s.id)) {
+            SupabaseSyncService.deleteServiceExpense(s.id, m).catch(() => {});
+            return false;
+          }
+          return true;
+        });
+        const local = this.getServiceExpenses(m);
+        const remoteIds = new Set(validRemote.map((s) => s.id));
+        const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id));
+        localPending.forEach((s) => {
+          SupabaseSyncService.upsertServiceExpense(s, m).catch(() => {});
+        });
+        const merged = [...validRemote, ...localPending].sort((a, b) => {
+          if (b.date !== a.date) return b.date.localeCompare(a.date);
+          return (b.created_at || '').localeCompare(a.created_at || '');
+        });
+        saveToStorage(this.getServiceExpensesKey(m), merged);
       }
     } catch (err) {
       console.warn('[Sync ' + m + '] Sincronización secundaria pospuesta:', err);
@@ -1483,22 +1545,36 @@ export const StorageService = {
       id: 'emp-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newEmp.id);
     all.unshift(newEmp);
     this.saveEmployees(all, m);
+    SupabaseSyncService.upsertEmployee(newEmp, m).catch(() => {});
     return newEmp;
   },
 
   updateEmployee(id: string, updates: Partial<Employee>, mode?: AppMode): void {
     const m = mode || this.getAppMode();
     const all = this.getEmployees(m);
-    const updated = all.map((e) => (e.id === id ? { ...e, ...updates } : e));
+    let updatedEmp: Employee | null = null;
+    const updated = all.map((e) => {
+      if (e.id === id) {
+        updatedEmp = { ...e, ...updates };
+        return updatedEmp;
+      }
+      return e;
+    });
     this.saveEmployees(updated, m);
+    if (updatedEmp) {
+      SupabaseSyncService.upsertEmployee(updatedEmp, m).catch(() => {});
+    }
   },
 
-  deleteEmployee(id: string, mode?: AppMode): void {
+  async deleteEmployee(id: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getEmployees(m);
     this.saveEmployees(all.filter((e) => e.id !== id), m);
+    await SupabaseSyncService.deleteEmployee(id, m).catch(() => {});
   },
 
   // Payroll Payments (Pagos de Sueldos y Salarios)
@@ -1529,13 +1605,16 @@ export const StorageService = {
       expense_id: exp.id,
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newPay.id);
     all.unshift(newPay);
     saveToStorage(this.getPayrollPaymentsKey(m), all);
+    SupabaseSyncService.upsertPayrollPayment(newPay, m).catch(() => {});
 
     return newPay;
   },
 
   async deletePayrollPayment(id: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getPayrollPayments(m);
     const pay = all.find((p) => p.id === id);
@@ -1559,6 +1638,7 @@ export const StorageService = {
       }
     }
     saveToStorage(this.getPayrollPaymentsKey(m), all.filter((p) => p.id !== id));
+    await SupabaseSyncService.deletePayrollPayment(id, m).catch(() => {});
   },
 
   // Service Expenses (Servicios Públicos, Alquiler, Internet, etc.)
@@ -1590,13 +1670,16 @@ export const StorageService = {
       expense_id: exp.id,
       created_at: new Date().toISOString(),
     };
+    unmarkDeleted(newServ.id);
     all.unshift(newServ);
     saveToStorage(this.getServiceExpensesKey(m), all);
+    SupabaseSyncService.upsertServiceExpense(newServ, m).catch(() => {});
 
     return newServ;
   },
 
   async deleteServiceExpense(id: string, mode?: AppMode): Promise<void> {
+    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getServiceExpenses(m);
     const srv = all.find((s) => s.id === id);
@@ -1619,6 +1702,7 @@ export const StorageService = {
       }
     }
     saveToStorage(this.getServiceExpensesKey(m), all.filter((s) => s.id !== id));
+    await SupabaseSyncService.deleteServiceExpense(id, m).catch(() => {});
   },
 
   async masterResetToZero(): Promise<void> {
