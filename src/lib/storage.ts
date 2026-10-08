@@ -13,6 +13,9 @@ import {
   Supplier,
   SupplierPurchase,
   SupplierPayment,
+  Employee,
+  PayrollPayment,
+  ServiceExpense,
   AppMode,
 } from '@/types';
 import {
@@ -157,6 +160,18 @@ export const StorageService = {
   getDebtPaymentsKey(mode?: AppMode): string {
     const m = mode || this.getAppMode();
     return 'cambiosjk_' + m + '_debt_payments_v2';
+  },
+  getEmployeesKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_employees_v1';
+  },
+  getPayrollPaymentsKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_payroll_payments_v1';
+  },
+  getServiceExpensesKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_service_expenses_v1';
   },
 
   // Migración automática de datos antiguos para separar César a Detal y María a Mayor
@@ -1449,6 +1464,163 @@ export const StorageService = {
     saveToStorage(this.getSupplierPaymentsKey('mayor'), []);
   },
 
+  // Employees (Personal y Colaboradores)
+  getEmployees(mode?: AppMode): Employee[] {
+    const m = mode || this.getAppMode();
+    return getFromStorage<Employee[]>(this.getEmployeesKey(m), []);
+  },
+
+  saveEmployees(employees: Employee[], mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    saveToStorage(this.getEmployeesKey(m), employees);
+  },
+
+  addEmployee(employee: Omit<Employee, 'id' | 'created_at'>, mode?: AppMode): Employee {
+    const m = mode || this.getAppMode();
+    const all = this.getEmployees(m);
+    const newEmp: Employee = {
+      ...employee,
+      id: 'emp-' + Date.now(),
+      created_at: new Date().toISOString(),
+    };
+    all.unshift(newEmp);
+    this.saveEmployees(all, m);
+    return newEmp;
+  },
+
+  updateEmployee(id: string, updates: Partial<Employee>, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const all = this.getEmployees(m);
+    const updated = all.map((e) => (e.id === id ? { ...e, ...updates } : e));
+    this.saveEmployees(updated, m);
+  },
+
+  deleteEmployee(id: string, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const all = this.getEmployees(m);
+    this.saveEmployees(all.filter((e) => e.id !== id), m);
+  },
+
+  // Payroll Payments (Pagos de Sueldos y Salarios)
+  getPayrollPayments(mode?: AppMode): PayrollPayment[] {
+    const m = mode || this.getAppMode();
+    return getFromStorage<PayrollPayment[]>(this.getPayrollPaymentsKey(m), []);
+  },
+
+  addPayrollPayment(payment: Omit<PayrollPayment, 'id' | 'created_at'>, mode?: AppMode): PayrollPayment {
+    const m = mode || this.getAppMode();
+    const all = this.getPayrollPayments(m);
+
+    // Registrar egreso contable automático para que cuadre con saldo de banco/wallet y Cierre Diario
+    const exp = this.addExpense({
+      date: payment.date,
+      type: 'egreso',
+      description: `[NÓMINA] ${payment.employee_name} (${payment.period})${payment.reference ? ' - Ref: ' + payment.reference : ''}`,
+      amount: payment.amount_currency,
+      currency: payment.currency,
+      concept: 'NÓMINA',
+      account_id: payment.account_id,
+      amount_usd: payment.amount_usd,
+    }, m);
+
+    const newPay: PayrollPayment = {
+      ...payment,
+      id: 'pay-' + Date.now(),
+      expense_id: exp.id,
+      created_at: new Date().toISOString(),
+    };
+    all.unshift(newPay);
+    saveToStorage(this.getPayrollPaymentsKey(m), all);
+
+    return newPay;
+  },
+
+  async deletePayrollPayment(id: string, mode?: AppMode): Promise<void> {
+    const m = mode || this.getAppMode();
+    const all = this.getPayrollPayments(m);
+    const pay = all.find((p) => p.id === id);
+    if (pay) {
+      // Revertir en gastos y reintegrar dinero a la cuenta pagadora
+      if (pay.expense_id) {
+        await this.deleteExpense(pay.expense_id, m);
+      } else {
+        const allExpenses = this.getExpenses(m);
+        const linkedExp = allExpenses.find((e) =>
+          e.concept === 'NÓMINA' &&
+          e.date === pay.date &&
+          e.amount === pay.amount_currency &&
+          e.description.includes(pay.employee_name)
+        );
+        if (linkedExp) {
+          await this.deleteExpense(linkedExp.id, m);
+        } else if (pay.account_id && pay.amount_currency > 0) {
+          this.updateAccountBalance(pay.account_id, pay.amount_currency, m);
+        }
+      }
+    }
+    saveToStorage(this.getPayrollPaymentsKey(m), all.filter((p) => p.id !== id));
+  },
+
+  // Service Expenses (Servicios Públicos, Alquiler, Internet, etc.)
+  getServiceExpenses(mode?: AppMode): ServiceExpense[] {
+    const m = mode || this.getAppMode();
+    return getFromStorage<ServiceExpense[]>(this.getServiceExpensesKey(m), []);
+  },
+
+  addServiceExpense(service: Omit<ServiceExpense, 'id' | 'created_at'>, mode?: AppMode): ServiceExpense {
+    const m = mode || this.getAppMode();
+    const all = this.getServiceExpenses(m);
+
+    // Registrar egreso contable automático
+    const catLabel = service.category.replace(/_/g, ' ');
+    const exp = this.addExpense({
+      date: service.date,
+      type: 'egreso',
+      description: `[SERVICIO - ${catLabel}] ${service.description}${service.invoice_number ? ' - Fac/Ref: ' + service.invoice_number : ''}`,
+      amount: service.amount,
+      currency: service.currency,
+      concept: 'SERVICIOS: ' + service.category,
+      account_id: service.account_id,
+      amount_usd: service.amount_usd,
+    }, m);
+
+    const newServ: ServiceExpense = {
+      ...service,
+      id: 'srv-' + Date.now(),
+      expense_id: exp.id,
+      created_at: new Date().toISOString(),
+    };
+    all.unshift(newServ);
+    saveToStorage(this.getServiceExpensesKey(m), all);
+
+    return newServ;
+  },
+
+  async deleteServiceExpense(id: string, mode?: AppMode): Promise<void> {
+    const m = mode || this.getAppMode();
+    const all = this.getServiceExpenses(m);
+    const srv = all.find((s) => s.id === id);
+    if (srv) {
+      if (srv.expense_id) {
+        await this.deleteExpense(srv.expense_id, m);
+      } else {
+        const allExpenses = this.getExpenses(m);
+        const linkedExp = allExpenses.find((e) =>
+          e.concept.startsWith('SERVICIOS') &&
+          e.date === srv.date &&
+          e.amount === srv.amount &&
+          e.description.includes(srv.description)
+        );
+        if (linkedExp) {
+          await this.deleteExpense(linkedExp.id, m);
+        } else if (srv.account_id && srv.amount > 0) {
+          this.updateAccountBalance(srv.account_id, srv.amount, m);
+        }
+      }
+    }
+    saveToStorage(this.getServiceExpensesKey(m), all.filter((s) => s.id !== id));
+  },
+
   async masterResetToZero(): Promise<void> {
     if (typeof window === 'undefined') return;
     saveToStorage(this.getAccountsKey('detal'), []);
@@ -1475,6 +1647,12 @@ export const StorageService = {
     saveToStorage(this.getSupplierPurchasesKey('mayor'), []);
     saveToStorage(this.getSupplierPaymentsKey('detal'), []);
     saveToStorage(this.getSupplierPaymentsKey('mayor'), []);
+    saveToStorage(this.getEmployeesKey('detal'), []);
+    saveToStorage(this.getEmployeesKey('mayor'), []);
+    saveToStorage(this.getPayrollPaymentsKey('detal'), []);
+    saveToStorage(this.getPayrollPaymentsKey('mayor'), []);
+    saveToStorage(this.getServiceExpensesKey('detal'), []);
+    saveToStorage(this.getServiceExpensesKey('mayor'), []);
     localStorage.removeItem('cambiosjk_accounts_v1');
     localStorage.removeItem('cambiosjk_clients_v1');
     localStorage.removeItem('cambiosjk_suppliers_v1');
@@ -1514,6 +1692,10 @@ export const StorageService = {
     saveToStorage(this.getSupplierPurchasesKey('detal'), []);
     saveToStorage(this.getSupplierPaymentsKey('detal'), []);
     saveToStorage(this.getSupplierPaymentsKey('mayor'), []);
+    saveToStorage(this.getPayrollPaymentsKey('detal'), []);
+    saveToStorage(this.getPayrollPaymentsKey('mayor'), []);
+    saveToStorage(this.getServiceExpensesKey('detal'), []);
+    saveToStorage(this.getServiceExpensesKey('mayor'), []);
     localStorage.removeItem('cambiosjk_accounts_v1');
     localStorage.removeItem('cambiosjk_clients_v1');
     localStorage.removeItem('cambiosjk_suppliers_v1');

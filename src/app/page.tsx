@@ -13,6 +13,7 @@ import { AccountsView } from '@/components/AccountsView';
 import { ClosuresView } from '@/components/ClosuresView';
 import { ClientsView } from '@/components/ClientsView';
 import { DebtorsView } from '@/components/DebtorsView';
+import { PayrollServicesView } from '@/components/PayrollServicesView';
 import { StorageService } from '@/lib/storage';
 import { CLIENTES_EXCEL_DETAL } from '@/lib/clientes-excel-detal';
 import { INITIAL_ACCOUNTS_MAYOR } from '@/lib/initial-data';
@@ -28,6 +29,9 @@ import {
   Debtor,
   Client,
   Supplier,
+  Employee,
+  PayrollPayment,
+  ServiceExpense,
   AppMode,
 } from '@/types';
 import { useAuth } from '@/lib/auth-context';
@@ -49,6 +53,9 @@ export default function Home() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [closures, setClosures] = useState<DailyClosure[]>([]);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [payrollPayments, setPayrollPayments] = useState<PayrollPayment[]>([]);
+  const [serviceExpenses, setServiceExpenses] = useState<ServiceExpense[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const refreshData = useCallback((modeOverride?: AppMode) => {
@@ -62,6 +69,9 @@ export default function Home() {
     setExpenses(StorageService.getExpenses(currentMode));
     setClosures(StorageService.getClosures(currentMode));
     setDebtors(StorageService.getDebtors(currentMode));
+    setEmployees(StorageService.getEmployees(currentMode));
+    setPayrollPayments(StorageService.getPayrollPayments(currentMode));
+    setServiceExpenses(StorageService.getServiceExpenses(currentMode));
   }, []);
 
   const handleModeChange = (mode: AppMode) => {
@@ -398,6 +408,17 @@ export default function Home() {
               clients={clients}
               detalTxs={detalTxs}
               mayorTxs={mayorTxs}
+              onDataChange={refreshData}
+              appMode={appMode}
+            />
+          )}
+
+          {activeTab === 'payroll' && (
+            <PayrollServicesView
+              accounts={accounts}
+              employees={employees}
+              payrollPayments={payrollPayments}
+              serviceExpenses={serviceExpenses}
               onDataChange={refreshData}
               appMode={appMode}
             />

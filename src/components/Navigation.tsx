@@ -12,6 +12,7 @@ import {
   CalendarCheck2,
   Users,
   UserCheck,
+  Briefcase,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth-context';
@@ -23,6 +24,7 @@ export type TabKey =
   | 'suppliers'
   | 'transfers'
   | 'expenses'
+  | 'payroll'
   | 'accounts'
   | 'closures'
   | 'clients'
@@ -44,6 +46,7 @@ export function Navigation({ activeTab, onSelectTab, appMode = 'detal' }: NavPro
     { key: 'suppliers' as TabKey, label: 'Proveedores', icon: Truck },
     { key: 'transfers' as TabKey, label: 'Cambio Saldos', icon: ArrowLeftRight },
     { key: 'expenses' as TabKey, label: 'Ingresos/Gastos', icon: Receipt },
+    { key: 'payroll' as TabKey, label: 'Nómina y Servicios', icon: Briefcase },
     { key: 'accounts' as TabKey, label: 'Cuentas', icon: Wallet },
     { key: 'closures' as TabKey, label: 'Cierre', icon: CalendarCheck2, adminOnly: true },
     { key: 'clients' as TabKey, label: 'Clientes', icon: UserCheck },

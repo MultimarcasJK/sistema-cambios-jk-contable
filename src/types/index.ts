@@ -258,3 +258,65 @@ export interface DebtPayment {
   created_at?: string;
 }
 
+export interface Employee {
+  id: string;
+  name: string;
+  identification?: string;
+  phone?: string;
+  position: string;
+  base_salary: number;
+  salary_currency: Currency;
+  payment_frequency: 'quincenal' | 'mensual' | 'semanal';
+  payment_details?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface PayrollPayment {
+  id: string;
+  date: string;
+  employee_id: string;
+  employee_name: string;
+  period: string;
+  base_amount: number;
+  bonuses: number;
+  deductions: number;
+  net_amount: number;
+  currency: Currency;
+  amount_currency: number;
+  exchange_rate: number;
+  amount_usd: number;
+  account_id?: string;
+  expense_id?: string;
+  reference?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export type ServiceCategory =
+  | 'SERVICIOS_PUBLICOS'
+  | 'ALQUILER_LOCAL'
+  | 'INTERNET_TELEFONIA'
+  | 'MANTENIMIENTO'
+  | 'PAPELERIA_SUMINISTROS'
+  | 'TRANSPORTE_VIATICOS'
+  | 'COMISIONES_OPERADORES'
+  | 'OTROS';
+
+export interface ServiceExpense {
+  id: string;
+  date: string;
+  category: ServiceCategory;
+  description: string;
+  invoice_number?: string;
+  amount: number;
+  currency: Currency;
+  exchange_rate: number;
+  amount_usd: number;
+  account_id?: string;
+  expense_id?: string;
+  notes?: string;
+  created_at: string;
+}
+
+
