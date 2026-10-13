@@ -2,15 +2,18 @@
 
 import React, { useState } from 'react';
 import { StorageService } from '@/lib/storage';
-import { AlertTriangle, Trash2, X, CheckCircle2 } from 'lucide-react';
+import { AppMode } from '@/types';
+import { AlertTriangle, Trash2, X, CheckCircle2, ShieldAlert } from 'lucide-react';
 
 interface MasterResetModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  currentMode?: AppMode;
 }
 
-export function MasterResetModal({ isOpen, onClose, onSuccess }: MasterResetModalProps) {
+export function MasterResetModal({ isOpen, onClose, onSuccess, currentMode = 'detal' }: MasterResetModalProps) {
+  const [resetScope, setResetScope] = useState<AppMode | 'both'>(currentMode);
   const [resetType, setResetType] = useState<'blank' | 'zero_balances'>('blank');
   const [confirmationInput, setConfirmationInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -25,12 +28,19 @@ export function MasterResetModal({ isOpen, onClose, onSuccess }: MasterResetModa
 
     setIsProcessing(true);
     try {
+      const scopeLabel =
+        resetScope === 'detal'
+          ? 'Grupo DETAL (Cripto/Dólar)'
+          : resetScope === 'mayor'
+          ? 'Grupo MAYOR (Monedas Regionales)'
+          : 'TODO EL SISTEMA (Detal y Mayor)';
+
       if (resetType === 'blank') {
-        await StorageService.masterResetToZero();
-        setSuccessMessage('¡Sistema reiniciado a CERO absoluto (lienzo en blanco) con éxito!');
+        await StorageService.masterResetToZero(resetScope);
+        setSuccessMessage(`¡${scopeLabel} reiniciado a CERO absoluto (lienzo en blanco) con éxito!`);
       } else {
-        await StorageService.resetBalancesToZero();
-        setSuccessMessage('¡Todos los saldos y deudas se han puesto en 0.00 con éxito!');
+        await StorageService.resetBalancesToZero(resetScope);
+        setSuccessMessage(`¡Saldos y deudas del ${scopeLabel} puestos en 0.00 con éxito!`);
       }
 
       onSuccess();
@@ -59,8 +69,8 @@ export function MasterResetModal({ isOpen, onClose, onSuccess }: MasterResetModa
               <AlertTriangle className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-white">Reinicio Maestro del Sistema</h2>
-              <p className="text-xs text-rose-300/80">Operaci?n de limpieza profunda</p>
+              <h2 className="text-lg font-black text-white">Reinicio Controlado del Sistema</h2>
+              <p className="text-xs text-rose-300/80">Limpieza por entorno o global</p>
             </div>
           </div>
           <button
@@ -80,67 +90,136 @@ export function MasterResetModal({ isOpen, onClose, onSuccess }: MasterResetModa
             </div>
           ) : (
             <>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Esta acci?n te permite reiniciar todo el sistema contable de forma controlada.
-                Elige el nivel de limpieza que deseas aplicar:
-              </p>
-
-              {/* Selector de Tipo de Reinicio */}
-              <div className="grid grid-cols-1 gap-3">
-                <label
-                  onClick={() => setResetType('blank')}
-                  className={
-                    'p-3.5 rounded-xl border cursor-pointer transition flex items-start space-x-3 ' +
-                    (resetType === 'blank'
-                      ? 'bg-rose-950/30 border-rose-500/60 ring-1 ring-rose-500'
-                      : 'bg-slate-800/60 border-slate-700 hover:border-slate-600')
-                  }
-                >
-                  <input
-                    type="radio"
-                    name="resetType"
-                    checked={resetType === 'blank'}
-                    onChange={() => setResetType('blank')}
-                    className="mt-1 text-rose-600 focus:ring-rose-500"
-                  />
-                  <div>
-                    <span className="text-sm font-bold text-white flex items-center space-x-1.5">
-                      <span>Lienzo en Blanco Total (0 Cuentas, 0 Datos)</span>
-                    </span>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Borra todas las cuentas bancarias, clientes, transacciones, traspasos, gastos y cierres. Queda 100% limpio para crear tus cuentas reales desde cero.
-                    </p>
-                  </div>
+              {/* Paso 1: Ámbito / Entorno */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wider">
+                  1. Selecciona el Entorno a Reiniciar:
                 </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setResetScope('detal')}
+                    className={
+                      'p-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center space-y-1 ' +
+                      (resetScope === 'detal'
+                        ? 'bg-emerald-950/50 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500'
+                        : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white hover:border-slate-600')
+                    }
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    <span>Solo DETAL</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Cripto / Dólar</span>
+                  </button>
 
-                <label
-                  onClick={() => setResetType('zero_balances')}
-                  className={
-                    'p-3.5 rounded-xl border cursor-pointer transition flex items-start space-x-3 ' +
-                    (resetType === 'zero_balances'
-                      ? 'bg-blue-950/30 border-blue-500/60 ring-1 ring-blue-500'
-                      : 'bg-slate-800/60 border-slate-700 hover:border-slate-600')
-                  }
-                >
-                  <input
-                    type="radio"
-                    name="resetType"
-                    checked={resetType === 'zero_balances'}
-                    onChange={() => setResetType('zero_balances')}
-                    className="mt-1 text-blue-600 focus:ring-blue-500"
-                  />
-                  <div>
-                    <span className="text-sm font-bold text-white flex items-center space-x-1.5">
-                      <span>Conservar Nombres de Cuentas, pero en 0.00</span>
-                    </span>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Mantiene los bancos y wallets pero deja sus saldos en $0.00. Borra todas las operaciones hist?ricas, deudas y gastos.
-                    </p>
-                  </div>
-                </label>
+                  <button
+                    type="button"
+                    onClick={() => setResetScope('mayor')}
+                    className={
+                      'p-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center space-y-1 ' +
+                      (resetScope === 'mayor'
+                        ? 'bg-amber-950/50 border-amber-500 text-amber-300 ring-1 ring-amber-500'
+                        : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white hover:border-slate-600')
+                    }
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                    <span>Solo MAYOR</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Regionales</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setResetScope('both')}
+                    className={
+                      'p-2.5 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center space-y-1 ' +
+                      (resetScope === 'both'
+                        ? 'bg-rose-950/50 border-rose-500 text-rose-300 ring-1 ring-rose-500'
+                        : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white hover:border-slate-600')
+                    }
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-400"></span>
+                    <span>TODO</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Detal + Mayor</span>
+                  </button>
+                </div>
+
+                {/* Nota de seguridad del entorno protegido */}
+                <div className="mt-2 p-2 bg-slate-950/70 border border-slate-800 rounded-lg flex items-center space-x-2 text-[11px]">
+                  <ShieldAlert className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span className="text-slate-300">
+                    {resetScope === 'detal' && (
+                      <>El grupo <strong className="text-amber-400 font-semibold">MAYOR queda 100% intacto y protegido</strong>.</>
+                    )}
+                    {resetScope === 'mayor' && (
+                      <>El grupo <strong className="text-emerald-400 font-semibold">DETAL queda 100% intacto y protegido</strong>.</>
+                    )}
+                    {resetScope === 'both' && (
+                      <span className="text-rose-400 font-semibold">Atención: Se limpiarán tanto Detal como Mayor.</span>
+                    )}
+                  </span>
+                </div>
               </div>
 
-              {/* Confirmaci?n obligatoria */}
+              {/* Paso 2: Tipo de Reinicio */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wider">
+                  2. Nivel de Limpieza:
+                </label>
+                <div className="grid grid-cols-1 gap-2.5">
+                  <label
+                    onClick={() => setResetType('blank')}
+                    className={
+                      'p-3 rounded-xl border cursor-pointer transition flex items-start space-x-3 ' +
+                      (resetType === 'blank'
+                        ? 'bg-rose-950/30 border-rose-500/60 ring-1 ring-rose-500'
+                        : 'bg-slate-800/60 border-slate-700 hover:border-slate-600')
+                    }
+                  >
+                    <input
+                      type="radio"
+                      name="resetType"
+                      checked={resetType === 'blank'}
+                      onChange={() => setResetType('blank')}
+                      className="mt-1 text-rose-600 focus:ring-rose-500"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-white">
+                        Lienzo en Blanco (0 Cuentas, 0 Datos)
+                      </span>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Borra todas las cuentas, clientes, transacciones y cierres del entorno seleccionado. Queda 100% limpio.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label
+                    onClick={() => setResetType('zero_balances')}
+                    className={
+                      'p-3 rounded-xl border cursor-pointer transition flex items-start space-x-3 ' +
+                      (resetType === 'zero_balances'
+                        ? 'bg-blue-950/30 border-blue-500/60 ring-1 ring-blue-500'
+                        : 'bg-slate-800/60 border-slate-700 hover:border-slate-600')
+                    }
+                  >
+                    <input
+                      type="radio"
+                      name="resetType"
+                      checked={resetType === 'zero_balances'}
+                      onChange={() => setResetType('zero_balances')}
+                      className="mt-1 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-white">
+                        Conservar Nombres de Cuentas, pero en $0.00
+                      </span>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Mantiene las cuentas bancarias pero deja saldos en $0.00 y elimina las operaciones del entorno seleccionado.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Paso 3: Confirmación obligatoria */}
               <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
                 <label className="block text-xs font-bold text-slate-300">
                   Para confirmar, escribe la palabra <span className="text-rose-400 font-black">REINICIAR</span>:
@@ -180,7 +259,13 @@ export function MasterResetModal({ isOpen, onClose, onSuccess }: MasterResetModa
               ) : (
                 <>
                   <Trash2 className="w-4 h-4" />
-                  <span>Limpiar y Dejar en 0</span>
+                  <span>
+                    {resetScope === 'detal'
+                      ? 'Reiniciar Solo Detal'
+                      : resetScope === 'mayor'
+                      ? 'Reiniciar Solo Mayor'
+                      : 'Reiniciar Todo'}
+                  </span>
                 </>
               )}
             </button>

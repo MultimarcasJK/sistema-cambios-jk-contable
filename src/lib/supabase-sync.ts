@@ -828,9 +828,9 @@ export const SupabaseSyncService = {
     }
   },
 
-  async resetBalancesToZeroInSupabase(): Promise<void> {
+  async resetBalancesToZeroInSupabase(targetMode: AppMode | 'both' = 'both'): Promise<void> {
     if (!isSupabaseConfigured || !supabase) return;
-    const modes: AppMode[] = ['detal', 'mayor'];
+    const modes: AppMode[] = targetMode === 'both' ? ['detal', 'mayor'] : [targetMode];
     for (const m of modes) {
       try {
         const { data: accs } = await supabase.from(`${m}_cuentas`).select('id');
@@ -877,9 +877,9 @@ export const SupabaseSyncService = {
     }
   },
 
-  async truncateAllTables(): Promise<void> {
+  async truncateAllTables(targetMode: AppMode | 'both' = 'both'): Promise<void> {
     if (!isSupabaseConfigured || !supabase) return;
-    const modes: AppMode[] = ['detal', 'mayor'];
+    const modes: AppMode[] = targetMode === 'both' ? ['detal', 'mayor'] : [targetMode];
     for (const m of modes) {
       const tables = [
         `${m}_gastos_servicios`,

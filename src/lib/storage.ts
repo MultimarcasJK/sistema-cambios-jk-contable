@@ -1705,89 +1705,70 @@ export const StorageService = {
     await SupabaseSyncService.deleteServiceExpense(id, m).catch(() => {});
   },
 
-  async masterResetToZero(): Promise<void> {
+  async masterResetToZero(targetMode: AppMode | 'both' = 'both'): Promise<void> {
     if (typeof window === 'undefined') return;
-    saveToStorage(this.getAccountsKey('detal'), []);
-    saveToStorage(this.getAccountsKey('mayor'), []);
-    saveToStorage(this.getClientsKey('detal'), []);
-    saveToStorage(this.getClientsKey('mayor'), []);
-    saveToStorage(this.getSuppliersKey('detal'), []);
-    saveToStorage(this.getSuppliersKey('mayor'), []);
-    saveToStorage(this.getDebtorsKey('detal'), []);
-    saveToStorage(this.getDebtorsKey('mayor'), []);
-    saveToStorage(this.getDebtPaymentsKey('detal'), []);
-    saveToStorage(this.getDebtPaymentsKey('mayor'), []);
-    saveToStorage(this.getTransactionsDetalKey('detal'), []);
-    saveToStorage(this.getTransactionsDetalKey('mayor'), []);
-    saveToStorage(this.getTransactionsMayorKey('detal'), []);
-    saveToStorage(this.getTransactionsMayorKey('mayor'), []);
-    saveToStorage(this.getTransfersKey('detal'), []);
-    saveToStorage(this.getTransfersKey('mayor'), []);
-    saveToStorage(this.getExpensesKey('detal'), []);
-    saveToStorage(this.getExpensesKey('mayor'), []);
-    saveToStorage(this.getClosuresKey('detal'), []);
-    saveToStorage(this.getClosuresKey('mayor'), []);
-    saveToStorage(this.getSupplierPurchasesKey('detal'), []);
-    saveToStorage(this.getSupplierPurchasesKey('mayor'), []);
-    saveToStorage(this.getSupplierPaymentsKey('detal'), []);
-    saveToStorage(this.getSupplierPaymentsKey('mayor'), []);
-    saveToStorage(this.getEmployeesKey('detal'), []);
-    saveToStorage(this.getEmployeesKey('mayor'), []);
-    saveToStorage(this.getPayrollPaymentsKey('detal'), []);
-    saveToStorage(this.getPayrollPaymentsKey('mayor'), []);
-    saveToStorage(this.getServiceExpensesKey('detal'), []);
-    saveToStorage(this.getServiceExpensesKey('mayor'), []);
-    localStorage.removeItem('cambiosjk_accounts_v1');
-    localStorage.removeItem('cambiosjk_clients_v1');
-    localStorage.removeItem('cambiosjk_suppliers_v1');
-    localStorage.removeItem('cambiosjk_detal_v1');
-    localStorage.removeItem('cambiosjk_mayor_v1');
-    localStorage.removeItem('cambiosjk_debtors_v1');
-    localStorage.removeItem('cambiosjk_debt_payments_v1');
-    await SupabaseSyncService.truncateAllTables().catch(() => {});
+    const modes: AppMode[] = targetMode === 'both' ? ['detal', 'mayor'] : [targetMode];
+    for (const m of modes) {
+      saveToStorage(this.getAccountsKey(m), []);
+      saveToStorage(this.getClientsKey(m), []);
+      saveToStorage(this.getSuppliersKey(m), []);
+      saveToStorage(this.getDebtorsKey(m), []);
+      saveToStorage(this.getDebtPaymentsKey(m), []);
+      saveToStorage(this.getTransactionsDetalKey(m), []);
+      saveToStorage(this.getTransactionsMayorKey(m), []);
+      saveToStorage(this.getTransfersKey(m), []);
+      saveToStorage(this.getExpensesKey(m), []);
+      saveToStorage(this.getClosuresKey(m), []);
+      saveToStorage(this.getSupplierPurchasesKey(m), []);
+      saveToStorage(this.getSupplierPaymentsKey(m), []);
+      saveToStorage(this.getEmployeesKey(m), []);
+      saveToStorage(this.getPayrollPaymentsKey(m), []);
+      saveToStorage(this.getServiceExpensesKey(m), []);
+    }
+    if (targetMode === 'both') {
+      localStorage.removeItem('cambiosjk_accounts_v1');
+      localStorage.removeItem('cambiosjk_clients_v1');
+      localStorage.removeItem('cambiosjk_suppliers_v1');
+      localStorage.removeItem('cambiosjk_detal_v1');
+      localStorage.removeItem('cambiosjk_mayor_v1');
+      localStorage.removeItem('cambiosjk_debtors_v1');
+      localStorage.removeItem('cambiosjk_debt_payments_v1');
+    }
+    await SupabaseSyncService.truncateAllTables(targetMode).catch(() => {});
   },
 
-  async resetBalancesToZero(): Promise<void> {
+  async resetBalancesToZero(targetMode: AppMode | 'both' = 'both'): Promise<void> {
     if (typeof window === 'undefined') return;
-    const detalAccs = this.getAccounts('detal').map((a) => ({ ...a, current_balance: 0, initial_balance: 0 }));
-    const mayorAccs = this.getAccounts('mayor').map((a) => ({ ...a, current_balance: 0, initial_balance: 0 }));
-    saveToStorage(this.getAccountsKey('detal'), detalAccs);
-    saveToStorage(this.getAccountsKey('mayor'), mayorAccs);
+    const modes: AppMode[] = targetMode === 'both' ? ['detal', 'mayor'] : [targetMode];
+    for (const m of modes) {
+      const accs = this.getAccounts(m).map((a) => ({ ...a, current_balance: 0, initial_balance: 0 }));
+      saveToStorage(this.getAccountsKey(m), accs);
 
-    const detalSuppliers = this.getSuppliers('detal').map((s) => ({ ...s, current_debt_usd: 0 }));
-    const mayorSuppliers = this.getSuppliers('mayor').map((s) => ({ ...s, current_debt_usd: 0 }));
-    saveToStorage(this.getSuppliersKey('detal'), detalSuppliers);
-    saveToStorage(this.getSuppliersKey('mayor'), mayorSuppliers);
+      const supps = this.getSuppliers(m).map((s) => ({ ...s, current_debt_usd: 0 }));
+      saveToStorage(this.getSuppliersKey(m), supps);
 
-    saveToStorage(this.getDebtorsKey('detal'), []);
-    saveToStorage(this.getDebtorsKey('mayor'), []);
-    saveToStorage(this.getDebtPaymentsKey('detal'), []);
-    saveToStorage(this.getDebtPaymentsKey('mayor'), []);
-    saveToStorage(this.getTransactionsDetalKey('detal'), []);
-    saveToStorage(this.getTransactionsDetalKey('mayor'), []);
-    saveToStorage(this.getTransactionsMayorKey('detal'), []);
-    saveToStorage(this.getTransactionsMayorKey('mayor'), []);
-    saveToStorage(this.getTransfersKey('detal'), []);
-    saveToStorage(this.getTransfersKey('mayor'), []);
-    saveToStorage(this.getExpensesKey('detal'), []);
-    saveToStorage(this.getExpensesKey('mayor'), []);
-    saveToStorage(this.getClosuresKey('detal'), []);
-    saveToStorage(this.getClosuresKey('mayor'), []);
-    saveToStorage(this.getSupplierPurchasesKey('detal'), []);
-    saveToStorage(this.getSupplierPaymentsKey('detal'), []);
-    saveToStorage(this.getSupplierPaymentsKey('mayor'), []);
-    saveToStorage(this.getPayrollPaymentsKey('detal'), []);
-    saveToStorage(this.getPayrollPaymentsKey('mayor'), []);
-    saveToStorage(this.getServiceExpensesKey('detal'), []);
-    saveToStorage(this.getServiceExpensesKey('mayor'), []);
-    localStorage.removeItem('cambiosjk_accounts_v1');
-    localStorage.removeItem('cambiosjk_clients_v1');
-    localStorage.removeItem('cambiosjk_suppliers_v1');
-    localStorage.removeItem('cambiosjk_detal_v1');
-    localStorage.removeItem('cambiosjk_mayor_v1');
-    localStorage.removeItem('cambiosjk_debtors_v1');
-    localStorage.removeItem('cambiosjk_debt_payments_v1');
-    await SupabaseSyncService.resetBalancesToZeroInSupabase().catch(() => {});
+      saveToStorage(this.getDebtorsKey(m), []);
+      saveToStorage(this.getDebtPaymentsKey(m), []);
+      saveToStorage(this.getTransactionsDetalKey(m), []);
+      saveToStorage(this.getTransactionsMayorKey(m), []);
+      saveToStorage(this.getTransfersKey(m), []);
+      saveToStorage(this.getExpensesKey(m), []);
+      saveToStorage(this.getClosuresKey(m), []);
+      saveToStorage(this.getSupplierPurchasesKey(m), []);
+      saveToStorage(this.getSupplierPaymentsKey(m), []);
+      saveToStorage(this.getPayrollPaymentsKey(m), []);
+      saveToStorage(this.getServiceExpensesKey(m), []);
+    }
+    if (targetMode === 'both') {
+      localStorage.removeItem('cambiosjk_accounts_v1');
+      localStorage.removeItem('cambiosjk_clients_v1');
+      localStorage.removeItem('cambiosjk_suppliers_v1');
+      localStorage.removeItem('cambiosjk_detal_v1');
+      localStorage.removeItem('cambiosjk_mayor_v1');
+      localStorage.removeItem('cambiosjk_debtors_v1');
+      localStorage.removeItem('cambiosjk_debt_payments_v1');
+    }
+    await SupabaseSyncService.resetBalancesToZeroInSupabase(targetMode).catch(() => {});
   },
 };
 

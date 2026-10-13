@@ -370,6 +370,7 @@ export function Header({
       <MasterResetModal
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
+        currentMode={appMode}
         onSuccess={() => {
           onResetSuccess?.();
         }}
