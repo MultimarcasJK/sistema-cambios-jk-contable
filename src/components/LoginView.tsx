@@ -51,7 +51,7 @@ export function LoginView() {
           <div className="inline-block relative mb-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/logo-jk-transparente.png"
+              src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/logo-jk-transparente.png`}
               alt="Logo Cambios JK"
               className="w-20 h-20 mx-auto object-contain drop-shadow-2xl"
             />

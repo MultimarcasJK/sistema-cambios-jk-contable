@@ -37,8 +37,10 @@ interface NavProps {
 }
 
 export function Navigation({ activeTab, onSelectTab, appMode = 'detal' }: NavProps) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, profile } = useAuth();
   const isDark = appMode === 'mayor';
+  const modoPermitido = profile?.modo_permitido || 'ambos';
+
   const allTabs = [
     { key: 'dashboard' as TabKey, label: 'Panel', icon: LayoutDashboard },
     { key: 'detal' as TabKey, label: 'Cripto/Dolar', icon: Coins },
@@ -53,7 +55,16 @@ export function Navigation({ activeTab, onSelectTab, appMode = 'detal' }: NavPro
     { key: 'debtors' as TabKey, label: 'Deudores', icon: Users },
   ];
 
-  const tabs = allTabs.filter((t) => !t.adminOnly || isAdmin);
+  const tabs = allTabs.filter((t) => {
+    if (t.adminOnly && !isAdmin) return false;
+    if (modoPermitido === 'detal' && t.key === 'mayor') return false;
+    if (modoPermitido === 'mayor' && t.key === 'detal') return false;
+    if (modoPermitido === 'ambos') {
+      if (appMode === 'detal' && t.key === 'mayor') return false;
+      if (appMode === 'mayor' && t.key === 'detal') return false;
+    }
+    return true;
+  });
 
   return (
     <>

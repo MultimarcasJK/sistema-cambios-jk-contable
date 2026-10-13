@@ -38,7 +38,7 @@ import { useAuth } from '@/lib/auth-context';
 import { LoginView } from '@/components/LoginView';
 
 export default function Home() {
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, profile, isLoading: isAuthLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [appMode, setAppMode] = useState<AppMode>('detal');
   const [isSyncingRates, setIsSyncingRates] = useState(false);
@@ -74,7 +74,13 @@ export default function Home() {
     setServiceExpenses(StorageService.getServiceExpenses(currentMode));
   }, []);
 
-  const handleModeChange = (mode: AppMode) => {
+  const handleModeChange = useCallback((mode: AppMode) => {
+    if (profile?.modo_permitido && profile.modo_permitido !== 'ambos') {
+      if (mode !== profile.modo_permitido) {
+        console.warn(`[JK] Acceso restringido al modo: ${profile.modo_permitido}`);
+        return;
+      }
+    }
     setAppMode(mode);
     StorageService.setAppMode(mode);
     RatesService.setAppMode(mode);
@@ -82,7 +88,20 @@ export default function Home() {
     StorageService.syncFromSupabase(mode)
       .then(() => refreshData(mode))
       .catch(() => {});
-  };
+  }, [profile?.modo_permitido, refreshData]);
+
+  // Forzar modo permitido si el usuario no tiene acceso a 'ambos'
+  useEffect(() => {
+    if (profile?.modo_permitido && profile.modo_permitido !== 'ambos') {
+      const allowed = profile.modo_permitido;
+      if (appMode !== allowed) {
+        handleModeChange(allowed);
+      }
+      if ((allowed === 'detal' && activeTab === 'mayor') || (allowed === 'mayor' && activeTab === 'detal')) {
+        setActiveTab('dashboard');
+      }
+    }
+  }, [profile?.modo_permitido, appMode, activeTab, handleModeChange]);
 
   const handleSyncRates = async () => {
     setIsSyncingRates(true);

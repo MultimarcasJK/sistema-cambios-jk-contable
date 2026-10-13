@@ -65,7 +65,7 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
       // Cargar logo JK
       const logo = new Image();
       logo.crossOrigin = 'anonymous';
-      logo.src = '/logo-jk-transparente.png';
+      logo.src = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/logo-jk-transparente.png`;
 
       const drawContent = () => {
         // Logo + Nombre Empresa

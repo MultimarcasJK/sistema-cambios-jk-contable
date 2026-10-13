@@ -116,11 +116,15 @@ export const RatesService = {
       let sheetUrl = GOOGLE_SHEETS_CSV_URL;
       if (typeof window !== 'undefined') {
         try {
-          const cfgRes = await fetch('/api/app-config', { cache: 'no-store' });
+          const cfgRes = await fetch(
+            'https://raw.githubusercontent.com/grupojk-cambios/grupojk-conversor/main/src/constants.js?nocache=' + Date.now(),
+            { cache: 'no-store' }
+          );
           if (cfgRes.ok) {
-            const cfg = await cfgRes.json();
-            if (cfg.googleSheetsUrl) {
-              sheetUrl = cfg.googleSheetsUrl;
+            const fileContent = await cfgRes.text();
+            const matchSheet = fileContent.match(/GOOGLE_SHEET_CSV_URL\s*=\s*['"`]([^'"`]+)['"`]/i);
+            if (matchSheet && matchSheet[1]) {
+              sheetUrl = matchSheet[1];
             }
           }
         } catch {
