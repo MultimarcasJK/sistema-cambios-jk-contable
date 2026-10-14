@@ -863,12 +863,10 @@ export const SupabaseSyncService = {
           `${m}_ventas_regionales`,
         ];
         for (const t of deleteTables) {
-          const { data: rows } = await supabase.from(t).select('id');
-          if (rows && rows.length > 0) {
-            const ids = rows.map((r: any) => r.id);
-            for (let i = 0; i < ids.length; i += 50) {
-              await supabase.from(t).delete().in('id', ids.slice(i, i + 50));
-            }
+          try {
+            await supabase.from(t).delete().neq('id', '___non_existent___');
+          } catch {
+            /* ignore */
           }
         }
       } catch (err) {
@@ -900,15 +898,9 @@ export const SupabaseSyncService = {
       ];
       for (const t of tables) {
         try {
-          const { data: rows } = await supabase.from(t).select('id');
-          if (rows && rows.length > 0) {
-            const ids = rows.map((r: any) => r.id);
-            for (let i = 0; i < ids.length; i += 50) {
-              await supabase.from(t).delete().in('id', ids.slice(i, i + 50));
-            }
-          }
-        } catch (err) {
-          /* warn */
+          await supabase.from(t).delete().neq('id', '___non_existent___');
+        } catch {
+          /* ignore */
         }
       }
     }
