@@ -230,13 +230,33 @@ export function DebtorsView({
           </div>
         </div>
 
-        <button
-          onClick={() => setIsAdding(!isAdding)}
-          className="flex items-center space-x-2 bg-white text-blue-700 hover:bg-blue-50 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-sm self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Agregar Cliente / Deuda</span>
-        </button>
+        <div className="flex items-center space-x-2 self-start sm:self-auto">
+          {appMode === 'mayor' && debtors.length > 0 && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (window.confirm('¿Deseas vaciar y dejar en 0 todos los deudores del grupo MAYOR?')) {
+                  await StorageService.resetBalancesToZero('mayor');
+                  onDataChange();
+                  window.location.reload();
+                }
+              }}
+              className="flex items-center space-x-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition shadow-sm border border-rose-500/50"
+              title="Vaciar lista de deudores de Mayor"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Vaciar Deudores</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setIsAdding(!isAdding)}
+            className="flex items-center space-x-2 bg-white text-blue-700 hover:bg-blue-50 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Agregar Cliente / Deuda</span>
+          </button>
+        </div>
       </div>
 
       {/* Formulario Nuevo Deudor */}

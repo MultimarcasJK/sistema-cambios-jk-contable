@@ -177,6 +177,17 @@ export const StorageService = {
   // Migración automática de datos antiguos para separar César a Detal y María a Mayor
   migrateOldDataIfNeeded(): void {
     if (typeof window === 'undefined') return;
+
+    // Purga forzada y definitiva de deudores y transacciones huérfanas de Mayor tras reinicio
+    const PURGE_MAYOR_GHOSTS = 'cambiosjk_purge_mayor_ghosts_v3';
+    if (!localStorage.getItem(PURGE_MAYOR_GHOSTS)) {
+      saveToStorage(this.getTransactionsMayorKey('mayor'), []);
+      saveToStorage(this.getDebtorsKey('mayor'), []);
+      saveToStorage(this.getDebtPaymentsKey('mayor'), []);
+      localStorage.setItem(PURGE_MAYOR_GHOSTS, '1');
+      console.log('[JK] Purga automática de deudores y ventas fantasmas de Mayor ejecutada.');
+    }
+
     const MIGRATED_FLAG = 'cambiosjk_data_split_v2_migrated';
     if (localStorage.getItem(MIGRATED_FLAG)) return;
 
@@ -1312,7 +1323,7 @@ export const StorageService = {
       if (existingIndex === -1) {
         if (calculatedNetDebt !== 0) {
           debtors.unshift({
-            id: 'deb-auto-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+            id: 'deb-auto-' + m + '-' + name.replace(/[^A-Z0-9]/g, '_'),
             client_name: name,
             current_debt: calculatedNetDebt,
             notes: calculatedNetDebt > 0
@@ -1347,6 +1358,18 @@ export const StorageService = {
       return true;
     });
 
+    // Deduplicar para garantizar un solo registro por cliente
+    const uniqueMap = new Map<string, Debtor>();
+    filteredDebtors.forEach((d) => {
+      const key = (d.client_name || '').trim().toUpperCase();
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, d);
+      } else {
+        hasChanges = true;
+        orphanedIds.push(d.id);
+      }
+    });
+
     if (orphanedIds.length > 0) {
       orphanedIds.forEach((id) => {
         markAsDeleted(id);
@@ -1355,7 +1378,7 @@ export const StorageService = {
     }
 
     debtors.length = 0;
-    debtors.push(...filteredDebtors);
+    debtors.push(...Array.from(uniqueMap.values()));
 
     const correctedDebtors: typeof debtors = [];
 
