@@ -1329,6 +1329,34 @@ export const StorageService = {
       }
     });
 
+    // Limpiar deudores automáticos huérfanos cuyas transacciones u operaciones fueron borradas/reseteadas
+    const orphanedIds: string[] = [];
+    const filteredDebtors = debtors.filter((d) => {
+      if (!d) return false;
+      const isAuto = Boolean(d.id?.startsWith('deb-auto-') || (d.notes && d.notes.toLowerCase().includes('sincronizado de operaciones')));
+      if (isAuto) {
+        const name = (d.client_name || '').trim().toUpperCase();
+        const hasActiveTx = clientStats.has(name) && ((clientStats.get(name)?.totalBought || 0) > 0 || (clientStats.get(name)?.totalPaidInTx || 0) > 0);
+        const hasPayment = payments.some((p) => p && (p.client_name || '').trim().toUpperCase() === name);
+        if (!hasActiveTx && !hasPayment) {
+          orphanedIds.push(d.id);
+          hasChanges = true;
+          return false;
+        }
+      }
+      return true;
+    });
+
+    if (orphanedIds.length > 0) {
+      orphanedIds.forEach((id) => {
+        markAsDeleted(id);
+        SupabaseSyncService.deleteDebtor(id, m).catch(() => {});
+      });
+    }
+
+    debtors.length = 0;
+    debtors.push(...filteredDebtors);
+
     const correctedDebtors: typeof debtors = [];
 
     if (hasChanges || !rawDebtors || rawDebtors.length === 0) {
