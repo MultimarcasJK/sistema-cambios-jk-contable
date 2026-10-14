@@ -2,7 +2,7 @@
   "name": "sistema-cambios-jk",
   "version": "1.0.0",
   "private": true,
-  "homepage": "https://kelvingrupojk.github.io/sistema-cambios-jk-contable",
+  "homepage": "https://multimarcasjk.github.io/sistema-cambios-jk-contable",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
