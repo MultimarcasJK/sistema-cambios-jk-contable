@@ -1442,6 +1442,32 @@ export const StorageService = {
       });
     }
 
+    // Sincronizar automáticamente hacia el módulo de Clientes
+    try {
+      const currentClients = this.getClients(m);
+      const clientNameSet = new Set(currentClients.map((c) => (c.name || '').trim().toUpperCase()));
+      let clientsChanged = false;
+      debtors.forEach((d) => {
+        const norm = (d.client_name || '').trim().toUpperCase();
+        if (norm && !clientNameSet.has(norm)) {
+          clientNameSet.add(norm);
+          const newClient: Client = {
+            id: 'cli-deb-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+            name: d.client_name.trim(),
+            phone: d.phone || '',
+            current_debt: d.current_debt || 0,
+            created_at: new Date().toISOString(),
+          };
+          currentClients.push(newClient);
+          clientsChanged = true;
+          SupabaseSyncService.upsertClient(newClient, m).catch(() => {});
+        }
+      });
+      if (clientsChanged) {
+        this.saveClients(currentClients, m);
+      }
+    } catch {}
+
     return debtors.map((d) => ({
       ...d,
       notes: d.notes ? d.notes.replace(/\bdetal\b/gi, '').replace(/\s+/g, ' ').trim() : d.notes,
@@ -1510,6 +1536,33 @@ export const StorageService = {
     all.unshift(newDebtor);
     this.saveDebtors(all, m);
     SupabaseSyncService.upsertDebtor(newDebtor, m).catch(() => {});
+
+    // AUTOMÁTICO: Asegurar que el deudor también se registre o actualice en Clientes
+    try {
+      const upperName = (debtor.client_name || '').trim().toUpperCase();
+      if (upperName) {
+        const clients = this.getClients(m);
+        const existingClient = clients.find((c) => (c.name || '').trim().toUpperCase() === upperName);
+        if (!existingClient) {
+          this.addClient({
+            name: debtor.client_name.trim(),
+            phone: debtor.phone || '',
+            current_debt: debtor.current_debt || 0,
+            notes: debtor.notes || '',
+          }, m);
+        } else {
+          const updates: Partial<Client> = {};
+          if (debtor.phone && !existingClient.phone) updates.phone = debtor.phone;
+          if (debtor.current_debt !== undefined && debtor.current_debt !== existingClient.current_debt) {
+            updates.current_debt = debtor.current_debt;
+          }
+          if (Object.keys(updates).length > 0) {
+            this.updateClient(existingClient.id, updates, m);
+          }
+        }
+      }
+    } catch {}
+
     return newDebtor;
   },
 
