@@ -123,7 +123,7 @@ export function DebtorsView({
 
   const handleDeleteDebtor = async (debtor: Debtor) => {
     if (confirm(`¿Estás seguro de eliminar al deudor "${debtor.client_name}"?`)) {
-      await StorageService.deleteDebtor(debtor.id, appMode);
+      await StorageService.deleteDebtor(debtor.id, appMode, debtor.client_name);
       onDataChange();
     }
   };

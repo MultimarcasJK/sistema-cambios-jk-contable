@@ -301,11 +301,16 @@ export const SupabaseSyncService = {
     }
   },
 
-  async deleteDebtor(id: string, mode: AppMode): Promise<void> {
+  async deleteDebtor(id: string, mode: AppMode, clientName?: string): Promise<void> {
     if (!isSupabaseConfigured || !supabase) return;
     const table = `${mode}_deudores`;
     try {
-      await supabase.from(table).delete().eq('id', id);
+      if (id) {
+        await supabase.from(table).delete().eq('id', id);
+      }
+      if (clientName && clientName.trim()) {
+        await supabase.from(table).delete().ilike('client_name', clientName.trim());
+      }
     } catch (err) {
       /* warn */
     }

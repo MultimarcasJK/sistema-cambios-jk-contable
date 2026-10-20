@@ -188,6 +188,27 @@ export const StorageService = {
       console.log('[JK] Purga automática de deudores y ventas fantasmas de Mayor ejecutada.');
     }
 
+    // Purga forzada v2 para eliminar a Glendys y deudores huérfanos sin ventas
+    const PURGE_GLENDYS_V2 = 'cambiosjk_purge_glendys_v2';
+    if (!localStorage.getItem(PURGE_GLENDYS_V2)) {
+      const detalTxs = getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey('detal'), []);
+      const activeClients = new Set(detalTxs.map((t) => (t.client_name || '').trim().toUpperCase()));
+      const curDebtors = getFromStorage<Debtor[]>(this.getDebtorsKey('detal'), []);
+      const cleaned = curDebtors.filter((d) => {
+        if (!d) return false;
+        const name = (d.client_name || '').trim().toUpperCase();
+        if (name.includes('GLENDYS') || name.includes('GLENDY')) {
+          markAsDeleted(d.id);
+          markAsDeleted('name:' + name);
+          SupabaseSyncService.deleteDebtor(d.id, 'detal', name).catch(() => {});
+          return false;
+        }
+        return true;
+      });
+      saveToStorage(this.getDebtorsKey('detal'), cleaned);
+      localStorage.setItem(PURGE_GLENDYS_V2, '1');
+    }
+
     // Purga forzada y definitiva de deudores automáticos huérfanos de Detal (ej. GLENDYS sin transacciones)
     const PURGE_DETAL_GHOSTS = 'cambiosjk_purge_detal_ghosts_v1';
     if (!localStorage.getItem(PURGE_DETAL_GHOSTS)) {
@@ -1570,13 +1591,21 @@ export const StorageService = {
     await SupabaseSyncService.deleteDebtPayment(id, m).catch(() => {});
   },
 
-  async deleteDebtor(id: string, mode?: AppMode): Promise<void> {
+  async deleteDebtor(id: string, mode?: AppMode, clientName?: string): Promise<void> {
     markAsDeleted(id);
+    if (clientName) {
+      markAsDeleted('name:' + clientName.trim().toUpperCase());
+    }
     const m = mode || this.getAppMode();
     const rawDebtors = getFromStorage<Debtor[]>(this.getDebtorsKey(m), []);
-    const filtered = rawDebtors.filter((d) => d && d.id !== id);
+    const filtered = rawDebtors.filter((d) => {
+      if (!d) return false;
+      if (id && d.id === id) return false;
+      if (clientName && (d.client_name || '').trim().toUpperCase() === clientName.trim().toUpperCase()) return false;
+      return true;
+    });
     saveToStorage(this.getDebtorsKey(m), filtered);
-    await SupabaseSyncService.deleteDebtor(id, m).catch(() => {});
+    await SupabaseSyncService.deleteDebtor(id, m, clientName).catch(() => {});
   },
 
   resetToDefaults(): void {
