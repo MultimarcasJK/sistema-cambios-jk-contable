@@ -121,6 +121,13 @@ export function DebtorsView({
     }
   };
 
+  const handleDeleteDebtor = async (debtor: Debtor) => {
+    if (confirm(`¿Estás seguro de eliminar al deudor "${debtor.client_name}"?`)) {
+      await StorageService.deleteDebtor(debtor.id, appMode);
+      onDataChange();
+    }
+  };
+
   // Sincronizar monto USD cuando cambia moneda, monto en moneda o tasa
   const handleAmountCurrencyChange = (val: string, rateVal?: string, curr?: Currency) => {
     setPaymentAmountCurrency(val);
@@ -414,6 +421,15 @@ export function DebtorsView({
                     >
                       <ArrowDownLeft className="w-3.5 h-3.5" />
                       <span>Abonar</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDebtor(d)}
+                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition cursor-pointer"
+                      title="Eliminar este deudor"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
