@@ -188,7 +188,7 @@ export function MayorView({
   };
 
   const handleDeleteTx = async (id: string) => {
-    if (confirm('¿Deseas eliminar esta transacción de Monedas Regionales? Si generó deuda o movió saldos, se revertirá automáticamente.')) {
+    if (confirm('¿Deseas eliminar esta transacción de venta? Si generó deuda o movió saldos, se revertirá automáticamente.')) {
       await StorageService.deleteTransactionMayor(id, appMode);
       onDataChange();
     }
@@ -334,7 +334,7 @@ export function MayorView({
           <div className="flex items-center space-x-2">
             <TrendingUp className="w-5 h-5 text-indigo-600" />
             <div>
-              <h2 className="text-base font-bold text-slate-900">Registrar Operación: Monedas Regionales</h2>
+              <h2 className="text-base font-bold text-slate-900">Registrar Venta (Multimoneda)</h2>
               <p className="text-xs text-slate-500">
                 Disponibilidad en cuentas ({selectedCurrency}): <strong className="font-mono text-slate-800">{totalCurrencyAvailable.toLocaleString()} {selectedCurrency}</strong>
               </p>
@@ -749,7 +749,7 @@ export function MayorView({
               </div>
               {isAdmin && (
                 <div>
-                  <span className="text-xs text-slate-500 block">Margen Ganancia Monedas Regionales</span>
+                  <span className="text-xs text-slate-500 block">Ganancia Neta</span>
                   <span
                     className={`text-lg font-black font-mono ${
                       calculations.profitUsd >= 0 ? 'text-indigo-600' : 'text-rose-600'
@@ -766,7 +766,7 @@ export function MayorView({
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow-sm transition flex items-center space-x-2 ml-auto cursor-pointer"
             >
               <CheckCircle className="w-4 h-4" />
-              <span>GUARDAR MONEDAS REGIONALES</span>
+              <span>GUARDAR VENTA</span>
             </button>
           </div>
         </form>
@@ -776,7 +776,7 @@ export function MayorView({
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-base font-bold text-slate-900">Historial de Operaciones: Monedas Regionales</h3>
+            <h3 className="text-base font-bold text-slate-900">Historial de Ventas</h3>
             <p className="text-xs text-slate-500">
               {filteredTxs.length} transacciones • Volumen: Bs.{' '}
               {totalVolumeVes.toLocaleString('es-VE')}

@@ -43,8 +43,8 @@ export function Navigation({ activeTab, onSelectTab, appMode = 'detal' }: NavPro
 
   const allTabs = [
     { key: 'dashboard' as TabKey, label: 'Panel', icon: LayoutDashboard },
+    { key: 'mayor' as TabKey, label: 'Ventas', icon: TrendingUp },
     { key: 'detal' as TabKey, label: 'Cripto/Dolar', icon: Coins },
-    { key: 'mayor' as TabKey, label: 'Monedas Regionales', icon: TrendingUp },
     { key: 'suppliers' as TabKey, label: 'Proveedores', icon: Truck },
     { key: 'transfers' as TabKey, label: 'Cambio Saldos', icon: ArrowLeftRight },
     { key: 'expenses' as TabKey, label: 'Ingresos/Gastos', icon: Receipt },
@@ -57,12 +57,6 @@ export function Navigation({ activeTab, onSelectTab, appMode = 'detal' }: NavPro
 
   const tabs = allTabs.filter((t) => {
     if (t.adminOnly && !isAdmin) return false;
-    if (modoPermitido === 'detal' && t.key === 'mayor') return false;
-    if (modoPermitido === 'mayor' && t.key === 'detal') return false;
-    if (modoPermitido === 'ambos') {
-      if (appMode === 'detal' && t.key === 'mayor') return false;
-      if (appMode === 'mayor' && t.key === 'detal') return false;
-    }
     return true;
   });
 

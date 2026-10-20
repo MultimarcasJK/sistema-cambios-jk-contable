@@ -97,11 +97,8 @@ export default function Home() {
       if (appMode !== allowed) {
         handleModeChange(allowed);
       }
-      if ((allowed === 'detal' && activeTab === 'mayor') || (allowed === 'mayor' && activeTab === 'detal')) {
-        setActiveTab('dashboard');
-      }
     }
-  }, [profile?.modo_permitido, appMode, activeTab, handleModeChange]);
+  }, [profile?.modo_permitido, appMode, handleModeChange]);
 
   const handleSyncRates = async () => {
     setIsSyncingRates(true);
