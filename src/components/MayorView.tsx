@@ -124,12 +124,26 @@ export function MayorView({
     let totalToPay = 0;
     let costUsd = 0;
 
-    if (sell > 10) {
+    const isUsdtOrDollar =
+      selectedCurrency === 'USDT' ||
+      selectedCurrency === 'USD' ||
+      RatesService.isCajaDolar({ codigo: selectedCurrency, pais: selectedCurrency });
+
+    if (isUsdtOrDollar) {
+      // Para USDT / Cripto / Caja Dólar: la tasa es el valor de cambio sobre $1 USD (ej: 0.995)
+      // Total a cobrar ($ USD) = Cantidad USDT / Tasa Venta
+      // Costo de compra ($ USD) = Cantidad USDT / Tasa Compra
       totalToPay = ves / sell;
       costUsd = buy > 0 ? ves / buy : totalToPay;
-    } else {
+    } else if (selectedCurrency === 'EUR') {
+      // Para Euro (divisa base mayor al dólar): 1 EUR = X USD (ej. 100 EUR * 1.14 = 114 USD)
       totalToPay = ves * sell;
       costUsd = buy > 0 ? ves * buy : totalToPay;
+    } else {
+      // Para monedas locales (VES, COP, CLP, ARS, PEN, BRL, etc.):
+      // La tasa indica cuántas unidades locales equivalen a 1 USD, por tanto se DIVIDE
+      totalToPay = ves / sell;
+      costUsd = buy > 0 ? ves / buy : totalToPay;
     }
 
     const pct = parseFloat(feePercent) || 0;
@@ -145,7 +159,7 @@ export function MayorView({
       effectiveFee: Number(effectiveFee.toFixed(4)),
       profitUsd: Math.abs(profitUsd) > 0 ? profitUsd : 0,
     };
-  }, [formData.amount_ves, formData.buy_price, formData.sell_price, formData.commission, feeMode, feePercent]);
+  }, [formData.amount_ves, formData.buy_price, formData.sell_price, formData.commission, feeMode, feePercent, selectedCurrency]);
 
   const handleSetFullPayment = () => {
     if (formData.received_account_id === 'POR_COBRAR') {
