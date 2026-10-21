@@ -619,8 +619,8 @@ export function AccountStatementModal({
                   {currentAccount.currency}
                 </span>
 
-                <span className="text-xs text-slate-400 print:text-slate-600">
-                  Tipo: <strong className="text-slate-200 print:text-black uppercase">{currentAccount.type}</strong>
+                <span className="text-xs text-slate-200 print:text-slate-600">
+                  Tipo: <strong className="text-white print:text-black uppercase font-bold">{currentAccount.type}</strong>
                 </span>
               </div>
 
@@ -637,7 +637,7 @@ export function AccountStatementModal({
                       const found = allAccounts.find((a) => a.id === e.target.value);
                       if (found) onSelectAccount(found);
                     }}
-                    className="text-xs bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-2.5 py-1 hover:border-slate-500 focus:outline-none cursor-pointer print:hidden"
+                    className="text-xs bg-slate-800 border border-slate-600 text-white font-semibold rounded-lg px-2.5 py-1 hover:border-slate-400 focus:outline-none cursor-pointer print:hidden"
                     title="Cambiar de cuenta bancaria"
                   >
                     {allAccounts.map((a) => (
@@ -649,9 +649,9 @@ export function AccountStatementModal({
                 )}
               </div>
 
-              <p className="text-xs text-slate-400 print:text-slate-600 mt-0.5">
-                Banco / Plataforma: <span className="text-slate-200 print:text-black font-medium">{currentAccount.bank_name}</span> • 
-                Responsable: <span className="text-blue-300 print:text-black font-semibold">{currentAccount.responsible}</span>
+              <p className="text-xs text-slate-300 print:text-slate-600 mt-0.5">
+                Banco / Plataforma: <span className="text-white print:text-black font-semibold">{currentAccount.bank_name}</span> • 
+                Responsable: <span className="text-blue-300 print:text-black font-bold">{currentAccount.responsible}</span>
               </p>
             </div>
           </div>
@@ -965,13 +965,13 @@ export function AccountStatementModal({
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-900 text-white font-bold tracking-wider text-[11px] uppercase print:bg-slate-100 print:text-black">
-                    <th className="py-3 px-3.5">Fecha / Hora</th>
-                    <th className="py-3 px-3">Operación</th>
-                    <th className="py-3 px-3">Descripción / Tercero</th>
-                    <th className="py-3 px-3">Referencia</th>
-                    <th className="py-3 px-3 text-right text-emerald-400 print:text-emerald-800">Entradas (+)</th>
-                    <th className="py-3 px-3 text-right text-rose-400 print:text-rose-800">Salidas (-)</th>
-                    <th className="py-3 px-4 text-right text-blue-300 print:text-black">Saldo Resultante</th>
+                    <th className="py-3 px-3.5 !text-white font-bold">Fecha / Hora</th>
+                    <th className="py-3 px-3 !text-white font-bold">Operación</th>
+                    <th className="py-3 px-3 !text-white font-bold">Descripción / Tercero</th>
+                    <th className="py-3 px-3 !text-white font-bold">Referencia</th>
+                    <th className="py-3 px-3 text-right !text-emerald-300 font-bold print:!text-emerald-800">Entradas (+)</th>
+                    <th className="py-3 px-3 text-right !text-rose-300 font-bold print:!text-rose-800">Salidas (-)</th>
+                    <th className="py-3 px-4 text-right !text-blue-200 font-bold print:!text-black">Saldo Resultante</th>
                   </tr>
                 </thead>
 
@@ -1125,7 +1125,7 @@ export function AccountStatementModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition ml-auto cursor-pointer"
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition ml-auto cursor-pointer shadow-sm hover:shadow"
           >
             Cerrar Estado de Cuenta
           </button>

@@ -59,13 +59,19 @@ body {
 [data-theme="detal"] .text-slate-400 {
   color: #334155 !important;
 }
-/* La barra superior (header) siempre tiene fondo oscuro, mantener textos legibles */
+/* La barra superior y contenedores con fondo oscuro/negro siempre deben mantener textos claros y legibles */
 [data-theme="detal"] header .text-slate-400,
-[data-theme="detal"] header [class*="text-slate-400"] {
-  color: #94a3b8 !important;
+[data-theme="detal"] header [class*="text-slate-400"],
+[data-theme="detal"] .bg-slate-900 .text-slate-400,
+[data-theme="detal"] .bg-slate-900 [class*="text-slate-400"],
+[data-theme="detal"] [class*="bg-slate-900"] .text-slate-400,
+[data-theme="detal"] [class*="bg-slate-900"] [class*="text-slate-400"] {
+  color: #cbd5e1 !important;
 }
-[data-theme="detal"] header label {
-  color: #94a3b8 !important;
+[data-theme="detal"] header label,
+[data-theme="detal"] .bg-slate-900 label,
+[data-theme="detal"] [class*="bg-slate-900"] label {
+  color: #f1f5f9 !important;
 }
 [data-theme="detal"] label {
   color: #000000 !important;
@@ -74,6 +80,29 @@ body {
 [data-theme="detal"] table thead th {
   color: #000000 !important;
   font-weight: 700;
+}
+/* En tablas con fondo oscuro en el thead, las letras deben ser BLANCAS y nunca negras */
+[data-theme="detal"] table thead.bg-slate-900 th,
+[data-theme="detal"] table thead tr.bg-slate-900 th,
+[data-theme="detal"] table thead [class*="bg-slate-900"] th,
+[data-theme="detal"] table thead [class*="bg-slate-800"] th,
+[data-theme="detal"] .bg-slate-900 table thead th {
+  color: #ffffff !important;
+}
+[data-theme="detal"] table thead th.text-emerald-400,
+[data-theme="detal"] table thead th.text-emerald-300,
+[data-theme="detal"] table thead th[class*="text-emerald"] {
+  color: #6ee7b7 !important;
+}
+[data-theme="detal"] table thead th.text-rose-400,
+[data-theme="detal"] table thead th.text-rose-300,
+[data-theme="detal"] table thead th[class*="text-rose"] {
+  color: #fca5a5 !important;
+}
+[data-theme="detal"] table thead th.text-blue-300,
+[data-theme="detal"] table thead th.text-blue-200,
+[data-theme="detal"] table thead th[class*="text-blue"] {
+  color: #bfdbfe !important;
 }
 [data-theme="detal"] table tbody td {
   color: #0f172a !important;
