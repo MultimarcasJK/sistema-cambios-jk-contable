@@ -13,7 +13,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
-import { Account, AppMode, Beneficiario, Remesa, RemesaEstado, RemesaMetodoPago, Supplier } from '@/types';
+import { Account, AppMode, Beneficiario, Client, Remesa, RemesaEstado, RemesaMetodoPago, Supplier } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { RatesService } from '@/lib/rates-service';
 import { COUNTRIES_LIST } from '@/lib/countries';
@@ -24,6 +24,7 @@ interface RemesasProps {
   appMode: AppMode;
   accounts: Account[];
   suppliers: Supplier[];
+  clients: Client[];
   dataVersion: unknown;
   onDataChange: () => void;
 }
@@ -81,7 +82,7 @@ const emptyForm = {
   notes: '',
 };
 
-export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataChange }: RemesasProps) {
+export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion, onDataChange }: RemesasProps) {
   const { isAdmin } = useAuth();
   const [form, setForm] = useState(emptyForm);
   const [filtro, setFiltro] = useState<'pendientes' | 'pagadas' | 'anuladas' | 'todas'>('pendientes');
@@ -114,6 +115,18 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
   const monedaOrigen = cuentaCobro?.currency || 'USD';
   const pais = PAISES.find((p) => p.id === form.pais_pago);
   const remitenteSel = remitentes.find((r) => r.name.trim().toUpperCase() === form.remitente_name.trim().toUpperCase());
+  const clienteSel = clients.find(
+    (c) => (c.name || '').trim().toUpperCase() === form.remitente_name.trim().toUpperCase(),
+  );
+  // Clientes del módulo Clientes + remitentes que ya enviaron, sin repetir
+  const nombresRemitente = useMemo(() => {
+    const set = new Map<string, string>();
+    [...clients.map((c) => c.name), ...remitentes.map((r) => r.name)].forEach((n) => {
+      const k = (n || '').trim().toUpperCase();
+      if (k && !set.has(k)) set.set(k, (n || '').trim());
+    });
+    return Array.from(set.values()).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  }, [clients, remitentes]);
   const beneficiariosPais = (remitenteSel?.beneficiarios || []).filter((b) => b.country === form.pais_pago);
 
   // Cálculos de la remesa
@@ -163,12 +176,15 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
   };
 
   const handleRemitente = (name: string) => {
-    const r = remitentes.find((x) => x.name.trim().toUpperCase() === name.trim().toUpperCase());
+    const k = name.trim().toUpperCase();
+    const r = remitentes.find((x) => x.name.trim().toUpperCase() === k);
+    const c = clients.find((x) => (x.name || '').trim().toUpperCase() === k);
+    const known = !!(r || c);
     setForm((f) => ({
       ...f,
       remitente_name: name,
-      remitente_identification: r ? r.identification || '' : f.remitente_identification,
-      remitente_phone: r ? r.phone || '' : f.remitente_phone,
+      remitente_identification: known ? r?.identification || c?.identification || '' : f.remitente_identification,
+      remitente_phone: known ? r?.phone || c?.phone || '' : f.remitente_phone,
       beneficiario_id: '',
     }));
   };
@@ -251,6 +267,21 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
         phone: form.ben_phone.trim(),
         country: form.pais_pago,
       };
+      // El remitente también queda (o se completa) en el módulo Clientes, sin duplicar
+      const docRem = form.remitente_identification.trim();
+      const telRem = form.remitente_phone.trim();
+      if (!clienteSel) {
+        StorageService.addClient(
+          { name: form.remitente_name.trim().toUpperCase(), identification: docRem, phone: telRem },
+          appMode,
+        );
+      } else if ((!clienteSel.identification && docRem) || (!clienteSel.phone && telRem)) {
+        StorageService.updateClient(
+          clienteSel.id,
+          { identification: clienteSel.identification || docRem, phone: clienteSel.phone || telRem },
+          appMode,
+        );
+      }
       const { remitente, beneficiario } = StorageService.saveRemitente(
         {
           id: remitenteSel?.id,
@@ -506,12 +537,12 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
                   value={form.remitente_name}
                   onChange={(e) => handleRemitente(e.target.value)}
                   className={input}
-                  placeholder="Nombre del cliente"
+                  placeholder="Escribe o elige un cliente"
                   required
                 />
                 <datalist id="remitentes-list">
-                  {remitentes.map((r) => (
-                    <option key={r.id} value={r.name} />
+                  {nombresRemitente.map((n) => (
+                    <option key={n} value={n} />
                   ))}
                 </datalist>
               </div>
