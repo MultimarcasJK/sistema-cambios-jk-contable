@@ -424,16 +424,6 @@ export const StorageService = {
           }
         });
 
-        // Preservar clientes creados localmente aún no sincronizados
-        const remoteIds = new Set(validRemote.map((c) => c.id));
-        const localPending = local.filter(
-          (c) => c && !remoteIds.has(c.id) && !uniqueMap.has((c.name || '').trim().toUpperCase()) && !isDeleted(c.id)
-        );
-        localPending.forEach((c) => {
-          SupabaseSyncService.upsertClient(c, m).catch(() => {});
-          uniqueMap.set(c.name.trim().toUpperCase(), c);
-        });
-
         const sorted = Array.from(uniqueMap.values()).sort((a, b) =>
           a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
         );
@@ -545,29 +535,14 @@ export const StorageService = {
       }
       if (remoteDebtors !== null) {
         const validRemote = remoteDebtors.filter((d) => !isDeleted(d.id));
-        const local = this.getDebtors(m);
-        const remoteIds = new Set(validRemote.map((d) => d.id));
-        const localPending = local.filter((d) => d && !remoteIds.has(d.id) && !isDeleted(d.id));
-        localPending.forEach((d) => {
-          SupabaseSyncService.upsertDebtor(d, m).catch(() => {});
-        });
-        saveToStorage(this.getDebtorsKey(m), [...validRemote, ...localPending]);
+        const sorted = validRemote.sort((a, b) =>
+          (a.client_name || '').localeCompare(b.client_name || '', 'es', { sensitivity: 'base' })
+        );
+        saveToStorage(this.getDebtorsKey(m), sorted);
       }
       if (remoteDebtPayments !== null) {
-        const validRemote = remoteDebtPayments.filter((p) => {
-          if (isDeleted(p.id)) {
-            SupabaseSyncService.deleteDebtPayment(p.id, m).catch(() => {});
-            return false;
-          }
-          return true;
-        });
-        const local = this.getDebtPayments(m);
-        const remoteIds = new Set(validRemote.map((p) => p.id));
-        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id));
-        localPending.forEach((p) => {
-          SupabaseSyncService.upsertDebtPayment(p, m).catch(() => {});
-        });
-        saveToStorage(this.getDebtPaymentsKey(m), [...validRemote, ...localPending]);
+        const validRemote = remoteDebtPayments.filter((p) => !isDeleted(p.id));
+        saveToStorage(this.getDebtPaymentsKey(m), validRemote);
       }
       if (remotePurchases !== null) {
         const validRemote = remotePurchases.filter((p) => {
