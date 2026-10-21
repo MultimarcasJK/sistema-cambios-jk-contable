@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { Navigation, TabKey } from '@/components/Navigation';
 import { DashboardView } from '@/components/DashboardView';
@@ -14,6 +14,7 @@ import { ClosuresView } from '@/components/ClosuresView';
 import { ClientsView } from '@/components/ClientsView';
 import { DebtorsView } from '@/components/DebtorsView';
 import { PayrollServicesView } from '@/components/PayrollServicesView';
+import { ContabilidadView } from '@/components/ContabilidadView';
 import { StorageService } from '@/lib/storage';
 import { CLIENTES_EXCEL_DETAL } from '@/lib/clientes-excel-detal';
 import { INITIAL_ACCOUNTS_MAYOR } from '@/lib/initial-data';
@@ -57,6 +58,11 @@ export default function Home() {
   const [payrollPayments, setPayrollPayments] = useState<PayrollPayment[]>([]);
   const [serviceExpenses, setServiceExpenses] = useState<ServiceExpense[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  // Cambia cada vez que se recargan las operaciones: el libro contable se recalcula con esto
+  const dataVersion = useMemo(
+    () => ({}),
+    [accounts, detalTxs, mayorTxs, transfers, expenses, closures, debtors, suppliers, payrollPayments, serviceExpenses]
+  );
 
   const refreshData = useCallback((modeOverride?: AppMode) => {
     const currentMode = modeOverride || StorageService.getAppMode();
@@ -402,6 +408,15 @@ export default function Home() {
               debtors={debtors}
               onDataChange={refreshData}
               appMode={appMode}
+            />
+          )}
+
+          {activeTab === 'ledger' && (
+            <ContabilidadView
+              appMode={appMode}
+              accounts={accounts}
+              dataVersion={dataVersion}
+              onDataChange={refreshData}
             />
           )}
 

@@ -13,6 +13,7 @@ import {
   Users,
   UserCheck,
   Briefcase,
+  BookOpen,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth-context';
@@ -28,7 +29,8 @@ export type TabKey =
   | 'accounts'
   | 'closures'
   | 'clients'
-  | 'debtors';
+  | 'debtors'
+  | 'ledger';
 
 interface NavProps {
   activeTab: TabKey;
@@ -50,6 +52,7 @@ export function Navigation({ activeTab, onSelectTab, appMode = 'detal' }: NavPro
     { key: 'payroll' as TabKey, label: 'Nómina y Servicios', icon: Briefcase },
     { key: 'accounts' as TabKey, label: 'Cuentas', icon: Wallet },
     { key: 'closures' as TabKey, label: 'Cierre', icon: CalendarCheck2, adminOnly: true },
+    { key: 'ledger' as TabKey, label: 'Contabilidad', icon: BookOpen, adminOnly: true },
     { key: 'clients' as TabKey, label: 'Clientes', icon: UserCheck },
     { key: 'debtors' as TabKey, label: 'Deudores', icon: Users },
   ];

@@ -55,7 +55,8 @@ export interface StatementMovement {
     | 'INCOME'
     | 'SUPPLIER_BUY'
     | 'SUPPLIER_PAY'
-    | 'DEBT_PAY';
+    | 'DEBT_PAY'
+    | 'ADJUSTMENT';
   categoryLabel: string;
   description: string;
   thirdParty: string;
@@ -389,6 +390,34 @@ export function AccountStatementModal({
           });
         }
       }
+    });
+
+    // H. Ajustes de saldo con motivo (libro contable)
+    const adjustments = [
+      ...StorageService.getAdjustments('detal'),
+      ...StorageService.getAdjustments('mayor'),
+    ];
+    adjustments.forEach((adj) => {
+      if (adj.account_id !== accId || !adj.delta) return;
+      const isUp = adj.delta > 0;
+      items.push({
+        id: `adj-${adj.id}`,
+        date: adj.date || (adj.created_at ? adj.created_at.slice(0, 10) : ''),
+        time: adj.created_at ? adj.created_at.slice(11, 16) : '',
+        sortKey: `${adj.date || ''} ${adj.created_at ? adj.created_at.slice(11, 16) : '00:00'} ${
+          adj.created_at || ''
+        } 3`,
+        type: isUp ? 'INGRESO' : 'EGRESO',
+        categoryKey: 'ADJUSTMENT',
+        categoryLabel: 'Ajuste de Saldo',
+        description: `Ajuste: ${adj.reason}`,
+        thirdParty: adj.user_email ? `Usuario: ${adj.user_email}` : 'Ajuste interno',
+        reference: adj.kind === 'reconciliacion' ? 'Diferencia reconocida' : 'Ajuste manual',
+        inflow: isUp ? adj.delta : 0,
+        outflow: isUp ? 0 : -adj.delta,
+        netAmount: adj.delta,
+        balanceAfter: 0,
+      });
     });
 
     // 2. Ordenar cronológicamente ascendente (desde el más antiguo al más reciente)
@@ -928,6 +957,7 @@ export function AccountStatementModal({
                   <option value="SUPPLIER_BUY">Compras a Proveedores</option>
                   <option value="SUPPLIER_PAY">Pagos a Proveedores</option>
                   <option value="DEBT_PAY">Abonos de Deudores</option>
+                  <option value="ADJUSTMENT">Ajustes de Saldo</option>
                 </select>
 
                 {/* Orden de visualización */}
