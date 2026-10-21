@@ -320,3 +320,43 @@ export interface ServiceExpense {
 }
 
 
+
+// ─── Contabilidad: ajustes de saldo y bitácora de auditoría ───
+
+export interface BalanceAdjustment {
+  id: string;
+  date: string;
+  account_id: string;
+  account_name: string;
+  currency: Currency;
+  previous_balance: number;
+  new_balance: number;
+  delta: number; // new_balance - previous_balance (o la diferencia reconocida)
+  reason: string;
+  kind: 'manual' | 'reconciliacion';
+  user_email?: string;
+  created_at: string;
+}
+
+export type AuditAction =
+  | 'crear'
+  | 'eliminar'
+  | 'editar'
+  | 'ajuste_saldo'
+  | 'cierre'
+  | 'reapertura'
+  | 'bloqueado';
+
+export interface AuditEntry {
+  id: string;
+  ts: string;
+  mode: AppMode;
+  user_id?: string;
+  user_email?: string;
+  action: AuditAction;
+  entity: string;
+  entity_id: string;
+  summary: string;
+  reason?: string;
+  data?: unknown;
+}

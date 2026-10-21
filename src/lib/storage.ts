@@ -17,6 +17,7 @@ import {
   PayrollPayment,
   ServiceExpense,
   AppMode,
+  BalanceAdjustment,
 } from '@/types';
 import {
   INITIAL_ACCOUNTS,
@@ -31,6 +32,9 @@ import {
   INITIAL_SUPPLIERS_MAYOR,
 } from './initial-data';
 import { SupabaseSyncService } from './supabase-sync';
+import { AuditService } from './audit';
+import { isActorAdmin, getActor } from './actor';
+import type { LedgerSources } from './ledger';
 
 let activeAppMode: AppMode = 'detal';
 
@@ -173,6 +177,48 @@ export const StorageService = {
     const m = mode || this.getAppMode();
     return 'cambiosjk_' + m + '_service_expenses_v1';
   },
+  getAdjustmentsKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_ajustes_saldo_v1';
+  },
+
+  // ── Candado de días cerrados ──
+  // Un día queda bloqueado cuando tiene cierre o cuando hay un cierre en una fecha posterior.
+  getLockedThrough(mode?: AppMode): string | null {
+    const m = mode || this.getAppMode();
+    const dates = this.getClosures(m)
+      .map((c) => c.date)
+      .filter(Boolean)
+      .sort();
+    return dates.length > 0 ? dates[dates.length - 1] : null;
+  },
+
+  isDayLocked(date: string | undefined, mode?: AppMode): boolean {
+    if (!date) return false;
+    const lockedThrough = this.getLockedThrough(mode);
+    return lockedThrough !== null && date.slice(0, 10) <= lockedThrough;
+  },
+
+  // Lanza un error (y avisa en pantalla) si se intenta mover dinero en un día cerrado
+  assertDayOpen(date: string | undefined, mode: AppMode, what: string): void {
+    if (!this.isDayLocked(date, mode)) return;
+    const lockedThrough = this.getLockedThrough(mode);
+    const msg =
+      `El día ${date} ya está cerrado (hay cierre hasta el ${lockedThrough}).\n\n` +
+      `No se puede ${what} en un día cerrado. Regístralo con fecha de hoy, ` +
+      `o pide a un ADMIN que reabra el día desde "Cierre".`;
+    AuditService.log({
+      mode,
+      action: 'bloqueado',
+      entity: 'dia_cerrado',
+      entityId: date || '',
+      summary: `Intento de ${what} con fecha ${date} (día cerrado)`,
+    });
+    if (typeof window !== 'undefined') window.alert(msg);
+    const err = new Error(msg);
+    err.name = 'DiaCerradoError';
+    throw err;
+  },
 
   // Migración automática de datos antiguos para separar César a Detal y María a Mayor
   migrateOldDataIfNeeded(): void {
@@ -313,6 +359,22 @@ export const StorageService = {
   async syncFromSupabase(mode?: AppMode): Promise<void> {
     const m = mode || this.getAppMode();
     try {
+      const [remoteAdjustments, remoteAudit] = await Promise.all([
+        SupabaseSyncService.fetchAdjustments(m),
+        SupabaseSyncService.fetchAuditEntries(m),
+      ]);
+      if (remoteAdjustments !== null) {
+        const local = this.getAdjustments(m);
+        const remoteIds = new Set(remoteAdjustments.map((a) => a.id));
+        const localPending = local.filter((a) => a && !remoteIds.has(a.id));
+        localPending.forEach((a) => {
+          SupabaseSyncService.upsertAdjustment(a, m).catch(() => {});
+        });
+        saveToStorage(this.getAdjustmentsKey(m), [...remoteAdjustments, ...localPending]);
+      }
+      if (remoteAudit !== null) {
+        AuditService.mergeRemote(m, remoteAudit);
+      }
       const [
         remoteAccs,
         remoteClients,
@@ -690,6 +752,14 @@ export const StorageService = {
       updated = [...accounts, account];
     }
     this.saveAccounts(updated, m);
+    AuditService.log({
+      mode: m,
+      action: existingIndex >= 0 ? 'editar' : 'crear',
+      entity: 'cuenta',
+      entityId: account.id,
+      summary: `${existingIndex >= 0 ? 'Actualizada' : 'Creada'} cuenta ${account.name} (${account.currency}) con saldo ${account.current_balance}`,
+      data: account,
+    });
     SupabaseSyncService.upsertAccount(account, m).catch((err) => {
       console.error(`[SupabaseSync] Error al subir cuenta ${account.name} a Supabase:`, err);
     });
@@ -700,14 +770,40 @@ export const StorageService = {
     const m = mode || this.getAppMode();
     const accounts = this.getAccounts(m);
     let updatedAcc: Account | null = null;
+    let previous: Account | null = null;
     const updated = accounts.map((acc) => {
       if (acc.id === accountId) {
+        previous = acc;
         updatedAcc = { ...acc, ...updates };
         return updatedAcc;
       }
       return acc;
     });
     this.saveAccounts(updated, m);
+    const prev = previous as Account | null;
+    const next = updatedAcc as Account | null;
+    if (prev && next) {
+      const balanceChanged =
+        Math.abs((Number(prev.current_balance) || 0) - (Number(next.current_balance) || 0)) > 0.00005 ||
+        Math.abs((Number(prev.initial_balance) || 0) - (Number(next.initial_balance) || 0)) > 0.00005;
+      // Solo se registran en bitácora los cambios de dinero o de datos clave (no el orden en pantalla)
+      const keys = Object.keys(updates).filter((k) => k !== 'order_index');
+      if (balanceChanged || keys.length > 0) {
+        AuditService.log({
+          mode: m,
+          action: 'editar',
+          entity: 'cuenta',
+          entityId: accountId,
+          summary: balanceChanged
+            ? `Saldo de ${next.name} cambiado de ${prev.current_balance} a ${next.current_balance}` +
+              (prev.initial_balance !== next.initial_balance
+                ? ` (saldo inicial ${prev.initial_balance ?? 0} → ${next.initial_balance ?? 0})`
+                : '')
+            : `Datos de la cuenta ${next.name} actualizados`,
+          data: { antes: prev, despues: next },
+        });
+      }
+    }
     if (updatedAcc) {
       SupabaseSyncService.upsertAccount(updatedAcc, m).catch(() => {});
     }
@@ -717,6 +813,17 @@ export const StorageService = {
     markAsDeleted(accountId);
     const m = mode || this.getAppMode();
     const accounts = this.getAccounts(m);
+    const removed = accounts.find((acc) => acc.id === accountId);
+    if (removed) {
+      AuditService.log({
+        mode: m,
+        action: 'eliminar',
+        entity: 'cuenta',
+        entityId: accountId,
+        summary: `Eliminada cuenta ${removed.name} con saldo ${removed.current_balance} ${removed.currency}`,
+        data: removed,
+      });
+    }
     const updated = accounts.filter((acc) => acc.id !== accountId);
     this.saveAccounts(updated, m);
     await SupabaseSyncService.deleteAccount(accountId, m).catch(() => {});
@@ -740,6 +847,118 @@ export const StorageService = {
     if (updatedAcc) {
       SupabaseSyncService.upsertAccount(updatedAcc, m).catch(() => {});
     }
+  },
+
+  // ── Ajustes de saldo con motivo ──
+  getAdjustments(mode?: AppMode): BalanceAdjustment[] {
+    const m = mode || this.getAppMode();
+    return getFromStorage<BalanceAdjustment[]>(this.getAdjustmentsKey(m), []);
+  },
+
+  saveAdjustment(adj: BalanceAdjustment, mode: AppMode): BalanceAdjustment {
+    const all = this.getAdjustments(mode);
+    all.unshift(adj);
+    saveToStorage(this.getAdjustmentsKey(mode), all);
+    SupabaseSyncService.upsertAdjustment(adj, mode).catch(() => {});
+    AuditService.log({
+      mode,
+      action: 'ajuste_saldo',
+      entity: 'cuenta',
+      entityId: adj.account_id,
+      summary:
+        adj.kind === 'manual'
+          ? `Ajuste de saldo ${adj.account_name}: ${adj.previous_balance} → ${adj.new_balance} ${adj.currency}`
+          : `Diferencia reconocida en ${adj.account_name}: ${adj.delta > 0 ? '+' : ''}${adj.delta} ${adj.currency}`,
+      reason: adj.reason,
+      data: adj,
+    });
+    return adj;
+  },
+
+  // Cambia el saldo de una cuenta dejando un ajuste con motivo (reemplaza la edición directa del número)
+  adjustAccountBalance(accountId: string, newBalance: number, reason: string, mode?: AppMode): BalanceAdjustment | null {
+    const m = mode || this.getAppMode();
+    const acc = this.getAccounts(m).find((a) => a.id === accountId);
+    if (!acc) return null;
+    const delta = Number((newBalance - (acc.current_balance || 0)).toFixed(4));
+    if (Math.abs(delta) < 0.00005) return null;
+    const motivo = (reason || '').trim();
+    if (!motivo) throw new Error('El ajuste de saldo necesita un motivo.');
+    const today = new Date().toISOString().slice(0, 10);
+    this.assertDayOpen(today, m, 'ajustar un saldo');
+    const adj: BalanceAdjustment = {
+      id: 'adj-' + Date.now(),
+      date: today,
+      account_id: acc.id,
+      account_name: acc.name,
+      currency: acc.currency,
+      previous_balance: Number((acc.current_balance || 0).toFixed(4)),
+      new_balance: Number(newBalance.toFixed(4)),
+      delta,
+      reason: motivo,
+      kind: 'manual',
+      user_email: getActor()?.email,
+      created_at: new Date().toISOString(),
+    };
+    this.saveAdjustment(adj, m);
+    this.updateAccountBalance(acc.id, delta, m);
+    return adj;
+  },
+
+  // Reconoce en el libro una diferencia que ya existe en el saldo (no cambia el saldo)
+  recognizeDifference(accountId: string, difference: number, reason: string, mode?: AppMode): BalanceAdjustment | null {
+    const m = mode || this.getAppMode();
+    if (!isActorAdmin()) throw new Error('Solo un ADMIN puede reconocer diferencias de saldo.');
+    const acc = this.getAccounts(m).find((a) => a.id === accountId);
+    if (!acc || Math.abs(difference) < 0.00005) return null;
+    const motivo = (reason || '').trim();
+    if (!motivo) throw new Error('Hace falta un motivo.');
+    const today = new Date().toISOString().slice(0, 10);
+    this.assertDayOpen(today, m, 'reconocer una diferencia de saldo');
+    const adj: BalanceAdjustment = {
+      id: 'adj-' + Date.now(),
+      date: today,
+      account_id: acc.id,
+      account_name: acc.name,
+      currency: acc.currency,
+      previous_balance: Number(((acc.current_balance || 0) - difference).toFixed(4)),
+      new_balance: Number((acc.current_balance || 0).toFixed(4)),
+      delta: Number(difference.toFixed(4)),
+      reason: motivo,
+      kind: 'reconciliacion',
+      user_email: getActor()?.email,
+      created_at: new Date().toISOString(),
+    };
+    return this.saveAdjustment(adj, m);
+  },
+
+  // Datos de ambas unidades (detal y mayor) para armar el libro contable
+  getLedgerSources(): LedgerSources {
+    const modes: AppMode[] = ['detal', 'mayor'];
+    const accounts: Account[] = [];
+    const seen = new Set<string>();
+    modes.forEach((mm) =>
+      this.getAccounts(mm).forEach((a) => {
+        if (a && a.id && !seen.has(a.id)) {
+          seen.add(a.id);
+          accounts.push({ ...a, scope: a.scope || mm });
+        }
+      })
+    );
+    const byMode = {} as LedgerSources['byMode'];
+    modes.forEach((mm) => {
+      byMode[mm] = {
+        detalTxs: getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(mm), []).filter(Boolean),
+        mayorTxs: getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(mm), []).filter(Boolean),
+        transfers: this.getTransfers(mm).filter(Boolean),
+        expenses: this.getExpenses(mm).filter(Boolean),
+        purchases: this.getSupplierPurchases(mm).filter(Boolean),
+        supplierPayments: this.getSupplierPayments(mm).filter(Boolean),
+        debtPayments: this.getDebtPayments(mm).filter(Boolean),
+        adjustments: this.getAdjustments(mm).filter(Boolean),
+      };
+    });
+    return { accounts, byMode };
   },
 
   // Clients
@@ -912,6 +1131,7 @@ export const StorageService = {
 
   addSupplierPurchase(purchase: Omit<SupplierPurchase, 'id' | 'created_at'>, mode?: AppMode): SupplierPurchase {
     const m = mode || this.getAppMode();
+    this.assertDayOpen(purchase.date, m, 'registrar una compra a proveedor');
     const all = this.getSupplierPurchases(m);
     const newPurchase: SupplierPurchase = {
       ...purchase,
@@ -930,6 +1150,14 @@ export const StorageService = {
     }
 
     SupabaseSyncService.upsertSupplierPurchase(newPurchase, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'crear',
+      entity: 'compra_proveedor',
+      entityId: newPurchase.id,
+      summary: `Compra a ${newPurchase.supplier_name}: ${newPurchase.quantity} ${newPurchase.currency} por ${newPurchase.cost_usd} USD`,
+      data: newPurchase,
+    });
     return newPurchase;
   },
 
@@ -940,6 +1168,7 @@ export const StorageService = {
 
   addSupplierPayment(payment: Omit<SupplierPayment, 'id' | 'created_at'>, mode?: AppMode): SupplierPayment {
     const m = mode || this.getAppMode();
+    this.assertDayOpen(payment.date, m, 'registrar un pago a proveedor');
     const all = this.getSupplierPayments(m);
     const newPayment: SupplierPayment = {
       ...payment,
@@ -957,14 +1186,33 @@ export const StorageService = {
     }
 
     SupabaseSyncService.upsertSupplierPayment(newPayment, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'crear',
+      entity: 'pago_proveedor',
+      entityId: newPayment.id,
+      summary: `Pago a proveedor ${newPayment.supplier_name}: ${newPayment.amount_usd}`,
+      data: newPayment,
+    });
     return newPayment;
   },
 
   async deleteSupplierPurchase(id: string, mode?: AppMode): Promise<void> {
-    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getSupplierPurchases(m);
     const purchase = all.find((p) => p.id === id);
+    if (purchase) {
+      this.assertDayOpen(purchase.date, m, 'anular una compra a proveedor');
+      AuditService.log({
+        mode: m,
+        action: 'eliminar',
+        entity: 'compra_proveedor',
+        entityId: id,
+        summary: 'Anulado registro del ' + purchase.date,
+        data: purchase,
+      });
+    }
+    markAsDeleted(id);
     if (purchase) {
       const netDebtIncrease = purchase.cost_usd - (purchase.credited_amount || 0);
       this.updateSupplierDebt(purchase.supplier_id, -netDebtIncrease, m);
@@ -977,10 +1225,21 @@ export const StorageService = {
   },
 
   async deleteSupplierPayment(id: string, mode?: AppMode): Promise<void> {
-    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getSupplierPayments(m);
     const payment = all.find((p) => p.id === id);
+    if (payment) {
+      this.assertDayOpen(payment.date, m, 'anular un pago a proveedor');
+      AuditService.log({
+        mode: m,
+        action: 'eliminar',
+        entity: 'pago_proveedor',
+        entityId: id,
+        summary: 'Anulado registro del ' + payment.date,
+        data: payment,
+      });
+    }
+    markAsDeleted(id);
     if (payment) {
       this.updateSupplierDebt(payment.supplier_id, payment.amount_usd, m);
       if (payment.account_id && payment.amount_usd > 0) {
@@ -1000,6 +1259,7 @@ export const StorageService = {
 
   addTransactionDetal(tx: Omit<TransactionDetal, 'id' | 'created_at'>, mode?: AppMode): TransactionDetal {
     const m = mode || this.getAppMode();
+    this.assertDayOpen(tx.date, m, 'registrar una venta');
     const all = this.getTransactionsDetal(m);
     const newTx: TransactionDetal = {
       ...tx,
@@ -1024,14 +1284,33 @@ export const StorageService = {
     }
 
     SupabaseSyncService.upsertTransactionDetal(newTx, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'crear',
+      entity: 'venta_detal',
+      entityId: newTx.id,
+      summary: `Venta detal a ${newTx.client_name}: ${newTx.usdt_amount} USDT, cobrado ${newTx.amount_received}, ganancia ${newTx.profit_usd} USD`,
+      data: newTx,
+    });
     return newTx;
   },
 
   async deleteTransactionDetal(id: string, mode?: AppMode): Promise<void> {
-    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getTransactionsDetal(m);
     const tx = all.find((t) => t.id === id);
+    if (tx) {
+      this.assertDayOpen(tx.date, m, 'anular una venta');
+      AuditService.log({
+        mode: m,
+        action: 'eliminar',
+        entity: 'venta_detal',
+        entityId: id,
+        summary: 'Anulado registro del ' + tx.date,
+        data: tx,
+      });
+    }
+    markAsDeleted(id);
     if (tx) {
       const unpaid = Number(((tx.total_to_pay || 0) - (tx.amount_received || 0)).toFixed(2));
       if (unpaid > 0) {
@@ -1058,6 +1337,7 @@ export const StorageService = {
 
   addTransactionMayor(tx: Omit<TransactionMayor, 'id' | 'created_at'>, mode?: AppMode): TransactionMayor {
     const m = mode || this.getAppMode();
+    this.assertDayOpen(tx.date, m, 'registrar una venta');
     const all = this.getTransactionsMayor(m);
     const newTx: TransactionMayor = {
       ...tx,
@@ -1088,14 +1368,33 @@ export const StorageService = {
     }
 
     SupabaseSyncService.upsertTransactionMayor(newTx, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'crear',
+      entity: 'venta_mayor',
+      entityId: newTx.id,
+      summary: `Venta mayor a ${newTx.client_name}: ${newTx.amount_ves} ${newTx.currency || 'VES'}, ganancia ${newTx.profit_usd} USD`,
+      data: newTx,
+    });
     return newTx;
   },
 
   async deleteTransactionMayor(id: string, mode?: AppMode): Promise<void> {
-    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getTransactionsMayor(m);
     const tx = all.find((t) => t.id === id);
+    if (tx) {
+      this.assertDayOpen(tx.date, m, 'anular una venta');
+      AuditService.log({
+        mode: m,
+        action: 'eliminar',
+        entity: 'venta_mayor',
+        entityId: id,
+        summary: 'Anulado registro del ' + tx.date,
+        data: tx,
+      });
+    }
+    markAsDeleted(id);
     if (tx) {
       const receivedAmt = tx.amount_received !== undefined ? tx.amount_received : 0;
       const unpaid = Number(((tx.total_to_pay || 0) - receivedAmt).toFixed(2));
@@ -1127,6 +1426,7 @@ export const StorageService = {
 
   addTransfer(transfer: Omit<BalanceTransfer, 'id' | 'created_at'>, mode?: AppMode): BalanceTransfer {
     const m = mode || this.getAppMode();
+    this.assertDayOpen(transfer.date, m, 'registrar un traspaso');
     const all = this.getTransfers(m);
     const newTransfer: BalanceTransfer = {
       ...transfer,
@@ -1142,14 +1442,33 @@ export const StorageService = {
     this.updateAccountBalance(newTransfer.to_account_id, newTransfer.amount_received, m);
 
     SupabaseSyncService.upsertTransfer(newTransfer, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'crear',
+      entity: 'traspaso',
+      entityId: newTransfer.id,
+      summary: `Traspaso de ${newTransfer.amount_sent} (recibido ${newTransfer.amount_received})${newTransfer.concept ? ': ' + newTransfer.concept : ''}`,
+      data: newTransfer,
+    });
     return newTransfer;
   },
 
   async deleteTransfer(id: string, mode?: AppMode): Promise<void> {
-    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getTransfers(m);
     const transfer = all.find((t) => t.id === id);
+    if (transfer) {
+      this.assertDayOpen(transfer.date, m, 'anular un traspaso');
+      AuditService.log({
+        mode: m,
+        action: 'eliminar',
+        entity: 'traspaso',
+        entityId: id,
+        summary: 'Anulado registro del ' + transfer.date,
+        data: transfer,
+      });
+    }
+    markAsDeleted(id);
     if (transfer) {
       const totalOut = transfer.amount_sent + (transfer.commission || 0);
       this.updateAccountBalance(transfer.from_account_id, totalOut, m);
@@ -1167,6 +1486,7 @@ export const StorageService = {
 
   addExpense(exp: Omit<Expense, 'id' | 'created_at'>, mode?: AppMode): Expense {
     const m = mode || this.getAppMode();
+    this.assertDayOpen(exp.date, m, 'registrar un gasto o ingreso');
     const all = this.getExpenses(m);
     const newExp: Expense = {
       ...exp,
@@ -1186,14 +1506,33 @@ export const StorageService = {
     }
 
     SupabaseSyncService.upsertExpense(newExp, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'crear',
+      entity: 'gasto',
+      entityId: newExp.id,
+      summary: `${newExp.type === 'ingreso' ? 'Ingreso' : 'Gasto'} ${newExp.amount} ${newExp.currency}: ${newExp.description || newExp.concept}`,
+      data: newExp,
+    });
     return newExp;
   },
 
   async deleteExpense(id: string, mode?: AppMode): Promise<void> {
-    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getExpenses(m);
     const exp = all.find((e) => e.id === id);
+    if (exp) {
+      this.assertDayOpen(exp.date, m, 'anular un gasto o ingreso');
+      AuditService.log({
+        mode: m,
+        action: 'eliminar',
+        entity: 'gasto',
+        entityId: id,
+        summary: 'Anulado registro del ' + exp.date,
+        data: exp,
+      });
+    }
+    markAsDeleted(id);
     if (exp && exp.account_id) {
       if (exp.type === 'ingreso') {
         this.updateAccountBalance(exp.account_id, -exp.amount, m);
@@ -1263,15 +1602,41 @@ export const StorageService = {
     const filtered = all.filter((c) => c.date !== closure.date);
     filtered.unshift(newClosure);
     saveToStorage(this.getClosuresKey(m), filtered);
+    AuditService.log({
+      mode: m,
+      action: 'cierre',
+      entity: 'cierre',
+      entityId: newClosure.id,
+      summary: `Cierre del día ${newClosure.date}: neto ${newClosure.total_net_profit} USD. Desde ahora el día queda bloqueado.`,
+      data: { date: newClosure.date, total_net_profit: newClosure.total_net_profit },
+    });
 
     SupabaseSyncService.upsertClosure(newClosure, m).catch(() => {});
     return newClosure;
   },
 
-  async deleteClosure(id: string, mode?: AppMode): Promise<void> {
-    markAsDeleted(id);
+  // Reabrir un día = borrar su cierre. Solo ADMIN y con motivo; queda en la bitácora.
+  async deleteClosure(id: string, mode?: AppMode, reason?: string): Promise<void> {
     const m = mode || this.getAppMode();
+    if (!isActorAdmin()) {
+      const msg = 'Solo un ADMIN puede reabrir un día cerrado.';
+      if (typeof window !== 'undefined') window.alert(msg);
+      throw new Error(msg);
+    }
+    const motivo = (reason || '').trim();
+    if (!motivo) throw new Error('Para reabrir un día hace falta un motivo.');
     const all = this.getClosures(m);
+    const closure = all.find((c) => c.id === id);
+    AuditService.log({
+      mode: m,
+      action: 'reapertura',
+      entity: 'cierre',
+      entityId: id,
+      summary: `Reabierto el día ${closure?.date || id} (se borró su cierre)`,
+      reason: motivo,
+      data: closure,
+    });
+    markAsDeleted(id);
     saveToStorage(
       this.getClosuresKey(m),
       all.filter((c) => c.id !== id)
@@ -1583,6 +1948,7 @@ export const StorageService = {
 
   addDebtPayment(payment: Omit<DebtPayment, 'id' | 'created_at'>, mode?: AppMode): DebtPayment {
     const m = mode || this.getAppMode();
+    this.assertDayOpen(payment.date, m, 'registrar un abono');
     const all = this.getDebtPayments(m);
     const newPayment: DebtPayment = {
       ...payment,
@@ -1621,14 +1987,33 @@ export const StorageService = {
     }
 
     SupabaseSyncService.upsertDebtPayment(newPayment, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'crear',
+      entity: 'abono_cliente',
+      entityId: newPayment.id,
+      summary: `Abono de ${newPayment.client_name}: ${newPayment.amount} USD`,
+      data: newPayment,
+    });
     return newPayment;
   },
 
   async deleteDebtPayment(id: string, mode?: AppMode): Promise<void> {
-    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getDebtPayments(m);
     const pay = all.find((p) => p.id === id);
+    if (pay) {
+      this.assertDayOpen(pay.date, m, 'anular un abono');
+      AuditService.log({
+        mode: m,
+        action: 'eliminar',
+        entity: 'abono_cliente',
+        entityId: id,
+        summary: 'Anulado registro del ' + pay.date,
+        data: pay,
+      });
+    }
+    markAsDeleted(id);
     if (pay) {
       const upperName = pay.client_name.trim().toUpperCase();
       const debtors = this.getDebtors(m);
@@ -1785,10 +2170,11 @@ export const StorageService = {
   },
 
   async deletePayrollPayment(id: string, mode?: AppMode): Promise<void> {
-    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getPayrollPayments(m);
     const pay = all.find((p) => p.id === id);
+    if (pay) this.assertDayOpen(pay.date, m, 'anular un pago de nómina');
+    markAsDeleted(id);
     if (pay) {
       // Revertir en gastos y reintegrar dinero a la cuenta pagadora
       if (pay.expense_id) {
@@ -1850,10 +2236,11 @@ export const StorageService = {
   },
 
   async deleteServiceExpense(id: string, mode?: AppMode): Promise<void> {
-    markAsDeleted(id);
     const m = mode || this.getAppMode();
     const all = this.getServiceExpenses(m);
     const srv = all.find((s) => s.id === id);
+    if (srv) this.assertDayOpen(srv.date, m, 'anular un gasto de servicio');
+    markAsDeleted(id);
     if (srv) {
       if (srv.expense_id) {
         await this.deleteExpense(srv.expense_id, m);
@@ -1880,6 +2267,14 @@ export const StorageService = {
     if (typeof window === 'undefined') return;
     const modes: AppMode[] = targetMode === 'both' ? ['detal', 'mayor'] : [targetMode];
     for (const m of modes) {
+      AuditService.log({
+        mode: m,
+        action: 'eliminar',
+        entity: 'sistema',
+        entityId: 'reset-total',
+        summary: 'Reseteo maestro: se borraron todos los datos de ' + m.toUpperCase(),
+      });
+      saveToStorage(this.getAdjustmentsKey(m), []);
       saveToStorage(this.getAccountsKey(m), []);
       saveToStorage(this.getClientsKey(m), []);
       saveToStorage(this.getSuppliersKey(m), []);
@@ -1912,6 +2307,14 @@ export const StorageService = {
     if (typeof window === 'undefined') return;
     const modes: AppMode[] = targetMode === 'both' ? ['detal', 'mayor'] : [targetMode];
     for (const m of modes) {
+      AuditService.log({
+        mode: m,
+        action: 'eliminar',
+        entity: 'sistema',
+        entityId: 'reset-saldos',
+        summary: 'Reseteo de saldos a cero y borrado de operaciones de ' + m.toUpperCase(),
+      });
+      saveToStorage(this.getAdjustmentsKey(m), []);
       const accs = this.getAccounts(m).map((a) => ({ ...a, current_balance: 0, initial_balance: 0 }));
       saveToStorage(this.getAccountsKey(m), accs);
 

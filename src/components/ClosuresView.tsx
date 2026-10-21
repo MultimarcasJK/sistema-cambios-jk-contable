@@ -130,10 +130,22 @@ export function ClosuresView({
 
   // Eliminar un cierre
   const handleDeleteClosure = async (id: string, date: string) => {
-    if (confirm(`¿Estás seguro de eliminar el registro de cierre del ${date}?`)) {
-      await StorageService.deleteClosure(id, appMode);
-      onDataChange();
+    const reason = window.prompt(
+      `Vas a REABRIR el día ${date} borrando su cierre.\n\n` +
+        'Mientras esté abierto se podrán registrar, editar o anular operaciones con esa fecha. ' +
+        'Escribe el motivo (quedará en la bitácora):'
+    );
+    if (reason === null) return;
+    if (!reason.trim()) {
+      window.alert('Para reabrir un día hace falta un motivo.');
+      return;
     }
+    try {
+      await StorageService.deleteClosure(id, appMode, reason);
+    } catch {
+      return;
+    }
+    onDataChange();
   };
 
   // Cierres que tienen snapshot de cuentas

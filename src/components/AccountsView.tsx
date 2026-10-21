@@ -105,13 +105,48 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
     onDataChange();
   };
 
+  // Pide el motivo de un cambio de saldo; null = el usuario canceló
+  const askAdjustReason = (accName: string, from: number, to: number): string | null => {
+    const reason = window.prompt(
+      `Vas a cambiar el saldo de ${accName} de ${from} a ${to}.\n\n` +
+        'El cambio quedará como un AJUSTE en el libro contable. Escribe el motivo ' +
+        '(ej.: "faltante en arqueo", "comisión no registrada"):'
+    );
+    if (reason === null) return null;
+    if (!reason.trim()) {
+      window.alert('El ajuste necesita un motivo. No se cambió el saldo.');
+      return null;
+    }
+    return reason.trim();
+  };
+
   const handleSaveAccount = (updated: Account) => {
     const currentMode = appMode || StorageService.getAppMode();
+    const before = accounts.find((a) => a.id === updated.id);
+    const balanceChanged =
+      before && Math.abs((before.current_balance || 0) - (updated.current_balance || 0)) > 0.00005;
+    let reason: string | null = null;
+    if (before && balanceChanged) {
+      reason = askAdjustReason(updated.name, before.current_balance, updated.current_balance);
+      if (reason === null) return;
+    }
+    // Los datos de la cuenta se guardan sin tocar el saldo; el saldo cambia solo mediante un ajuste
     StorageService.updateAccount(
       updated.id,
-      { ...updated, scope: updated.scope || currentMode },
+      {
+        ...updated,
+        current_balance: before ? before.current_balance : updated.current_balance,
+        scope: updated.scope || currentMode,
+      },
       currentMode
     );
+    if (before && balanceChanged && reason) {
+      try {
+        StorageService.adjustAccountBalance(updated.id, updated.current_balance, reason, currentMode);
+      } catch {
+        // assertDayOpen ya avisó en pantalla
+      }
+    }
     setAccountToEdit(null);
     onDataChange();
   };
@@ -128,7 +163,17 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
     if (isNaN(val)) return;
 
     const currentMode = appMode || StorageService.getAppMode();
-    StorageService.updateAccount(accId, { current_balance: val }, currentMode);
+    const acc = accounts.find((a) => a.id === accId);
+    if (!acc) return;
+    if (Math.abs((acc.current_balance || 0) - val) > 0.00005) {
+      const reason = askAdjustReason(acc.name, acc.current_balance, val);
+      if (reason === null) return;
+      try {
+        StorageService.adjustAccountBalance(accId, val, reason, currentMode);
+      } catch {
+        return;
+      }
+    }
     setEditingAccountId(null);
     setAdjustBalanceValue('');
     onDataChange();

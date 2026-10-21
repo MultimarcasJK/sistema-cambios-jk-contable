@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { UserProfile } from '@/types';
+import { setActor } from './actor';
 
 interface AuthContextType {
   user: User | null;
@@ -132,6 +133,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
     setProfile(null);
   };
+
+  // Usuario activo para la bitácora de auditoría y los permisos del libro contable
+  useEffect(() => {
+    if (user) {
+      setActor({
+        id: user.id,
+        email: profile?.email || user.email || '',
+        nombre: profile?.nombre,
+        rol: profile?.rol,
+      });
+    } else {
+      setActor(null);
+    }
+  }, [user, profile]);
 
   const isAdmin = profile?.rol === 'ADMIN';
   const isOperator = profile?.rol === 'OPERADOR';

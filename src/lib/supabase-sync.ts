@@ -1,5 +1,7 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import {
+  AuditEntry,
+  BalanceAdjustment,
   Account,
   Client,
   Supplier,
@@ -855,6 +857,7 @@ export const SupabaseSyncService = {
         }
 
         const deleteTables = [
+          `${m}_ajustes_saldo`,
           `${m}_gastos_servicios`,
           `${m}_pagos_nomina`,
           `${m}_pagos_proveedores`,
@@ -885,6 +888,7 @@ export const SupabaseSyncService = {
     const modes: AppMode[] = targetMode === 'both' ? ['detal', 'mayor'] : [targetMode];
     for (const m of modes) {
       const tables = [
+        `${m}_ajustes_saldo`,
         `${m}_gastos_servicios`,
         `${m}_pagos_nomina`,
         `${m}_empleados`,
@@ -910,5 +914,83 @@ export const SupabaseSyncService = {
       }
     }
   },
-};
+  // Ajustes de saldo con motivo (detal_ajustes_saldo / mayor_ajustes_saldo)
+  async fetchAdjustments(mode: AppMode): Promise<BalanceAdjustment[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    try {
+      const { data, error } = await supabase.from(`${mode}_ajustes_saldo`).select('*');
+      if (error) return null;
+      return ((data || []) as any[]).map((row) => ({
+        ...row,
+        previous_balance: Number(row.previous_balance) || 0,
+        new_balance: Number(row.new_balance) || 0,
+        delta: Number(row.delta) || 0,
+      })) as BalanceAdjustment[];
+    } catch {
+      return null;
+    }
+  },
 
+  async upsertAdjustment(adj: BalanceAdjustment, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      await supabase.from(`${mode}_ajustes_saldo`).upsert({
+        id: adj.id,
+        date: adj.date,
+        account_id: adj.account_id,
+        account_name: adj.account_name,
+        currency: adj.currency,
+        previous_balance: adj.previous_balance,
+        new_balance: adj.new_balance,
+        delta: adj.delta,
+        reason: adj.reason,
+        kind: adj.kind,
+        user_email: adj.user_email || null,
+        created_at: adj.created_at,
+      });
+    } catch {
+      /* warn */
+    }
+  },
+
+  // Bitácora de auditoría (detal_auditoria / mayor_auditoria): solo se inserta, nunca se edita
+  async fetchAuditEntries(mode: AppMode, limit = 1000): Promise<AuditEntry[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    try {
+      const { data, error } = await supabase
+        .from(`${mode}_auditoria`)
+        .select('*')
+        .order('ts', { ascending: false })
+        .limit(limit);
+      if (error) return null;
+      return (data || []) as AuditEntry[];
+    } catch {
+      return null;
+    }
+  },
+
+  async insertAuditEntry(entry: AuditEntry): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      // upsert con ignoreDuplicates: reintentar una fila ya subida no la modifica
+      await supabase.from(`${entry.mode}_auditoria`).upsert(
+        {
+          id: entry.id,
+          ts: entry.ts,
+          mode: entry.mode,
+          user_id: entry.user_id || null,
+          user_email: entry.user_email || null,
+          action: entry.action,
+          entity: entry.entity,
+          entity_id: entry.entity_id,
+          summary: entry.summary,
+          reason: entry.reason || null,
+          data: entry.data ?? null,
+        },
+        { onConflict: 'id', ignoreDuplicates: true }
+      );
+    } catch {
+      /* warn */
+    }
+  },
+};
