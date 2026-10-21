@@ -40,12 +40,6 @@ import { LoginView } from '@/components/LoginView';
 export default function Home() {
   const { user, profile, isLoading: isAuthLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
-
-  useEffect(() => {
-    if (activeTab === 'detal') {
-      setActiveTab('dashboard');
-    }
-  }, [activeTab]);
   const [appMode, setAppMode] = useState<AppMode>('detal');
   const [isSyncingRates, setIsSyncingRates] = useState(false);
   const [lastRatesSync, setLastRatesSync] = useState<string | null>(null);

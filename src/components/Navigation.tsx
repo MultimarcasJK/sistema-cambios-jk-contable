@@ -44,7 +44,6 @@ export function Navigation({ activeTab, onSelectTab, appMode = 'detal' }: NavPro
   const allTabs = [
     { key: 'dashboard' as TabKey, label: 'Panel', icon: LayoutDashboard },
     { key: 'mayor' as TabKey, label: 'Ventas', icon: TrendingUp },
-    { key: 'detal' as TabKey, label: 'Cripto/Dolar', icon: Coins },
     { key: 'suppliers' as TabKey, label: 'Proveedores', icon: Truck },
     { key: 'transfers' as TabKey, label: 'Cambio Saldos', icon: ArrowLeftRight },
     { key: 'expenses' as TabKey, label: 'Ingresos/Gastos', icon: Receipt },
