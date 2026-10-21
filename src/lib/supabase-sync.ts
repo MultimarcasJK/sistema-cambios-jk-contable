@@ -288,11 +288,13 @@ export const SupabaseSyncService = {
     }
   },
 
-  async upsertDebtor(debtor: Debtor, mode: AppMode): Promise<void> {
-    if (!isSupabaseConfigured || !supabase) return;
+  // Devuelve true solo si Supabase confirmó la escritura (o no hay Supabase configurado).
+  // supabase-js no lanza excepciones: los fallos llegan en `error` y antes se ignoraban.
+  async upsertDebtor(debtor: Debtor, mode: AppMode): Promise<boolean> {
+    if (!isSupabaseConfigured || !supabase) return true;
     const table = `${mode}_deudores`;
     try {
-      await supabase.from(table).upsert({
+      const { error } = await supabase.from(table).upsert({
         id: debtor.id,
         client_name: debtor.client_name,
         phone: debtor.phone || '',
@@ -300,23 +302,41 @@ export const SupabaseSyncService = {
         notes: debtor.notes || '',
         updated_at: debtor.updated_at || new Date().toISOString(),
       });
+      if (error) {
+        console.warn(`[SupabaseSync] No se pudo guardar el deudor ${debtor.id}:`, error.message);
+        return false;
+      }
+      return true;
     } catch (err) {
-      /* warn */
+      console.warn(`[SupabaseSync] No se pudo guardar el deudor ${debtor.id}:`, err);
+      return false;
     }
   },
 
-  async deleteDebtor(id: string, mode: AppMode, clientName?: string): Promise<void> {
-    if (!isSupabaseConfigured || !supabase) return;
+  async deleteDebtor(id: string, mode: AppMode, clientName?: string): Promise<boolean> {
+    if (!isSupabaseConfigured || !supabase) return true;
     const table = `${mode}_deudores`;
     try {
       if (id) {
-        await supabase.from(table).delete().eq('id', id);
+        const { error } = await supabase.from(table).delete().eq('id', id);
+        if (error) {
+          console.warn(`[SupabaseSync] No se pudo borrar el deudor ${id}:`, error.message);
+          return false;
+        }
       }
       if (clientName && clientName.trim()) {
-        await supabase.from(table).delete().ilike('client_name', clientName.trim());
+        // Escapar comodines de ILIKE para que el nombre se compare literalmente
+        const pattern = clientName.trim().replace(/[\\%_]/g, (c) => '\\' + c);
+        const { error } = await supabase.from(table).delete().ilike('client_name', pattern);
+        if (error) {
+          console.warn(`[SupabaseSync] No se pudo borrar el deudor ${clientName}:`, error.message);
+          return false;
+        }
       }
+      return true;
     } catch (err) {
-      /* warn */
+      console.warn(`[SupabaseSync] No se pudo borrar el deudor ${id}:`, err);
+      return false;
     }
   },
 
