@@ -107,7 +107,10 @@ export function AccountStatementModal({
     const items: StatementMovement[] = [];
 
     // A. Ventas Detal
-    const detalTxs: TransactionDetal[] = StorageService.getTransactionsDetal();
+    const detalTxs: TransactionDetal[] = [
+      ...StorageService.getTransactionsDetal('detal'),
+      ...StorageService.getTransactionsDetal('mayor'),
+    ];
     detalTxs.forEach((tx) => {
       // 1. Entrada de dinero (Cobro al cliente)
       if (tx.received_account_id === accId && tx.amount_received > 0) {
@@ -154,7 +157,10 @@ export function AccountStatementModal({
     });
 
     // B. Ventas Mayor
-    const mayorTxs: TransactionMayor[] = StorageService.getTransactionsMayor();
+    const mayorTxs: TransactionMayor[] = [
+      ...StorageService.getTransactionsMayor('mayor'),
+      ...StorageService.getTransactionsMayor('detal'),
+    ];
     mayorTxs.forEach((tx) => {
       // 1. Entrada de dinero (Cobro al cliente)
       const receivedAmt = tx.amount_received !== undefined ? tx.amount_received : 0;
@@ -209,7 +215,10 @@ export function AccountStatementModal({
     });
 
     // C. Transferencias entre Cuentas (Cambios de Saldo)
-    const transfers: BalanceTransfer[] = StorageService.getTransfers();
+    const transfers: BalanceTransfer[] = [
+      ...StorageService.getTransfers('detal'),
+      ...StorageService.getTransfers('mayor'),
+    ];
     transfers.forEach((trf) => {
       // 1. Salida (Cuenta Origen)
       if (trf.from_account_id === accId) {
@@ -264,7 +273,10 @@ export function AccountStatementModal({
     });
 
     // D. Gastos e Ingresos Varios
-    const expenses: Expense[] = StorageService.getExpenses();
+    const expenses: Expense[] = [
+      ...StorageService.getExpenses('detal'),
+      ...StorageService.getExpenses('mayor'),
+    ];
     expenses.forEach((exp) => {
       if (exp.account_id === accId) {
         const isIngreso = exp.type === 'ingreso';
@@ -290,7 +302,10 @@ export function AccountStatementModal({
     });
 
     // E. Compras a Proveedores (Entrada de Inventario de Divisas/USDT a la cuenta)
-    const supplierPurchases: SupplierPurchase[] = StorageService.getSupplierPurchases();
+    const supplierPurchases: SupplierPurchase[] = [
+      ...StorageService.getSupplierPurchases('detal'),
+      ...StorageService.getSupplierPurchases('mayor'),
+    ];
     supplierPurchases.forEach((pur) => {
       if (pur.account_id === accId && pur.quantity > 0) {
         items.push({
@@ -315,7 +330,10 @@ export function AccountStatementModal({
     });
 
     // F. Pagos a Proveedores (Salida de dinero de nuestra cuenta para pagar deuda)
-    const supplierPayments: SupplierPayment[] = StorageService.getSupplierPayments();
+    const supplierPayments: SupplierPayment[] = [
+      ...StorageService.getSupplierPayments('detal'),
+      ...StorageService.getSupplierPayments('mayor'),
+    ];
     supplierPayments.forEach((pay) => {
       if (pay.account_id === accId && pay.amount_usd > 0) {
         items.push({
@@ -340,7 +358,10 @@ export function AccountStatementModal({
     });
 
     // G. Cobros de Deudas / Abonos de Clientes Deudores
-    const debtPayments: DebtPayment[] = StorageService.getDebtPayments();
+    const debtPayments: DebtPayment[] = [
+      ...StorageService.getDebtPayments('detal'),
+      ...StorageService.getDebtPayments('mayor'),
+    ];
     debtPayments.forEach((dp) => {
       if (dp.account_id === accId) {
         const amt =
