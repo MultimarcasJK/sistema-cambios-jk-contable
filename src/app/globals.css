@@ -204,6 +204,11 @@ select option {
   border-color: #334155 !important;
 }
 
+/* Separadores de filas de tablas en modo oscuro */
+[data-theme="mayor"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #334155 !important;
+}
+
 /* Bordes claros → oscuros */
 [data-theme="mayor"] .border-slate-200,
 [data-theme="mayor"] .border-slate-100,

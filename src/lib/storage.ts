@@ -215,7 +215,9 @@ export const StorageService = {
       summary: `Intento de ${what} con fecha ${date} (día cerrado)`,
     });
     if (typeof window !== 'undefined') window.alert(msg);
-    throw new Error(msg);
+    const err = new Error(msg);
+    err.name = 'DiaCerradoError';
+    throw err;
   },
 
   // Migración automática de datos antiguos para separar César a Detal y María a Mayor

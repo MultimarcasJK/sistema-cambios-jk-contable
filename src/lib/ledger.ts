@@ -105,11 +105,12 @@ export const PLAN_FIJO: LedgerAccountDef[] = [
   { key: 'ING_DETAL', codigo: '4.1.01', nombre: 'Ganancia ventas detal', tipo: 'ingreso' },
   { key: 'ING_MAYOR', codigo: '4.1.02', nombre: 'Ganancia ventas mayor', tipo: 'ingreso' },
   { key: 'ING_OTROS', codigo: '4.3.01', nombre: 'Otros ingresos', tipo: 'ingreso' },
+  { key: 'AJUSTES_FAVOR', codigo: '4.9.01', nombre: 'Sobrantes y ajustes a favor', tipo: 'ingreso' },
   { key: 'GTO_COMIS', codigo: '5.1.01', nombre: 'Comisiones bancarias', tipo: 'gasto' },
   { key: 'GTO_OPER', codigo: '5.2.01', nombre: 'Gastos operativos', tipo: 'gasto' },
   { key: 'GTO_SERV', codigo: '5.2.02', nombre: 'Servicios (alquiler, luz, internet…)', tipo: 'gasto' },
   { key: 'GTO_NOMINA', codigo: '5.3.01', nombre: 'Nómina', tipo: 'gasto' },
-  { key: 'AJUSTES', codigo: '5.9.01', nombre: 'Ajustes y diferencias de saldo', tipo: 'gasto' },
+  { key: 'AJUSTES', codigo: '5.9.01', nombre: 'Faltantes y ajustes en contra', tipo: 'gasto' },
   { key: 'PUENTE', codigo: '9.9.01', nombre: 'Puente cambiario', tipo: 'orden' },
 ];
 
@@ -426,7 +427,8 @@ export function buildLedger(src: LedgerSources): Ledger {
       const acc = real(a.account_id);
       if (!acc) return;
       push(lines, acc.key, acc.moneda, a.delta);
-      push(lines, 'AJUSTES', acc.moneda, -a.delta);
+      // Un ajuste que sube el saldo es un sobrante (ingreso); uno que lo baja, un faltante (gasto)
+      push(lines, a.delta > 0 ? 'AJUSTES_FAVOR' : 'AJUSTES', acc.moneda, -a.delta);
       add(
         {
           id: 'as-' + a.id,

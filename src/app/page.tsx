@@ -80,6 +80,23 @@ export default function Home() {
     setServiceExpenses(StorageService.getServiceExpenses(currentMode));
   }, []);
 
+  // Un intento de mover dinero en un día cerrado ya se avisó con una alerta; no es un fallo de la app
+  useEffect(() => {
+    const isDayLock = (e: unknown) => (e as Error | undefined)?.name === 'DiaCerradoError';
+    const onRejection = (ev: PromiseRejectionEvent) => {
+      if (isDayLock(ev.reason)) ev.preventDefault();
+    };
+    const onError = (ev: ErrorEvent) => {
+      if (isDayLock(ev.error)) ev.preventDefault();
+    };
+    window.addEventListener('unhandledrejection', onRejection);
+    window.addEventListener('error', onError);
+    return () => {
+      window.removeEventListener('unhandledrejection', onRejection);
+      window.removeEventListener('error', onError);
+    };
+  }, []);
+
   const handleModeChange = useCallback((mode: AppMode) => {
     if (profile?.modo_permitido && profile.modo_permitido !== 'ambos') {
       if (mode !== profile.modo_permitido) {
