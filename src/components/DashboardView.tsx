@@ -386,41 +386,41 @@ export function DashboardView({
           </div>
         </div>
 
-        {/* Últimas Ventas Cripto/Dolar */}
+        {/* Últimas Ventas */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-              <Coins className="w-4 h-4 text-emerald-600" />
-              <span>Últimas Operaciones Cripto/Dolar</span>
+              <TrendingUp className="w-4 h-4 text-indigo-600" />
+              <span>Últimas Ventas</span>
             </h3>
             <button
-              onClick={() => onNavigate('detal')}
+              onClick={() => onNavigate('mayor')}
               className="text-xs font-semibold text-blue-600 hover:text-blue-700"
             >
               Ver todas
             </button>
           </div>
 
-          {detalTxs.length === 0 ? (
+          {mayorTxs.length === 0 ? (
             <div className="text-center py-8 text-slate-400 text-sm">
-              No hay operaciones registradas todavía.
+              No hay ventas registradas todavía.
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {detalTxs.slice(0, 5).map((tx) => (
+              {mayorTxs.slice(0, 5).map((tx) => (
                 <div key={tx.id} className="py-2.5 flex items-center justify-between text-sm">
                   <div>
                     <div className="font-semibold text-slate-800">{tx.client_name}</div>
                     <div className="text-xs text-slate-400">
-                      {tx.date} • {tx.usdt_amount} USDT @ {tx.sell_price}
+                      {tx.date} • {formatCurrency(tx.amount_ves)} {tx.currency || 'VES'} @ {tx.sell_price}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-emerald-600 font-mono">
-                      +${tx.profit_usd.toFixed(2)}
+                    <div className={`font-bold font-mono ${tx.profit_usd >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {tx.profit_usd >= 0 ? `+$${formatCurrency(tx.profit_usd)}` : `-$${formatCurrency(Math.abs(tx.profit_usd))}`}
                     </div>
                     <div className="text-xs text-slate-500 font-mono">
-                      ${tx.total_to_pay.toFixed(2)} USD
+                      ${formatCurrency(tx.total_to_pay)} USD
                     </div>
                   </div>
                 </div>
