@@ -369,11 +369,12 @@ export const SupabaseSyncService = {
     }
   },
 
-  async upsertDebtPayment(payment: DebtPayment, mode: AppMode): Promise<void> {
-    if (!isSupabaseConfigured || !supabase) return;
+  // Devuelve true solo si Supabase confirmó la escritura (o no hay Supabase configurado).
+  async upsertDebtPayment(payment: DebtPayment, mode: AppMode): Promise<boolean> {
+    if (!isSupabaseConfigured || !supabase) return true;
     const table = `${mode}_abonos_deudores`;
     try {
-      await supabase.from(table).upsert({
+      const { error } = await supabase.from(table).upsert({
         id: payment.id,
         date: payment.date,
         debtor_id: payment.debtor_id || '',
@@ -385,8 +386,14 @@ export const SupabaseSyncService = {
         account_id: payment.account_id || '',
         notes: payment.notes || '',
       });
+      if (error) {
+        console.warn(`[SupabaseSync] No se pudo guardar el abono ${payment.id}:`, error.message);
+        return false;
+      }
+      return true;
     } catch (err) {
-      /* warn */
+      console.warn(`[SupabaseSync] No se pudo guardar el abono ${payment.id}:`, err);
+      return false;
     }
   },
 

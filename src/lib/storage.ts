@@ -118,6 +118,34 @@ function isDeleted(id: string): boolean {
   return getDeletedIds().has(id);
 }
 
+// Abonos creados en este dispositivo que Supabase todavía no confirmó. La sincronización
+// los conserva y reintenta en vez de reemplazarlos por la lista remota, que aún no los tiene.
+function getPendingDebtPaymentsKey(mode: AppMode): string {
+  return 'cambiosjk_' + mode + '_abonos_pendientes_v1';
+}
+
+function getPendingDebtPaymentIds(mode: AppMode): Set<string> {
+  const ids = getFromStorage<string[]>(getPendingDebtPaymentsKey(mode), []);
+  return new Set(Array.isArray(ids) ? ids.filter(Boolean) : []);
+}
+
+function setDebtPaymentPending(id: string, mode: AppMode, pending: boolean): void {
+  const ids = getPendingDebtPaymentIds(mode);
+  if (pending === ids.has(id)) return;
+  if (pending) ids.add(id);
+  else ids.delete(id);
+  saveToStorage(getPendingDebtPaymentsKey(mode), Array.from(ids));
+}
+
+function pushDebtPayment(payment: DebtPayment, mode: AppMode): void {
+  setDebtPaymentPending(payment.id, mode, true);
+  SupabaseSyncService.upsertDebtPayment(payment, mode)
+    .then((ok) => {
+      if (ok) setDebtPaymentPending(payment.id, mode, false);
+    })
+    .catch(() => {});
+}
+
 // Lápidas de deudores: propias de cada modo, con fecha y sin límite de tamaño, para que
 // un borrado no se pierda cuando la lista genérica de IDs borrados supera 500 entradas.
 function getDebtorTombstonesKey(mode: AppMode): string {
@@ -772,7 +800,22 @@ export const StorageService = {
       }
       if (remoteDebtPayments !== null) {
         const validRemote = remoteDebtPayments.filter((p) => !isDeleted(p.id));
-        saveToStorage(this.getDebtPaymentsKey(m), validRemote);
+        const remoteIds = new Set(validRemote.map((p) => p.id));
+        const pendingIds = getPendingDebtPaymentIds(m);
+        // Solo se conservan los abonos locales nunca confirmados; uno ya confirmado que falta
+        // en Supabase fue borrado desde otro dispositivo y no debe resucitar.
+        const localPending = (getFromStorage<DebtPayment[]>(this.getDebtPaymentsKey(m), []) || []).filter(
+          (p) => p && pendingIds.has(p.id) && !remoteIds.has(p.id) && !isDeleted(p.id)
+        );
+        pendingIds.forEach((id) => {
+          if (remoteIds.has(id) || isDeleted(id)) setDebtPaymentPending(id, m, false);
+        });
+        localPending.forEach((p) => pushDebtPayment(p, m));
+        const merged = [...validRemote, ...localPending].sort((a, b) => {
+          if (b.date !== a.date) return b.date.localeCompare(a.date);
+          return (b.created_at || '').localeCompare(a.created_at || '');
+        });
+        saveToStorage(this.getDebtPaymentsKey(m), merged);
       }
       if (remotePurchases !== null) {
         const validRemote = remotePurchases.filter((p) => {
@@ -2447,7 +2490,7 @@ export const StorageService = {
       this.updateAccountBalance(newPayment.account_id, amountToCredit, m);
     }
 
-    SupabaseSyncService.upsertDebtPayment(newPayment, m).catch(() => {});
+    pushDebtPayment(newPayment, m);
     AuditService.log({
       mode: m,
       action: 'crear',
