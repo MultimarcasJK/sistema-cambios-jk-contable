@@ -405,7 +405,12 @@ export const StorageService = {
         remoteRemitentes.forEach((r) => byId.set(r.id, r));
         local.forEach((l) => {
           const r = byId.get(l.id);
-          if (!r || (l.beneficiarios?.length || 0) > (r.beneficiarios?.length || 0)) {
+          // Gana la copia editada más recientemente (borrar un beneficiario también cuenta)
+          const localNewer =
+            l.updated_at || r?.updated_at
+              ? (l.updated_at || '') > (r?.updated_at || '')
+              : (l.beneficiarios?.length || 0) > (r?.beneficiarios?.length || 0);
+          if (!r || localNewer) {
             byId.set(l.id, l);
             SupabaseSyncService.upsertRemitente(l, m).catch(() => {});
           }
@@ -1065,9 +1070,51 @@ export const StorageService = {
         rem.beneficiarios.push(ben);
       }
     }
+    rem.updated_at = new Date().toISOString();
     saveToStorage(this.getRemitentesKey(m), all);
     SupabaseSyncService.upsertRemitente(rem, m).catch(() => {});
     return { remitente: rem, beneficiario: ben };
+  },
+
+  updateBeneficiario(remitenteId: string, ben: Beneficiario, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const all = this.getRemitentes(m);
+    const rem = all.find((r) => r.id === remitenteId);
+    const cur = rem?.beneficiarios.find((b) => b.id === ben.id);
+    if (!rem || !cur) throw new Error('No se encontró el beneficiario.');
+    if (!ben.name.trim()) throw new Error('El beneficiario necesita un nombre.');
+    Object.assign(cur, { ...ben, id: cur.id, country: cur.country, name: ben.name.trim().toUpperCase() });
+    rem.updated_at = new Date().toISOString();
+    saveToStorage(this.getRemitentesKey(m), all);
+    SupabaseSyncService.upsertRemitente(rem, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'editar',
+      entity: 'beneficiario',
+      entityId: cur.id,
+      summary: `Beneficiario ${cur.name} de ${rem.name} actualizado`,
+      data: { ...cur },
+    });
+  },
+
+  deleteBeneficiario(remitenteId: string, beneficiarioId: string, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const all = this.getRemitentes(m);
+    const rem = all.find((r) => r.id === remitenteId);
+    const cur = rem?.beneficiarios.find((b) => b.id === beneficiarioId);
+    if (!rem || !cur) return;
+    rem.beneficiarios = rem.beneficiarios.filter((b) => b.id !== beneficiarioId);
+    rem.updated_at = new Date().toISOString();
+    saveToStorage(this.getRemitentesKey(m), all);
+    SupabaseSyncService.upsertRemitente(rem, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'eliminar',
+      entity: 'beneficiario',
+      entityId: cur.id,
+      summary: `Beneficiario ${cur.name} de ${rem.name} eliminado (las remesas anteriores conservan sus datos)`,
+      data: { ...cur },
+    });
   },
 
   getRemesaPrefs(mode?: AppMode): Record<string, { metodo: RemesaMetodoPago; cuenta_pago_id?: string; aliado_id?: string }> {
