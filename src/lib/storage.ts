@@ -40,6 +40,19 @@ import { SupabaseSyncService } from './supabase-sync';
 import { AuditService } from './audit';
 import { isActorAdmin, getActor } from './actor';
 import type { LedgerSources } from './ledger';
+import {
+  DebtorOutboxEntry,
+  DebtorOutboxOp,
+  DebtorTombstones,
+  addDebtorTombstone,
+  emptyTombstones,
+  enqueueDebtorOp,
+  isDebtorSuppressed,
+  lastActivityByName,
+  mergeRemoteDebtors,
+  normalizeDebtorName,
+  pendingUpsertIds,
+} from './debtor-sync';
 
 let activeAppMode: AppMode = 'detal';
 
@@ -103,6 +116,97 @@ function unmarkDeleted(id: string): void {
 function isDeleted(id: string): boolean {
   if (!id) return false;
   return getDeletedIds().has(id);
+}
+
+// Lápidas de deudores: propias de cada modo, con fecha y sin límite de tamaño, para que
+// un borrado no se pierda cuando la lista genérica de IDs borrados supera 500 entradas.
+function getDebtorTombstonesKey(mode: AppMode): string {
+  return 'cambiosjk_' + mode + '_debtor_tombstones_v1';
+}
+
+function getDebtorTombstones(mode: AppMode): DebtorTombstones {
+  if (typeof window === 'undefined') return emptyTombstones();
+  const key = getDebtorTombstonesKey(mode);
+  const stored = getFromStorage<DebtorTombstones | null>(key, null);
+  if (stored && stored.ids && stored.names) return stored;
+
+  // Migración única desde cambiosjk_deleted_ids_v1: se conservan los borrados anteriores
+  // con la fecha de hoy, así lo nuevo que se registre después vuelve a aparecer.
+  let migrated = emptyTombstones();
+  const now = new Date().toISOString();
+  getDeletedIds().forEach((entry) => {
+    if (entry.startsWith('name:')) {
+      migrated = addDebtorTombstone(migrated, undefined, entry.slice(5), now);
+    } else if (entry.startsWith('deb')) {
+      migrated = addDebtorTombstone(migrated, entry, undefined, now);
+    }
+  });
+  saveToStorage(key, migrated);
+  return migrated;
+}
+
+// `notBefore` permite fechar el borrado después del updated_at del deudor, por si el reloj
+// del dispositivo que lo editó iba adelantado.
+function recordDebtorDeletion(mode: AppMode, id: string | undefined, name?: string, notBefore = 0): void {
+  const at = new Date(Math.max(Date.now(), notBefore)).toISOString();
+  const next = addDebtorTombstone(getDebtorTombstones(mode), id, name, at);
+  saveToStorage(getDebtorTombstonesKey(mode), next);
+  if (id) markAsDeleted(id);
+}
+
+const DEBTOR_OUTBOX_KEY = 'cambiosjk_debtor_outbox_v1';
+
+function getDebtorOutbox(): DebtorOutboxEntry[] {
+  const queue = getFromStorage<DebtorOutboxEntry[]>(DEBTOR_OUTBOX_KEY, []);
+  return Array.isArray(queue) ? queue.filter(Boolean) : [];
+}
+
+function queueDebtorRemote(op: DebtorOutboxOp): void {
+  if (typeof window === 'undefined') return;
+  const queue = getDebtorOutbox();
+  const seq = queue.reduce((max, q) => Math.max(max, q.seq), 0) + 1;
+  saveToStorage(DEBTOR_OUTBOX_KEY, enqueueDebtorOp(queue, op, seq));
+}
+
+let debtorFlushInFlight: Promise<void> | null = null;
+let debtorFlushGeneration = 0;
+
+// Envía a Supabase las operaciones pendientes de deudores, en orden. Lo que falla se queda
+// en la cola y se reintenta en la próxima sincronización.
+function flushDebtorOutbox(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if (debtorFlushInFlight) {
+    // Encadenar para que lo encolado durante el envío actual también salga
+    return debtorFlushInFlight.then(() => flushDebtorOutbox());
+  }
+  const generation = ++debtorFlushGeneration;
+  const run = (async () => {
+    // Ceder un turno para que `debtorFlushInFlight` quede asignado antes de empezar
+    await Promise.resolve();
+    try {
+      const snapshot = getDebtorOutbox();
+      const done = new Set<number>();
+      const blocked = new Set<string>();
+      for (const entry of snapshot) {
+        const key = entry.mode + ':' + entry.id;
+        // Si falló una operación anterior del mismo deudor, no adelantar las siguientes
+        if (blocked.has(key)) continue;
+        const ok =
+          entry.op === 'upsert'
+            ? await SupabaseSyncService.upsertDebtor(entry.debtor, entry.mode).catch(() => false)
+            : await SupabaseSyncService.deleteDebtor(entry.id, entry.mode, entry.name).catch(() => false);
+        if (ok) done.add(entry.seq);
+        else blocked.add(key);
+      }
+      if (done.size > 0) {
+        saveToStorage(DEBTOR_OUTBOX_KEY, getDebtorOutbox().filter((q) => !done.has(q.seq)));
+      }
+    } finally {
+      if (generation === debtorFlushGeneration) debtorFlushInFlight = null;
+    }
+  })();
+  debtorFlushInFlight = run;
+  return run;
 }
 
 export const StorageService = {
@@ -261,9 +365,8 @@ export const StorageService = {
         if (!d) return false;
         const name = (d.client_name || '').trim().toUpperCase();
         if (name.includes('GLENDYS') || name.includes('GLENDY')) {
-          markAsDeleted(d.id);
-          markAsDeleted('name:' + name);
-          SupabaseSyncService.deleteDebtor(d.id, 'detal', name).catch(() => {});
+          recordDebtorDeletion('detal', d.id, name);
+          queueDebtorRemote({ op: 'delete', mode: 'detal', id: d.id, name });
           return false;
         }
         return true;
@@ -282,8 +385,8 @@ export const StorageService = {
         if (!d) return false;
         const isAuto = Boolean(d.id?.startsWith('deb-auto-') || (d.notes && d.notes.toLowerCase().includes('sincronizado de operaciones')));
         if (isAuto && !activeClients.has((d.client_name || '').trim().toUpperCase())) {
-          markAsDeleted(d.id);
-          SupabaseSyncService.deleteDebtor(d.id, 'detal').catch(() => {});
+          recordDebtorDeletion('detal', d.id);
+          queueDebtorRemote({ op: 'delete', mode: 'detal', id: d.id });
           return false;
         }
         return true;
@@ -376,6 +479,8 @@ export const StorageService = {
   async syncFromSupabase(mode?: AppMode): Promise<void> {
     const m = mode || this.getAppMode();
     try {
+      // Enviar primero lo pendiente para no descargar filas que ya se borraron aquí
+      await flushDebtorOutbox().catch(() => {});
       const [remoteAdjustments, remoteAudit, remoteRemesas, remoteRemitentes] = await Promise.all([
         SupabaseSyncService.fetchAdjustments(m),
         SupabaseSyncService.fetchAuditEntries(m),
@@ -429,6 +534,7 @@ export const StorageService = {
       if (remoteAudit !== null) {
         AuditService.mergeRemote(m, remoteAudit);
       }
+      const fetchStartedAt = Date.now();
       const [
         remoteAccs,
         remoteClients,
@@ -650,11 +756,19 @@ export const StorageService = {
         saveToStorage(this.getTransactionsMayorKey(m), merged);
       }
       if (remoteDebtors !== null) {
-        const validRemote = remoteDebtors.filter((d) => !isDeleted(d.id) && !isDeleted('name:' + (d.client_name || '').trim().toUpperCase()) && (d.client_name || '').trim().toUpperCase() !== 'GLENDYS');
-        const sorted = validRemote.sort((a, b) =>
-          (a.client_name || '').localeCompare(b.client_name || '', 'es', { sensitivity: 'base' })
-        );
-        saveToStorage(this.getDebtorsKey(m), sorted);
+        const { debtors: mergedDebtors, staleRemoteIds } = mergeRemoteDebtors({
+          remote: remoteDebtors,
+          local: getFromStorage<Debtor[]>(this.getDebtorsKey(m), []) || [],
+          tombstones: getDebtorTombstones(m),
+          pendingIds: pendingUpsertIds(getDebtorOutbox(), m),
+          fetchStartedAt,
+        });
+        saveToStorage(this.getDebtorsKey(m), mergedDebtors);
+        // Filas que otro dispositivo (o un borrado fallido) dejó vivas en Supabase
+        if (staleRemoteIds.length > 0) {
+          staleRemoteIds.forEach((id) => queueDebtorRemote({ op: 'delete', mode: m, id }));
+          flushDebtorOutbox().catch(() => {});
+        }
       }
       if (remoteDebtPayments !== null) {
         const validRemote = remoteDebtPayments.filter((p) => !isDeleted(p.id));
@@ -1947,15 +2061,14 @@ export const StorageService = {
   syncDebtors(mode?: AppMode): Debtor[] {
     const m = mode || this.getAppMode();
     this.migrateOldDataIfNeeded();
-    markAsDeleted('deb-1792537298623');
-    markAsDeleted('name:GLENDYS');
+    const tombstones = getDebtorTombstones(m);
     const rawDebtors = getFromStorage<Debtor[] | null>(this.getDebtorsKey(m), null);
     const debtors: Debtor[] = (rawDebtors === null ? (m === 'detal' ? [...INITIAL_DEBTORS] : []) : [...rawDebtors].filter(Boolean))
-      .filter((d) => !isDeleted(d.id) && !isDeleted('name:' + (d.client_name || '').trim().toUpperCase()))
-      .filter((d) => d.id !== 'deb-1792537298623' && (d.client_name || '').trim().toUpperCase() !== 'GLENDYS');
+      .filter((d) => !isDebtorSuppressed(tombstones, d));
     const detalTxs = (getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []) || []).filter(Boolean);
     const mayorTxs = (getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []) || []).filter(Boolean);
     const payments = (getFromStorage<DebtPayment[]>(this.getDebtPaymentsKey(m), []) || []).filter(Boolean);
+    const lastActivity = lastActivityByName([...detalTxs, ...mayorTxs, ...payments]);
 
     const clientStats = new Map<string, { totalBought: number; totalPaidInTx: number }>();
 
@@ -2012,9 +2125,16 @@ export const StorageService = {
       const hasActivity = st.totalBought > 0 || clientAbonos > 0;
 
       if (existingIndex === -1) {
-        if (calculatedNetDebt !== 0) {
+        const autoId = 'deb-auto-' + m + '-' + name.replace(/[^A-Z0-9]/g, '_');
+        // Un deudor borrado a mano no se recrea a partir de ventas o abonos anteriores al borrado
+        const suppressed = isDebtorSuppressed(
+          tombstones,
+          { id: autoId, client_name: name },
+          lastActivity.get(name) ?? null
+        );
+        if (calculatedNetDebt !== 0 && !suppressed) {
           debtors.unshift({
-            id: 'deb-auto-' + m + '-' + name.replace(/[^A-Z0-9]/g, '_'),
+            id: autoId,
             client_name: name,
             current_debt: calculatedNetDebt,
             notes: calculatedNetDebt > 0
@@ -2053,19 +2173,23 @@ export const StorageService = {
     const uniqueMap = new Map<string, Debtor>();
     filteredDebtors.forEach((d) => {
       const key = (d.client_name || '').trim().toUpperCase();
-      if (!uniqueMap.has(key)) {
+      const kept = uniqueMap.get(key);
+      if (!kept) {
         uniqueMap.set(key, d);
       } else {
         hasChanges = true;
-        orphanedIds.push(d.id);
+        // Un duplicado con el mismo id que el conservado no se borra (borraría a ambos)
+        if (d.id !== kept.id) orphanedIds.push(d.id);
       }
     });
 
     if (orphanedIds.length > 0) {
+      // Limpieza automática: lápida solo por id, no por nombre, para no bloquear al cliente
       orphanedIds.forEach((id) => {
-        markAsDeleted(id);
-        SupabaseSyncService.deleteDebtor(id, m).catch(() => {});
+        recordDebtorDeletion(m, id);
+        queueDebtorRemote({ op: 'delete', mode: m, id });
       });
+      flushDebtorOutbox().catch(() => {});
     }
 
     debtors.length = 0;
@@ -2139,7 +2263,8 @@ export const StorageService = {
     });
     this.saveDebtors(updated, m);
     if (updatedDebtor) {
-      SupabaseSyncService.upsertDebtor(updatedDebtor, m).catch(() => {});
+      queueDebtorRemote({ op: 'upsert', mode: m, id: debtorId, debtor: updatedDebtor });
+      flushDebtorOutbox().catch(() => {});
     }
   },
 
@@ -2181,7 +2306,8 @@ export const StorageService = {
       };
       const updatedList = all.map((d) => (d.id === existingDebtor.id ? updated : d));
       this.saveDebtors(updatedList, m);
-      SupabaseSyncService.upsertDebtor(updated, m).catch(() => {});
+      queueDebtorRemote({ op: 'upsert', mode: m, id: updated.id, debtor: updated });
+      flushDebtorOutbox().catch(() => {});
 
       // Sincronizar en Clientes
       try {
@@ -2207,7 +2333,8 @@ export const StorageService = {
     unmarkDeleted(newDebtor.id);
     all.unshift(newDebtor);
     this.saveDebtors(all, m);
-    SupabaseSyncService.upsertDebtor(newDebtor, m).catch(() => {});
+    queueDebtorRemote({ op: 'upsert', mode: m, id: newDebtor.id, debtor: newDebtor });
+    flushDebtorOutbox().catch(() => {});
 
     // AUTOMÁTICO: Asegurar que el deudor también se registre o actualice en Clientes
     try {
@@ -2337,20 +2464,25 @@ export const StorageService = {
   },
 
   async deleteDebtor(id: string, mode?: AppMode, clientName?: string): Promise<void> {
-    markAsDeleted(id);
-    if (clientName) {
-      markAsDeleted('name:' + clientName.trim().toUpperCase());
-    }
     const m = mode || this.getAppMode();
     const rawDebtors = getFromStorage<Debtor[]>(this.getDebtorsKey(m), []);
+    let latestUpdate = 0;
     const filtered = rawDebtors.filter((d) => {
       if (!d) return false;
-      if (id && d.id === id) return false;
-      if (clientName && (d.client_name || '').trim().toUpperCase() === clientName.trim().toUpperCase()) return false;
+      const matches =
+        (id && d.id === id) ||
+        (clientName && (d.client_name || '').trim().toUpperCase() === clientName.trim().toUpperCase());
+      if (matches) {
+        latestUpdate = Math.max(latestUpdate, (d.updated_at ? new Date(d.updated_at).getTime() : 0) || 0);
+        return false;
+      }
       return true;
     });
+    recordDebtorDeletion(m, id, clientName, latestUpdate + 1);
     saveToStorage(this.getDebtorsKey(m), filtered);
-    await SupabaseSyncService.deleteDebtor(id, m, clientName).catch(() => {});
+    // Si Supabase falla, el borrado queda en cola y se reintenta en cada sincronización
+    queueDebtorRemote({ op: 'delete', mode: m, id, name: clientName ? normalizeDebtorName(clientName) : undefined });
+    await flushDebtorOutbox().catch(() => {});
   },
 
   resetToDefaults(): void {
