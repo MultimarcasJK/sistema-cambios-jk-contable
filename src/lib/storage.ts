@@ -775,7 +775,10 @@ export const StorageService = {
       const item = localStorage.getItem(key);
       if (item !== null) {
         try {
-          return JSON.parse(item) || [];
+          const list: Client[] = JSON.parse(item) || [];
+          return list.sort((a, b) =>
+            (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' })
+          );
         } catch {
           return [];
         }
@@ -787,7 +790,10 @@ export const StorageService = {
 
   saveClients(clients: Client[], mode?: AppMode): void {
     const m = mode || this.getAppMode();
-    saveToStorage(this.getClientsKey(m), clients);
+    const sorted = [...clients].sort((a, b) =>
+      (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' })
+    );
+    saveToStorage(this.getClientsKey(m), sorted);
   },
 
   addClient(client: Omit<Client, 'id' | 'created_at'>, mode?: AppMode): Client {
@@ -1471,7 +1477,9 @@ export const StorageService = {
     return debtors.map((d) => ({
       ...d,
       notes: d.notes ? d.notes.replace(/\bdetal\b/gi, '').replace(/\s+/g, ' ').trim() : d.notes,
-    }));
+    })).sort((a, b) =>
+      (a.client_name || '').localeCompare(b.client_name || '', 'es', { sensitivity: 'base' })
+    );
   },
 
   getDebtors(mode?: AppMode): Debtor[] {
@@ -1481,7 +1489,10 @@ export const StorageService = {
 
   saveDebtors(debtors: Debtor[], mode?: AppMode): void {
     const m = mode || this.getAppMode();
-    saveToStorage(this.getDebtorsKey(m), debtors);
+    const sorted = [...debtors].sort((a, b) =>
+      (a.client_name || '').localeCompare(b.client_name || '', 'es', { sensitivity: 'base' })
+    );
+    saveToStorage(this.getDebtorsKey(m), sorted);
   },
 
   updateDebtorDebt(debtorId: string, delta: number, mode?: AppMode): void {

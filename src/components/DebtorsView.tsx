@@ -79,9 +79,9 @@ export function DebtorsView({
   }, [debtors]);
 
   const filteredDebtors = useMemo(() => {
-    return debtors.filter((d) =>
-      d.client_name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    return debtors
+      .filter((d) => (d.client_name || '').toLowerCase().includes(searchTerm.toLowerCase()))
+      .sort((a, b) => (a.client_name || '').localeCompare(b.client_name || '', 'es', { sensitivity: 'base' }));
   }, [debtors, searchTerm]);
 
   const handleAddDebtor = (e: React.FormEvent) => {
