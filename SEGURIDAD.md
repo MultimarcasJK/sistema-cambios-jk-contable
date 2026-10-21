@@ -7,7 +7,7 @@ La clave pública de Supabase (`sb_publishable_...` / `anon key`) **siempre** vi
 1. En Supabase > **Authentication > Users**, confirma que cada persona que usa el sistema tiene su usuario (correo y contraseña).
 2. En la tabla `perfiles_usuarios`, cada usuario debe tener una fila con el mismo `id` que en Authentication, `activo = true`, `rol` (`ADMIN` u `OPERADOR`) y `modo_permitido` (`detal`, `mayor` o `ambos`). Tú debes tener `rol = 'ADMIN'`.
 3. En Supabase > **Authentication > Sign In / Providers**, desactiva **Allow new users to sign up**, para que nadie pueda crearse una cuenta por su cuenta.
-4. En Supabase > **SQL Editor**, pega y ejecuta `supabase-seguridad-rls.sql`, siempre después de los demás `.sql` del proyecto (incluido `supabase-contabilidad.sql`). El script se detiene sin cambiar nada si no encuentra un ADMIN activo.
+4. En Supabase > **SQL Editor**, pega y ejecuta `supabase-seguridad-rls.sql`, siempre después de los demás `.sql` del proyecto (incluidos `supabase-contabilidad.sql` y `supabase-remesas.sql`). El script se detiene sin cambiar nada si no encuentra un ADMIN activo.
 5. Abre el sistema, inicia sesión y comprueba que ves tus datos.
 
 Resultado:

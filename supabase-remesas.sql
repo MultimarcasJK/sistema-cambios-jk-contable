@@ -4,6 +4,8 @@
 --
 -- Cómo usarlo: Supabase → SQL Editor → pegar todo este archivo → Run.
 -- Se puede ejecutar más de una vez sin problema.
+-- Después de ejecutarlo, ejecuta supabase-seguridad-rls.sql para aplicar los
+-- permisos definitivos (usuario activo y modo detal/mayor).
 -- =========================================================================
 
 DO $$

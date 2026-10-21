@@ -18,7 +18,7 @@
 --
 -- Cómo usarlo: Supabase > SQL Editor > pegar todo > Run.
 -- Es seguro ejecutarlo varias veces. Ejecútalo DESPUÉS de cualquier otro .sql
--- del proyecto (schema, nómina, contabilidad), y de nuevo si vuelves a correr
+-- del proyecto (schema, nómina, contabilidad, remesas), y de nuevo si vuelves a correr
 -- alguno de ellos, porque esos archivos crean sus propias políticas.
 -- IMPORTANTE: antes de ejecutarlo, tu usuario debe existir en
 -- perfiles_usuarios con rol = 'ADMIN' y activo = true (el script se detiene
