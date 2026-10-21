@@ -15,6 +15,7 @@ import { ClientsView } from '@/components/ClientsView';
 import { DebtorsView } from '@/components/DebtorsView';
 import { PayrollServicesView } from '@/components/PayrollServicesView';
 import { ContabilidadView } from '@/components/ContabilidadView';
+import { RemesasView } from '@/components/RemesasView';
 import { StorageService } from '@/lib/storage';
 import { CLIENTES_EXCEL_DETAL } from '@/lib/clientes-excel-detal';
 import { INITIAL_ACCOUNTS_MAYOR } from '@/lib/initial-data';
@@ -425,6 +426,16 @@ export default function Home() {
               debtors={debtors}
               onDataChange={refreshData}
               appMode={appMode}
+            />
+          )}
+
+          {activeTab === 'remesas' && (
+            <RemesasView
+              appMode={appMode}
+              accounts={accounts}
+              suppliers={suppliers}
+              dataVersion={dataVersion}
+              onDataChange={refreshData}
             />
           )}
 

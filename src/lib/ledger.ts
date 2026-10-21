@@ -5,6 +5,7 @@ import {
   BalanceTransfer,
   DebtPayment,
   Expense,
+  Remesa,
   SupplierPayment,
   SupplierPurchase,
   TransactionDetal,
@@ -53,7 +54,10 @@ export type LedgerOrigin =
   | 'compra_proveedor'
   | 'pago_proveedor'
   | 'abono_cliente'
-  | 'ajuste';
+  | 'ajuste'
+  | 'remesa_cobro'
+  | 'remesa_pago'
+  | 'remesa_anulacion';
 
 export interface LedgerEntry {
   id: string;
@@ -79,6 +83,7 @@ export interface LedgerSources {
       supplierPayments: SupplierPayment[];
       debtPayments: DebtPayment[];
       adjustments: BalanceAdjustment[];
+      remesas?: Remesa[];
     }
   >;
 }
@@ -100,10 +105,12 @@ export interface Ledger {
 export const PLAN_FIJO: LedgerAccountDef[] = [
   { key: 'SIN_CUENTA', codigo: '1.1.99', nombre: 'Cuenta no indicada', tipo: 'activo' },
   { key: 'CXC', codigo: '1.2.01', nombre: 'Cuentas por cobrar clientes', tipo: 'activo' },
-  { key: 'CXP', codigo: '2.1.01', nombre: 'Cuentas por pagar proveedores', tipo: 'pasivo' },
+  { key: 'CXP', codigo: '2.1.01', nombre: 'Cuentas por pagar proveedores y aliados', tipo: 'pasivo' },
+  { key: 'REM_PAGAR', codigo: '2.1.02', nombre: 'Remesas por pagar', tipo: 'pasivo' },
   { key: 'APERTURA', codigo: '3.1.01', nombre: 'Saldos iniciales (capital)', tipo: 'patrimonio' },
   { key: 'ING_DETAL', codigo: '4.1.01', nombre: 'Ganancia ventas detal', tipo: 'ingreso' },
   { key: 'ING_MAYOR', codigo: '4.1.02', nombre: 'Ganancia ventas mayor', tipo: 'ingreso' },
+  { key: 'ING_REMESAS', codigo: '4.1.03', nombre: 'Ganancia remesas (comisión + diferencial)', tipo: 'ingreso' },
   { key: 'ING_OTROS', codigo: '4.3.01', nombre: 'Otros ingresos', tipo: 'ingreso' },
   { key: 'AJUSTES_FAVOR', codigo: '4.9.01', nombre: 'Sobrantes y ajustes a favor', tipo: 'ingreso' },
   { key: 'GTO_COMIS', codigo: '5.1.01', nombre: 'Comisiones bancarias', tipo: 'gasto' },
@@ -444,6 +451,51 @@ export function buildLedger(src: LedgerSources): Ledger {
     });
   });
 
+  // 9. Remesas: cobro (nace la deuda con el beneficiario), pago (se cancela) y anulación (se devuelve)
+  (['detal', 'mayor'] as AppMode[]).forEach((unidad) => {
+    (src.byMode[unidad]?.remesas || []).forEach((r) => {
+      if (!r) return;
+      const cobro = real(r.cuenta_cobro_id);
+      const ref = `#${r.numero} ${r.remitente_name} → ${r.beneficiario?.name || ''} (${r.pais_pago})`;
+
+      const lc: LedgerLine[] = [];
+      if (cobro) push(lc, cobro.key, cobro.moneda, r.total_cobrado);
+      push(lc, 'REM_PAGAR', r.moneda_pago, -r.monto_pago, r.beneficiario?.name);
+      add(
+        { id: 'as-' + r.id + '-c', fecha: r.date, orden: timeOf(r.created_at), unidad, origen: 'remesa_cobro', origenId: r.id, descripcion: 'Cobro remesa ' + ref },
+        lc
+      );
+
+      if (r.estado === 'pagada' && r.fecha_pago) {
+        const pago = r.historial?.find((h) => h.estado === 'pagada');
+        const lp: LedgerLine[] = [];
+        push(lp, 'REM_PAGAR', r.moneda_pago, r.monto_pago, r.beneficiario?.name);
+        if (r.metodo_pago === 'cuenta_propia') {
+          const cp = real(r.cuenta_pago_id);
+          if (cp) push(lp, cp.key, cp.moneda, -r.monto_pago);
+        } else {
+          push(lp, 'CXP', 'USD', -(r.costo_usd || 0), r.aliado_name);
+        }
+        push(lp, 'ING_REMESAS', 'USD', -(r.ganancia_usd || 0));
+        add(
+          { id: 'as-' + r.id + '-p', fecha: r.fecha_pago, orden: timeOf(pago?.ts), unidad, origen: 'remesa_pago', origenId: r.id, descripcion: 'Pago remesa ' + ref },
+          lp
+        );
+      }
+
+      if (r.estado === 'anulada' && r.fecha_anulacion) {
+        const an = r.historial?.find((h) => h.estado === 'anulada');
+        const la: LedgerLine[] = [];
+        if (cobro) push(la, cobro.key, cobro.moneda, -r.total_cobrado);
+        push(la, 'REM_PAGAR', r.moneda_pago, r.monto_pago, r.beneficiario?.name);
+        add(
+          { id: 'as-' + r.id + '-a', fecha: r.fecha_anulacion, orden: timeOf(an?.ts), unidad, origen: 'remesa_anulacion', origenId: r.id, descripcion: 'Anulación remesa ' + ref + (an?.nota ? ': ' + an.nota : '') },
+          la
+        );
+      }
+    });
+  });
+
   asientos.sort((a, b) => (a.fecha + a.orden).localeCompare(b.fecha + b.orden) || a.id.localeCompare(b.id));
 
   // Cuadre: saldo según libro contra saldo guardado en la cuenta
@@ -482,4 +534,7 @@ export const ORIGIN_LABELS: Record<LedgerOrigin, string> = {
   pago_proveedor: 'Pago proveedor',
   abono_cliente: 'Abono cliente',
   ajuste: 'Ajuste de saldo',
+  remesa_cobro: 'Remesa cobrada',
+  remesa_pago: 'Remesa pagada',
+  remesa_anulacion: 'Remesa anulada',
 };
