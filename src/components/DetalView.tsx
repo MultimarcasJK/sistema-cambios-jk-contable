@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Account, TransactionDetal, Client, AppMode } from '@/types';
 import { StorageService } from '@/lib/storage';
+import { recordTime } from '@/lib/order';
 import { RatesService } from '@/lib/rates-service';
 import { AbonoModal } from '@/components/AbonoModal';
 import { parseFormattedNumber, formatCurrency, formatRateDisplay, formatInputNumber } from '@/lib/formatters';
@@ -253,13 +254,13 @@ export function DetalView({
         type: 'tx' as const,
         data: tx,
         date: tx.date,
-        timestamp: new Date(tx.created_at || tx.date).getTime() || 0,
+        timestamp: recordTime(tx),
       })),
       ...allPayments.map((pay) => ({
         type: 'abono' as const,
         data: pay,
         date: pay.date,
-        timestamp: new Date(pay.created_at || pay.date).getTime() || 0,
+        timestamp: recordTime(pay),
       })),
     ];
 

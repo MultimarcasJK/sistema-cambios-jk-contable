@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Account, BalanceTransfer } from '@/types';
+import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
 import { ArrowLeftRight, CheckCircle, Search, Trash2 } from 'lucide-react';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInputNumber } from '@/lib/formatters';
@@ -123,7 +124,7 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
   };
 
   const filteredTransfers = useMemo(() => {
-    return transfers.filter((t) => {
+    return newestFirst(transfers).filter((t) => {
       const matchConcept = (t.concept || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchRef = t.reference ? t.reference.toLowerCase().includes(searchTerm.toLowerCase()) : false;
       return matchConcept || matchRef;

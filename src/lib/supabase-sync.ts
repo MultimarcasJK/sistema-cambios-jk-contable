@@ -1,4 +1,12 @@
 import { supabase, isSupabaseConfigured } from './supabase';
+
+// Varias tablas no guardan la hora de creación; se recupera del id (prefijo-<milisegundos>)
+// para que las listas sigan ordenadas de la más nueva a la más vieja después de sincronizar.
+export function createdAtOf(row: { id?: string; created_at?: string } | null | undefined): string | undefined {
+  if (row?.created_at) return row.created_at;
+  const m = /-(\d{13})(?:\D|$)/.exec(String(row?.id || ''));
+  return m ? new Date(Number(m[1])).toISOString() : undefined;
+}
 import {
   Remesa,
   Remitente,
@@ -152,6 +160,7 @@ export const SupabaseSyncService = {
         profit_usd: Number(row.net_profit ?? row.profit_usd ?? 0),
         payment_status: row.payment_status || 'PAGADO',
         notes: row.notes || '',
+        created_at: createdAtOf(row),
       }));
     } catch {
       return null;
@@ -230,6 +239,7 @@ export const SupabaseSyncService = {
         profit_usd: Number(row.net_profit ?? row.profit_usd ?? 0),
         payment_status: row.payment_status || 'PAGADO',
         notes: row.notes || '',
+        created_at: createdAtOf(row),
       }));
     } catch {
       return null;
@@ -352,6 +362,7 @@ export const SupabaseSyncService = {
         amount: Number(row.amount) || 0,
         amount_currency: Number(row.amount_currency ?? row.amount) || 0,
         exchange_rate: Number(row.exchange_rate) || 1,
+        created_at: createdAtOf(row),
       })) as DebtPayment[];
     } catch {
       return null;
@@ -405,6 +416,7 @@ export const SupabaseSyncService = {
         percentage_fee: Number(row.percentage_fee) || 0,
         concept: row.concept ?? row.notes ?? '',
         reference: row.reference ?? '',
+        created_at: createdAtOf(row),
       })) as BalanceTransfer[];
     } catch {
       return null;
@@ -448,7 +460,7 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
-      return (data as Expense[]) || [];
+      return ((data || []) as any[]).map((row) => ({ ...row, created_at: createdAtOf(row) })) as Expense[];
     } catch {
       return null;
     }
@@ -573,7 +585,7 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
-      return (data as SupplierPurchase[]) || [];
+      return ((data || []) as any[]).map((row) => ({ ...row, created_at: createdAtOf(row) })) as SupplierPurchase[];
     } catch {
       return null;
     }
@@ -617,7 +629,7 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
-      return (data as SupplierPayment[]) || [];
+      return ((data || []) as any[]).map((row) => ({ ...row, created_at: createdAtOf(row) })) as SupplierPayment[];
     } catch {
       return null;
     }
@@ -669,7 +681,7 @@ export const SupabaseSyncService = {
         payment_frequency: row.payment_frequency || 'quincenal',
         payment_details: row.payment_details || '',
         is_active: row.is_active !== undefined && row.is_active !== null ? Boolean(row.is_active) : true,
-        created_at: row.created_at || new Date().toISOString(),
+        created_at: createdAtOf(row) || new Date().toISOString(),
       })) as Employee[];
     } catch {
       return null;
@@ -733,7 +745,7 @@ export const SupabaseSyncService = {
         expense_id: row.expense_id || '',
         reference: row.reference || '',
         notes: row.notes || '',
-        created_at: row.created_at || new Date().toISOString(),
+        created_at: createdAtOf(row) || new Date().toISOString(),
       })) as PayrollPayment[];
     } catch {
       return null;
@@ -799,7 +811,7 @@ export const SupabaseSyncService = {
         account_id: row.account_id || '',
         expense_id: row.expense_id || '',
         notes: row.notes || '',
-        created_at: row.created_at || new Date().toISOString(),
+        created_at: createdAtOf(row) || new Date().toISOString(),
       })) as ServiceExpense[];
     } catch {
       return null;

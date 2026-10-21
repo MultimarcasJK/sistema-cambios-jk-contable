@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Account, Expense, Currency, CurrencyConfig } from '@/types';
+import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
 import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from '@/components/ManageCurrenciesModal';
@@ -120,7 +121,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
   };
 
   const filteredExpenses = useMemo(() => {
-    return expenses.filter((e) => {
+    return newestFirst(expenses).filter((e) => {
       const matchSearch =
         e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         e.concept.toLowerCase().includes(searchTerm.toLowerCase());

@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { Supplier, SupplierPurchase, SupplierPayment, Account } from '@/types';
 import { StorageService } from '@/lib/storage';
+import { recordTime } from '@/lib/order';
 import { SupplierVoucherData } from './ShareSupplierVoucherModal';
 import {
   Building2,
@@ -130,7 +131,7 @@ export function SupplierHistoryModal({
         originalId: p.id,
         type: 'COMPRA',
         date: p.date,
-        timestamp: new Date(p.date).getTime() || 0,
+        timestamp: recordTime(p),
         badgeLabel: `Compra ${p.currency}`,
         badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
         dotColor: 'bg-blue-500',
@@ -175,7 +176,7 @@ export function SupplierHistoryModal({
         originalId: pay.id,
         type: 'PAGO',
         date: pay.date,
-        timestamp: new Date(pay.date).getTime() || 0,
+        timestamp: recordTime(pay),
         badgeLabel: 'Pago a Proveedor',
         badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
         dotColor: 'bg-emerald-500',

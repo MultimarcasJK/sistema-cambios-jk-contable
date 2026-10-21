@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Debtor, DebtPayment, Account, Currency, Client, TransactionDetal, TransactionMayor } from '@/types';
+import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
 import { CurrencyService } from '@/lib/currencies';
 import { ShareVoucherModal, VoucherData } from './ShareVoucherModal';
@@ -59,7 +60,7 @@ export function DebtorsView({
   const availableCurrencies = useMemo(() => CurrencyService.getCurrencies(), []);
 
   const allPayments = useMemo(() => {
-    return StorageService.getDebtPayments(appMode);
+    return newestFirst(StorageService.getDebtPayments(appMode));
   }, [debtors, appMode]);
 
   // Formulario nuevo deudor
