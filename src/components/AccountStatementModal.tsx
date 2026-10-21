@@ -641,7 +641,12 @@ export function AccountStatementModal({
                     title="Cambiar de cuenta bancaria"
                   >
                     {allAccounts.map((a) => (
-                      <option key={a.id} value={a.id}>
+                      <option
+                        key={a.id}
+                        value={a.id}
+                        style={{ backgroundColor: '#1e293b', color: '#ffffff' }}
+                        className="bg-slate-800 text-white py-1"
+                      >
                         Cambiar a: {a.name} ({a.currency} - {a.bank_name})
                       </option>
                     ))}

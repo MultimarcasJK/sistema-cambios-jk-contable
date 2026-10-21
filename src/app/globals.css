@@ -109,10 +109,27 @@ body {
 }
 [data-theme="detal"] input:not([type="checkbox"]):not([type="radio"]):not([type="date"]),
 [data-theme="detal"] input[type="date"],
-[data-theme="detal"] select,
+[data-theme="detal"] select:not([class*="bg-slate-"]):not([class*="bg-gray-"]):not([class*="bg-black"]),
 [data-theme="detal"] textarea {
   color: #000000 !important;
   font-weight: 500;
+}
+[data-theme="detal"] select[class*="bg-slate-"],
+[data-theme="detal"] select[class*="bg-gray-"],
+[data-theme="detal"] select[class*="bg-black"],
+[data-theme="detal"] select.bg-slate-800,
+[data-theme="detal"] select.bg-slate-900,
+[data-theme="detal"] .bg-slate-900 select {
+  color: #ffffff !important;
+  background-color: #1e293b !important;
+}
+[data-theme="detal"] select[class*="bg-slate-"] option,
+[data-theme="detal"] select.bg-slate-800 option,
+[data-theme="detal"] select.bg-slate-900 option,
+[data-theme="detal"] .bg-slate-900 select option,
+select option {
+  color: #ffffff !important;
+  background-color: #1e293b !important;
 }
 
 /* ══════════════════════════════════════════════
