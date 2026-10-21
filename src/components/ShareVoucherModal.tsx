@@ -13,12 +13,24 @@ export interface VoucherData {
   notes?: string;
 }
 
+// Nota para el cliente: las notas automáticas del sistema no le dicen nada (y podían contradecir el saldo)
+function notaParaCliente(notes?: string): string {
+  const raw = (notes || '').trim();
+  if (/^(sincronizado de operaciones|abono a favor registrado|generado automáticamente)/i.test(raw)) return '';
+  return raw
+    .replace(/\((detal|mayor)\)/gi, '')
+    .replace(/\bdetal\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 interface ShareVoucherModalProps {
   data: VoucherData;
   onClose: () => void;
 }
 
 export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
+  const cleanNotes = notaParaCliente(data.notes);
   const [copiedImage, setCopiedImage] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -67,13 +79,20 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
       logo.crossOrigin = 'anonymous';
       logo.src = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/logo-jk-transparente.png`;
 
-      const drawContent = () => {
-        // Logo + Nombre Empresa
-        ctx.drawImage(logo, 400, 60, 80, 80);
-        ctx.textAlign = 'center';
+      const drawContent = (conLogo: boolean) => {
+        // Logo + Nombre Empresa, centrados juntos y sin encimarse
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 40px sans-serif';
-        ctx.fillText('CAMBIOS JK', 540, 115);
+        ctx.textBaseline = 'middle';
+        const textW = ctx.measureText('CAMBIOS JK').width;
+        const logoW = conLogo ? 80 : 0;
+        const gap = conLogo ? 18 : 0;
+        const startX = 500 - (logoW + gap + textW) / 2;
+        if (conLogo) ctx.drawImage(logo, startX, 60, 80, 80);
+        ctx.textAlign = 'left';
+        ctx.fillText('CAMBIOS JK', startX + logoW + gap, 100);
+        ctx.textBaseline = 'alphabetic';
+        ctx.textAlign = 'center';
 
         // Línea separadora
         ctx.strokeStyle = '#334155';
@@ -164,10 +183,6 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
           ctx.fillText(`• Moneda de Referencia: Dólares Americanos (USD)`, 110, 860);
         }
 
-        const cleanNotes = (data.notes || '')
-          .replace(/\bdetal\b/gi, '')
-          .replace(/\s+/g, ' ')
-          .trim();
 
         if (cleanNotes) {
           ctx.fillText(`• Observaciones: ${cleanNotes.slice(0, 60)}`, 110, 895);
@@ -175,7 +190,7 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
           ctx.fillText(`• Soporte y Atención directa vía WhatsApp`, 110, 895);
         }
 
-        ctx.fillText(`• Código de Verificación: JK-${Date.now().toString().slice(-6)}`, 110, 930);
+        ctx.fillText(`• Emitido: ${new Date().toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' })}`, 110, 930);
 
         // Pie de Comprobante
         ctx.textAlign = 'center';
@@ -187,15 +202,9 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
         resolveCanvas(canvas);
       };
 
-      logo.onload = drawContent;
-      logo.onerror = () => {
-        // Si falla el logo, dibujar solo texto
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 46px sans-serif';
-        ctx.fillText('CAMBIOS JK', 500, 130);
-        drawContent();
-      };
+      logo.onload = () => drawContent(true);
+      // Si falla el logo, solo el nombre
+      logo.onerror = () => drawContent(false);
     });
   };
 
@@ -276,10 +285,6 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
   };
 
   // Generar texto para WhatsApp
-  const cleanNotes = (data.notes || '')
-    .replace(/\bdetal\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 
   const getFormattedTextMessage = (): string => {
     const estado = isDebtor
