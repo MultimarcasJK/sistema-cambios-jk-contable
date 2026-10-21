@@ -18,5 +18,5 @@ Este archivo contiene las instrucciones y reglas permanentes que la IA (Antigrav
 ---
 
 ## 3. Mis Nuevas Reglas (Espacio para agregar más)
-<!-- Puedes escribir aquí abajo cualquier otra regla que desees agregar -->
+- **Despliegue GitHub Pages:** El proyecto en vivo funciona en GitHub Pages (`https://multimarcasjk.github.io/sistema-cambios-jk-contable/`). SIEMPRE ejecutar `npm run deploy` completo tras cada confirmación de ejecución (`EJECUTAR`) para actualizar la rama `gh-pages` y publicar los cambios en vivo.
 
