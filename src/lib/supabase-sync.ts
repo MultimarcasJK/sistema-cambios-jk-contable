@@ -374,7 +374,16 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
-      return (data as BalanceTransfer[]) || [];
+      // La tabla guarda el concepto en "notes" y no tiene percentage_fee: se normaliza para que la pantalla no falle
+      return ((data || []) as any[]).map((row) => ({
+        ...row,
+        amount_sent: Number(row.amount_sent) || 0,
+        amount_received: Number(row.amount_received) || 0,
+        commission: Number(row.commission) || 0,
+        percentage_fee: Number(row.percentage_fee) || 0,
+        concept: row.concept ?? row.notes ?? '',
+        reference: row.reference ?? '',
+      })) as BalanceTransfer[];
     } catch {
       return null;
     }

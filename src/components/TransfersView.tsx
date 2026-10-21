@@ -49,7 +49,7 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
   const groupedAccounts = useMemo(() => {
     const map = new Map<string, Account[]>();
     accounts.forEach((acc) => {
-      const curr = acc.currency.toUpperCase();
+      const curr = (acc.currency || 'USD').toUpperCase();
       if (!map.has(curr)) map.set(curr, []);
       map.get(curr)!.push(acc);
     });
@@ -124,7 +124,7 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
 
   const filteredTransfers = useMemo(() => {
     return transfers.filter((t) => {
-      const matchConcept = t.concept.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchConcept = (t.concept || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchRef = t.reference ? t.reference.toLowerCase().includes(searchTerm.toLowerCase()) : false;
       return matchConcept || matchRef;
     });
