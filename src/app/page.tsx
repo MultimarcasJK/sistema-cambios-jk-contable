@@ -434,6 +434,7 @@ export default function Home() {
               appMode={appMode}
               accounts={accounts}
               suppliers={suppliers}
+              clients={clients}
               dataVersion={dataVersion}
               onDataChange={refreshData}
             />
