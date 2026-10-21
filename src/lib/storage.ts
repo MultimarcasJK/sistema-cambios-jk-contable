@@ -534,7 +534,7 @@ export const StorageService = {
         saveToStorage(this.getTransactionsMayorKey(m), merged);
       }
       if (remoteDebtors !== null) {
-        const validRemote = remoteDebtors.filter((d) => !isDeleted(d.id));
+        const validRemote = remoteDebtors.filter((d) => !isDeleted(d.id) && !isDeleted('name:' + (d.client_name || '').trim().toUpperCase()) && (d.client_name || '').trim().toUpperCase() !== 'GLENDYS');
         const sorted = validRemote.sort((a, b) =>
           (a.client_name || '').localeCompare(b.client_name || '', 'es', { sensitivity: 'base' })
         );
@@ -1283,8 +1283,12 @@ export const StorageService = {
   syncDebtors(mode?: AppMode): Debtor[] {
     const m = mode || this.getAppMode();
     this.migrateOldDataIfNeeded();
+    markAsDeleted('deb-1792537298623');
+    markAsDeleted('name:GLENDYS');
     const rawDebtors = getFromStorage<Debtor[] | null>(this.getDebtorsKey(m), null);
-    const debtors: Debtor[] = rawDebtors === null ? (m === 'detal' ? [...INITIAL_DEBTORS] : []) : [...rawDebtors].filter(Boolean);
+    const debtors: Debtor[] = (rawDebtors === null ? (m === 'detal' ? [...INITIAL_DEBTORS] : []) : [...rawDebtors].filter(Boolean))
+      .filter((d) => !isDeleted(d.id) && !isDeleted('name:' + (d.client_name || '').trim().toUpperCase()))
+      .filter((d) => d.id !== 'deb-1792537298623' && (d.client_name || '').trim().toUpperCase() !== 'GLENDYS');
     const detalTxs = (getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []) || []).filter(Boolean);
     const mayorTxs = (getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []) || []).filter(Boolean);
     const payments = (getFromStorage<DebtPayment[]>(this.getDebtPaymentsKey(m), []) || []).filter(Boolean);
@@ -1403,24 +1407,8 @@ export const StorageService = {
     debtors.length = 0;
     debtors.push(...Array.from(uniqueMap.values()));
 
-    const correctedDebtors: typeof debtors = [];
-
     if (hasChanges || !rawDebtors || rawDebtors.length === 0) {
       saveToStorage(this.getDebtorsKey(m), debtors);
-      // Subir a Supabase los deudores corregidos para que no se sobreescriban
-      debtors.forEach((d) => {
-        if (d.updated_at && rawDebtors) {
-          const old = rawDebtors.find((r) => r && r.id === d.id);
-          if (!old || old.current_debt !== d.current_debt) {
-            correctedDebtors.push(d);
-          }
-        } else if (!rawDebtors) {
-          correctedDebtors.push(d);
-        }
-      });
-      correctedDebtors.forEach((d) => {
-        SupabaseSyncService.upsertDebtor(d, m).catch(() => {});
-      });
     }
 
     // Sincronizar automáticamente hacia el módulo de Clientes
