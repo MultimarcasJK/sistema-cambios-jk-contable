@@ -380,6 +380,7 @@ export interface Remitente {
   phone?: string;
   beneficiarios: Beneficiario[];
   created_at: string;
+  updated_at?: string;
 }
 
 export type RemesaEstado = 'cobrada' | 'en_proceso' | 'pagada' | 'fallida' | 'anulada';

@@ -1,16 +1,19 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Send, CheckCircle, Clock, XCircle, AlertTriangle, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import {
-  Account,
-  AppMode,
-  Beneficiario,
-  Remesa,
-  RemesaEstado,
-  RemesaMetodoPago,
-  Supplier,
-} from '@/types';
+  Send,
+  CheckCircle,
+  Clock,
+  XCircle,
+  AlertTriangle,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
+import { Account, AppMode, Beneficiario, Remesa, RemesaEstado, RemesaMetodoPago, Supplier } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { RatesService } from '@/lib/rates-service';
 import { COUNTRIES_LIST } from '@/lib/countries';
@@ -85,28 +88,32 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
   const [filtroPais, setFiltroPais] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [abierta, setAbierta] = useState<string | null>(null);
-  const [accion, setAccion] = useState({ metodo: 'cuenta_propia' as RemesaMetodoPago, cuenta: '', aliado: '', referencia: '' });
+  const [accion, setAccion] = useState({
+    metodo: 'cuenta_propia' as RemesaMetodoPago,
+    cuenta: '',
+    aliado: '',
+    referencia: '',
+  });
   // Un cambio de estado sin movimiento de saldo no cambia dataVersion; esto fuerza releer
   const [tick, setTick] = useState(0);
+  const [editandoBen, setEditandoBen] = useState(false);
 
   const remesas = useMemo(
     () => StorageService.getRemesas(appMode),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [appMode, dataVersion, tick]
+    [appMode, dataVersion, tick],
   );
   const remitentes = useMemo(
     () => StorageService.getRemitentes(appMode),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [appMode, dataVersion, tick]
+    [appMode, dataVersion, tick],
   );
 
   const activeAccounts = accounts.filter((a) => a.is_active !== false);
   const cuentaCobro = accounts.find((a) => a.id === form.cuenta_cobro_id);
   const monedaOrigen = cuentaCobro?.currency || 'USD';
   const pais = PAISES.find((p) => p.id === form.pais_pago);
-  const remitenteSel = remitentes.find(
-    (r) => r.name.trim().toUpperCase() === form.remitente_name.trim().toUpperCase()
-  );
+  const remitenteSel = remitentes.find((r) => r.name.trim().toUpperCase() === form.remitente_name.trim().toUpperCase());
   const beneficiariosPais = (remitenteSel?.beneficiarios || []).filter((b) => b.country === form.pais_pago);
 
   // Cálculos de la remesa
@@ -127,7 +134,8 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
     const origenUsd = origen === 'USD' || origen === 'USDT' ? 1 : RatesService.getRateInfo(origen, appMode).costRate;
     setForm((f) => ({
       ...f,
-      tasa_cliente: info.sellRate && info.sellRate !== 1 ? String(r4(info.sellRate / (origenUsd || 1))) : f.tasa_cliente,
+      tasa_cliente:
+        info.sellRate && info.sellRate !== 1 ? String(r4(info.sellRate / (origenUsd || 1))) : f.tasa_cliente,
       tasa_costo: info.costRate && info.costRate !== 1 ? String(info.costRate) : f.tasa_costo,
       tasa_origen_usd: String(origenUsd || 1),
     }));
@@ -146,7 +154,12 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
 
   const handlePais = (id: string) => {
     const p = PAISES.find((x) => x.id === id);
-    setForm((f) => ({ ...f, pais_pago: id, moneda_pago: p?.defaultCurrency || f.moneda_pago, beneficiario_id: '' }));
+    setForm((f) => ({
+      ...f,
+      pais_pago: id,
+      moneda_pago: p?.defaultCurrency || f.moneda_pago,
+      beneficiario_id: '',
+    }));
   };
 
   const handleRemitente = (name: string) => {
@@ -161,6 +174,7 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
   };
 
   const handleBeneficiario = (id: string) => {
+    setEditandoBen(false);
     const b = beneficiariosPais.find((x) => x.id === id);
     setForm((f) => ({
       ...f,
@@ -171,6 +185,45 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
       ben_account: b?.account_number || '',
       ben_phone: b?.phone || '',
     }));
+  };
+
+  const guardarBeneficiario = () => {
+    if (!remitenteSel || !form.beneficiario_id) return;
+    try {
+      StorageService.updateBeneficiario(
+        remitenteSel.id,
+        {
+          id: form.beneficiario_id,
+          name: form.ben_name,
+          identification: form.ben_identification.trim(),
+          bank: form.ben_bank.trim(),
+          account_number: form.ben_account.trim(),
+          phone: form.ben_phone.trim(),
+          country: form.pais_pago,
+        },
+        appMode,
+      );
+      setEditandoBen(false);
+      setTick((t) => t + 1);
+      window.alert('Beneficiario actualizado.');
+    } catch (err) {
+      window.alert((err as Error).message);
+    }
+  };
+
+  const borrarBeneficiario = () => {
+    const b = beneficiariosPais.find((x) => x.id === form.beneficiario_id);
+    if (!remitenteSel || !b) return;
+    if (
+      !window.confirm(
+        `¿Borrar a ${b.name} de los beneficiarios de ${remitenteSel.name}? Las remesas anteriores no cambian.`,
+      )
+    )
+      return;
+    StorageService.deleteBeneficiario(remitenteSel.id, b.id, appMode);
+    setEditandoBen(false);
+    handleBeneficiario('');
+    setTick((t) => t + 1);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -206,7 +259,7 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
           phone: form.remitente_phone,
         },
         ben,
-        appMode
+        appMode,
       );
       const r = StorageService.createRemesa(
         {
@@ -235,7 +288,7 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
           referencia_cobro: form.referencia_cobro.trim(),
           notes: form.notes.trim(),
         },
-        appMode
+        appMode,
       );
       setForm((f) => ({
         ...emptyForm,
@@ -277,7 +330,7 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
       const txt = window.prompt(
         nuevo === 'anulada'
           ? `Anular la remesa #${r.numero}. Se devolverán ${amt(r.total_cobrado, r.moneda_origen)} ${r.moneda_origen} desde la cuenta de cobro. Escribe el motivo:`
-          : `¿Por qué falló el pago de la remesa #${r.numero}?`
+          : `¿Por qué falló el pago de la remesa #${r.numero}?`,
       );
       if (txt === null) return;
       if (!txt.trim()) {
@@ -299,7 +352,7 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
           aliado_id: accion.aliado || undefined,
           aliado_name: aliado?.name,
         },
-        appMode
+        appMode,
       );
       setAbierta(null);
       setTick((t) => t + 1);
@@ -337,7 +390,12 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
       .filter((r) => PENDIENTES.includes(r.estado))
       .forEach((r) => {
         const k = r.pais_pago + '|' + r.moneda_pago;
-        const cur = map.get(k) || { pais: r.pais_pago, moneda: r.moneda_pago, total: 0, count: 0 };
+        const cur = map.get(k) || {
+          pais: r.pais_pago,
+          moneda: r.moneda_pago,
+          total: 0,
+          count: 0,
+        };
         cur.total += r.monto_pago;
         cur.count += 1;
         map.set(k, cur);
@@ -357,10 +415,10 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
         filtro === 'pendientes'
           ? PENDIENTES.includes(r.estado)
           : filtro === 'pagadas'
-          ? r.estado === 'pagada'
-          : filtro === 'anuladas'
-          ? r.estado === 'anulada'
-          : true
+            ? r.estado === 'pagada'
+            : filtro === 'anuladas'
+              ? r.estado === 'anulada'
+              : true,
       )
       .filter((r) => !filtroPais || r.pais_pago === filtroPais)
       .filter(
@@ -368,7 +426,7 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
           !q ||
           r.remitente_name.toUpperCase().includes(q) ||
           (r.beneficiario?.name || '').toUpperCase().includes(q) ||
-          String(r.numero) === q.replace('#', '')
+          String(r.numero) === q.replace('#', ''),
       );
   }, [remesas, filtro, filtroPais, busqueda]);
 
@@ -431,7 +489,8 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
           <div>
             <h2 className="text-base font-bold text-slate-900">Nueva remesa</h2>
             <p className="text-xs text-slate-500">
-              Se registra como COBRADA: el dinero del remitente entra a tu cuenta y queda pendiente el pago al beneficiario.
+              Se registra como COBRADA: el dinero del remitente entra a tu cuenta y queda pendiente el pago al
+              beneficiario.
             </p>
           </div>
         </div>
@@ -460,7 +519,12 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
                 <label className={label}>Documento</label>
                 <input
                   value={form.remitente_identification}
-                  onChange={(e) => setForm({ ...form, remitente_identification: e.target.value })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      remitente_identification: e.target.value,
+                    })
+                  }
                   className={input}
                 />
               </div>
@@ -504,20 +568,64 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
               </div>
               <div>
                 <label className={label}>Beneficiario guardado</label>
-                <select
-                  value={form.beneficiario_id}
-                  onChange={(e) => handleBeneficiario(e.target.value)}
-                  className={input}
-                  disabled={beneficiariosPais.length === 0}
-                >
-                  <option value="">{beneficiariosPais.length ? 'Nuevo beneficiario…' : 'Sin beneficiarios guardados'}</option>
-                  {beneficiariosPais.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} {b.bank ? `· ${b.bank}` : ''}
+                <div className="flex gap-2">
+                  <select
+                    value={form.beneficiario_id}
+                    onChange={(e) => handleBeneficiario(e.target.value)}
+                    className={input}
+                    disabled={beneficiariosPais.length === 0}
+                  >
+                    <option value="">
+                      {beneficiariosPais.length ? 'Nuevo beneficiario…' : 'Sin beneficiarios guardados'}
                     </option>
-                  ))}
-                </select>
+                    {beneficiariosPais.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} {b.bank ? `· ${b.bank}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {form.beneficiario_id && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setEditandoBen(true)}
+                        title="Editar beneficiario"
+                        className="px-2.5 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={borrarBeneficiario}
+                        title="Borrar beneficiario"
+                        className="px-2.5 rounded-xl border border-rose-300 text-rose-600 hover:bg-rose-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
+              {editandoBen && (
+                <div className="sm:col-span-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span className="flex-1">Corrige los datos del beneficiario abajo y dale a Guardar cambios.</span>
+                  <button
+                    type="button"
+                    onClick={guardarBeneficiario}
+                    className="px-3 py-1.5 rounded-xl bg-amber-600 text-white font-semibold"
+                  >
+                    Guardar cambios
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBeneficiario(form.beneficiario_id)}
+                    className="px-3 py-1.5 rounded-xl border border-amber-300 font-semibold"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
               <div>
                 <label className={label}>Nombre del beneficiario *</label>
                 <input
@@ -748,10 +856,18 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
               key={f}
               onClick={() => setFiltro(f)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold border ${
-                filtro === f ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200'
+                filtro === f
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white text-slate-600 border-slate-200'
               }`}
             >
-              {f === 'pendientes' ? 'Pendientes' : f === 'pagadas' ? 'Pagadas' : f === 'anuladas' ? 'Anuladas' : 'Todas'}
+              {f === 'pendientes'
+                ? 'Pendientes'
+                : f === 'pagadas'
+                  ? 'Pagadas'
+                  : f === 'anuladas'
+                    ? 'Anuladas'
+                    : 'Todas'}
             </button>
           ))}
           <select
@@ -796,12 +912,18 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
                     {amt(r.monto_pago, r.moneda_pago)} {r.moneda_pago}
                   </span>
                   <span className="text-slate-500">
-                    {r.metodo_pago === 'aliado' ? `Aliado: ${r.aliado_name || 'por elegir'}` : `Cuenta: ${accName(r.cuenta_pago_id)}`}
+                    {r.metodo_pago === 'aliado'
+                      ? `Aliado: ${r.aliado_name || 'por elegir'}`
+                      : `Cuenta: ${accName(r.cuenta_pago_id)}`}
                   </span>
                   <span className={`ml-auto px-2 py-0.5 rounded-lg border font-semibold ${ESTADO_CLASS[r.estado]}`}>
                     {ESTADO_LABEL[r.estado]}
                   </span>
-                  {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                  {open ? (
+                    <ChevronUp className="w-4 h-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                  )}
                 </button>
 
                 {open && (
@@ -818,7 +940,12 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
                         <div className="text-slate-500">Beneficiario</div>
                         <div className="font-semibold">{r.beneficiario?.name}</div>
                         <div className="text-slate-500">
-                          {[r.beneficiario?.identification, r.beneficiario?.bank, r.beneficiario?.account_number, r.beneficiario?.phone]
+                          {[
+                            r.beneficiario?.identification,
+                            r.beneficiario?.bank,
+                            r.beneficiario?.account_number,
+                            r.beneficiario?.phone,
+                          ]
                             .filter(Boolean)
                             .join(' · ')}
                         </div>
@@ -829,7 +956,8 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
                           {amt(r.total_cobrado, r.moneda_origen)} {r.moneda_origen} en {accName(r.cuenta_cobro_id)}
                         </div>
                         <div className="text-slate-500">
-                          Tasa {r.tasa_cliente} · comisión {amt(r.comision, r.moneda_origen)} · ganancia {amt(r.ganancia_usd, 'USD')} USD
+                          Tasa {r.tasa_cliente} · comisión {amt(r.comision, r.moneda_origen)} · ganancia{' '}
+                          {amt(r.ganancia_usd, 'USD')} USD
                         </div>
                       </div>
                     </div>
@@ -850,7 +978,12 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
                           <label className={label}>Forma de pago</label>
                           <select
                             value={accion.metodo}
-                            onChange={(e) => setAccion({ ...accion, metodo: e.target.value as RemesaMetodoPago })}
+                            onChange={(e) =>
+                              setAccion({
+                                ...accion,
+                                metodo: e.target.value as RemesaMetodoPago,
+                              })
+                            }
                             className={input}
                           >
                             <option value="cuenta_propia">Con mis cuentas</option>
@@ -896,7 +1029,12 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
                           <label className={label}>Referencia del pago</label>
                           <input
                             value={accion.referencia}
-                            onChange={(e) => setAccion({ ...accion, referencia: e.target.value })}
+                            onChange={(e) =>
+                              setAccion({
+                                ...accion,
+                                referencia: e.target.value,
+                              })
+                            }
                             className={input}
                           />
                         </div>
@@ -915,7 +1053,8 @@ export function RemesasView({ appMode, accounts, suppliers, dataVersion, onDataC
                           onClick={() => cambiar(r, 'en_proceso')}
                           className="px-3 py-1.5 rounded-xl border border-amber-300 text-amber-700 font-semibold flex items-center gap-1"
                         >
-                          <Clock className="w-3.5 h-3.5" /> {r.estado === 'fallida' ? 'Reintentar' : 'Pasar a en proceso'}
+                          <Clock className="w-3.5 h-3.5" />{' '}
+                          {r.estado === 'fallida' ? 'Reintentar' : 'Pasar a en proceso'}
                         </button>
                       )}
                       {(r.estado === 'cobrada' || r.estado === 'en_proceso') && (
