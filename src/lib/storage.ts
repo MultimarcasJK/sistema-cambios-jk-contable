@@ -1197,7 +1197,7 @@ export const StorageService = {
     const cur = rem?.beneficiarios.find((b) => b.id === ben.id);
     if (!rem || !cur) throw new Error('No se encontró el beneficiario.');
     if (!ben.name.trim()) throw new Error('El beneficiario necesita un nombre.');
-    Object.assign(cur, { ...ben, id: cur.id, country: cur.country, name: ben.name.trim().toUpperCase() });
+    Object.assign(cur, { ...ben, id: cur.id, country: ben.country || cur.country, name: ben.name.trim().toUpperCase() });
     rem.updated_at = new Date().toISOString();
     saveToStorage(this.getRemitentesKey(m), all);
     SupabaseSyncService.upsertRemitente(rem, m).catch(() => {});
@@ -1209,6 +1209,21 @@ export const StorageService = {
       summary: `Beneficiario ${cur.name} de ${rem.name} actualizado`,
       data: { ...cur },
     });
+  },
+
+  // Al renombrar un cliente, sus beneficiarios lo siguen (el remitente se busca por nombre)
+  renameRemitente(oldName: string, newName: string, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const from = oldName.trim().toUpperCase();
+    const to = newName.trim().toUpperCase();
+    if (!from || !to || from === to) return;
+    const all = this.getRemitentes(m);
+    const rem = all.find((r) => r.name.trim().toUpperCase() === from);
+    if (!rem || all.some((r) => r.name.trim().toUpperCase() === to)) return;
+    rem.name = to;
+    rem.updated_at = new Date().toISOString();
+    saveToStorage(this.getRemitentesKey(m), all);
+    SupabaseSyncService.upsertRemitente(rem, m).catch(() => {});
   },
 
   deleteBeneficiario(remitenteId: string, beneficiarioId: string, mode?: AppMode): void {
@@ -1269,7 +1284,7 @@ export const StorageService = {
     const now = new Date().toISOString();
     const remesa: Remesa = {
       ...input,
-      id: 'rms-' + Date.now(),
+      id: 'rms-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
       numero,
       date: today,
       created_at: now,

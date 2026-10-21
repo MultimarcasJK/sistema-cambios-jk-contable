@@ -5,6 +5,7 @@ import { Client, TransactionDetal, TransactionMayor, Debtor, Account, DebtPaymen
 import { StorageService } from '@/lib/storage';
 import { CurrencyService } from '@/lib/currencies';
 import { ShareVoucherModal, VoucherData } from './ShareVoucherModal';
+import { BeneficiariosCliente } from './BeneficiariosCliente';
 import {
   Users,
   Plus,
@@ -134,6 +135,8 @@ export function ClientsView({
       return;
     }
 
+    // Los beneficiarios guardados siguen al cliente si cambia de nombre
+    StorageService.renameRemitente(editingClient.name, editFormData.name, appMode);
     StorageService.updateClient(editingClient.id, {
       name: editFormData.name.trim().toUpperCase(),
       identification: editFormData.identification.trim() || undefined,
@@ -1230,7 +1233,7 @@ export function ClientsView({
       {/* Modal de Edición de Cliente */}
       {editingClient && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-bold text-slate-900 mb-1">Editar Ficha de Cliente</h3>
             <p className="text-xs text-slate-500 mb-4">
               Modifica los datos personales, de contacto y cuenta habitual del cliente
@@ -1298,6 +1301,21 @@ export function ClientsView({
                   value={editFormData.notes}
                   onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
                   className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Enter dentro de un beneficiario no debe guardar toda la ficha */}
+              <div
+                className="pt-3 border-t border-slate-100"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.preventDefault();
+                }}
+              >
+                <BeneficiariosCliente
+                  clientName={editingClient.name}
+                  identification={editingClient.identification}
+                  phone={editingClient.phone}
+                  appMode={appMode}
                 />
               </div>
 
