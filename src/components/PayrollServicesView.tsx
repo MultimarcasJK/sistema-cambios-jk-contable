@@ -10,6 +10,7 @@ import {
   Currency,
   AppMode,
 } from '@/types';
+import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
 import { CurrencyService } from '@/lib/currencies';
 import { formatInputNumber, parseFormattedNumber } from '@/lib/formatters';
@@ -321,7 +322,7 @@ export function PayrollServicesView({
   const [paymentMonthFilter, setPaymentMonthFilter] = useState('');
 
   const filteredPayments = useMemo(() => {
-    return payrollPayments.filter((p) => {
+    return newestFirst(payrollPayments).filter((p) => {
       const matchSearch =
         paymentSearch === '' ||
         p.employee_name.toLowerCase().includes(paymentSearch.toLowerCase()) ||
@@ -506,7 +507,7 @@ export function PayrollServicesView({
   };
 
   const filteredServices = useMemo(() => {
-    return serviceExpenses.filter((s) => {
+    return newestFirst(serviceExpenses).filter((s) => {
       const matchSearch =
         serviceSearch === '' ||
         s.description.toLowerCase().includes(serviceSearch.toLowerCase()) ||

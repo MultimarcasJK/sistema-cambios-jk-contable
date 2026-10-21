@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Account, Supplier, SupplierPurchase, SupplierPayment, CurrencyConfig } from '@/types';
+import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
 import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from './ManageCurrenciesModal';
@@ -306,8 +307,8 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
     return suppliers.reduce((sum, s) => sum + (s.current_debt_usd || 0), 0);
   }, [suppliers]);
 
-  const purchasesHistory = StorageService.getSupplierPurchases();
-  const paymentsHistory = StorageService.getSupplierPayments();
+  const purchasesHistory = newestFirst(StorageService.getSupplierPurchases());
+  const paymentsHistory = newestFirst(StorageService.getSupplierPayments());
 
   const commonCurrencies = ['USDT', 'VES', 'COP', 'PEN', 'EUR', 'USD'];
 

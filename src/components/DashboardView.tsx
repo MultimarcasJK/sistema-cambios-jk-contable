@@ -11,6 +11,7 @@ import {
   Debtor,
 } from '@/types';
 import { CurrencyService } from '@/lib/currencies';
+import { newestFirst } from '@/lib/order';
 import { TabKey } from './Navigation';
 import { formatCurrency } from '@/lib/formatters';
 import {
@@ -407,7 +408,7 @@ export function DashboardView({
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {mayorTxs.slice(0, 5).map((tx) => (
+              {newestFirst(mayorTxs).slice(0, 5).map((tx) => (
                 <div key={tx.id} className="py-2.5 flex items-center justify-between text-sm">
                   <div>
                     <div className="font-semibold text-slate-800">{tx.client_name}</div>

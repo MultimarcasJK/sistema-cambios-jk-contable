@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Account, AppMode, Beneficiario, Client, Remesa, RemesaEstado, RemesaMetodoPago, Supplier } from '@/types';
 import { StorageService } from '@/lib/storage';
+import { newestFirst } from '@/lib/order';
 import { RatesService } from '@/lib/rates-service';
 import { COUNTRIES_LIST } from '@/lib/countries';
 import { useAuth } from '@/lib/auth-context';
@@ -450,7 +451,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
 
   const lista = useMemo(() => {
     const q = busqueda.trim().toUpperCase();
-    return remesas
+    return newestFirst(remesas)
       .filter((r) =>
         filtro === 'pendientes'
           ? PENDIENTES.includes(r.estado)
@@ -1019,7 +1020,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                     </div>
 
                     <div className="text-slate-500">
-                      {(r.historial || []).map((h, i) => (
+                      {[...(r.historial || [])].reverse().map((h, i) => (
                         <span key={i} className="mr-3">
                           {ESTADO_LABEL[h.estado]}: {new Date(h.ts).toLocaleString('es-ES')}
                           {h.user_email ? ` (${h.user_email})` : ''}

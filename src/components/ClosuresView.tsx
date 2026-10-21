@@ -11,6 +11,7 @@ import {
   Currency,
 } from '@/types';
 import { StorageService } from '@/lib/storage';
+import { newestFirst } from '@/lib/order';
 import {
   CalendarCheck2,
   CheckCircle,
@@ -44,12 +45,14 @@ export function ClosuresView({
   detalTxs,
   mayorTxs,
   expenses,
-  closures,
+  closures: closuresRaw,
   accounts,
   debtors,
   onDataChange,
   appMode,
 }: ClosuresProps) {
+  // El cierre más reciente arriba
+  const closures = useMemo(() => newestFirst(closuresRaw), [closuresRaw]);
   const isDark = appMode === 'mayor';
   const todayStr = new Date().toISOString().slice(0, 10);
   const [activeSubTab, setActiveSubTab] = useState<'profits' | 'accounts' | 'debtors'>('profits');

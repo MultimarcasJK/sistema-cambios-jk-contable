@@ -110,14 +110,16 @@ export function ContabilidadView({ appMode, accounts, dataVersion, onDataChange 
 
   const auditEntries: AuditEntry[] = useMemo(() => {
     const q = auditFilter.trim().toLowerCase();
-    return AuditService.getEntries(appMode).filter(
-      (e) =>
-        !q ||
-        e.summary.toLowerCase().includes(q) ||
-        (e.user_email || '').toLowerCase().includes(q) ||
-        (e.reason || '').toLowerCase().includes(q) ||
-        e.entity.toLowerCase().includes(q)
-    );
+    return AuditService.getEntries(appMode)
+      .filter(
+        (e) =>
+          !q ||
+          e.summary.toLowerCase().includes(q) ||
+          (e.user_email || '').toLowerCase().includes(q) ||
+          (e.reason || '').toLowerCase().includes(q) ||
+          e.entity.toLowerCase().includes(q)
+      )
+      .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, auditFilter, dataVersion, accounts]);
 

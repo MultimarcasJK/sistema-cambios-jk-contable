@@ -12,6 +12,7 @@ import {
   DebtPayment,
 } from '@/types';
 import { StorageService } from '@/lib/storage';
+import { recordTime } from '@/lib/order';
 import { COUNTRIES_LIST, getAccountCountry } from '@/lib/countries';
 import { exportAccountStatementToExcel, StatementRowExport } from '@/lib/excel-export';
 import {
@@ -120,7 +121,7 @@ export function AccountStatementModal({
           id: `detal-in-${tx.id}`,
           date: tx.date || (tx.created_at ? tx.created_at.slice(0, 10) : ''),
           time: tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : ''),
-          sortKey: `${tx.date || ''} ${tx.time || '00:00'} ${tx.created_at || ''} 1`,
+          sortKey: `${tx.date || ''} ${tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : '00:00')} ${tx.created_at || ''} 1`,
           type: 'INGRESO',
           categoryKey: 'DETAL_IN',
           categoryLabel: 'Cobro Detal',
@@ -141,7 +142,7 @@ export function AccountStatementModal({
           id: `detal-out-${tx.id}`,
           date: tx.date || (tx.created_at ? tx.created_at.slice(0, 10) : ''),
           time: tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : ''),
-          sortKey: `${tx.date || ''} ${tx.time || '00:00'} ${tx.created_at || ''} 2`,
+          sortKey: `${tx.date || ''} ${tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : '00:00')} ${tx.created_at || ''} 2`,
           type: 'EGRESO',
           categoryKey: 'DETAL_OUT',
           categoryLabel: 'Despacho Detal',
@@ -467,7 +468,18 @@ export function AccountStatementModal({
 
     // 2. Ordenar cronológicamente ascendente (desde el más antiguo al más reciente)
     // para construir el saldo progresivo acumulativo exacto
-    items.sort((a, b) => (a.sortKey > b.sortKey ? 1 : a.sortKey < b.sortKey ? -1 : 0));
+    // Dentro del mismo día manda la hora de creación; si el registro no la trae (llegó así de Supabase),
+    // se toma del id (prefijo-<milisegundos>) para no dejarlo fuera de lugar
+    const itemTime = (it: StatementMovement) => {
+      const created = it.sortKey.split(' ')[2];
+      return recordTime({ id: it.id, created_at: created && created.includes('T') ? created : undefined });
+    };
+    items.sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) ||
+        itemTime(a) - itemTime(b) ||
+        (a.sortKey > b.sortKey ? 1 : a.sortKey < b.sortKey ? -1 : 0)
+    );
 
     // Saldo base histórico antes de los movimientos registrados:
     // Parte estrictamente del saldo inicial configurado de la cuenta (initial_balance) o 0.00

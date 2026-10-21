@@ -9,6 +9,7 @@ import {
   Account,
 } from '@/types';
 import { StorageService } from '@/lib/storage';
+import { recordTime } from '@/lib/order';
 import { VoucherData } from './ShareVoucherModal';
 import {
   CreditCard,
@@ -160,7 +161,7 @@ export function ClientHistoryModal({
 
     // 1. Operaciones Cripto/Dólar
     clientDetalHistory.forEach((t) => {
-      const ts = new Date(t.created_at || t.date).getTime() || 0;
+      const ts = recordTime(t);
       const isPaid = t.payment_status === 'PAGADO';
       const isPartial = t.payment_status === 'PARCIAL';
       const isPorCobrar = t.received_account_id === 'POR_COBRAR' || t.payment_status === 'PENDIENTE' || (!isPaid && !isPartial);
@@ -212,7 +213,7 @@ export function ClientHistoryModal({
 
     // 2. Operaciones Emergentes
     clientMayorHistory.forEach((t) => {
-      const ts = new Date(t.created_at || t.date).getTime() || 0;
+      const ts = recordTime(t);
       const isPaid = t.payment_status === 'PAGADO';
       const isPartial = t.payment_status === 'PARCIAL';
       const isPorCobrar = t.received_account_id === 'POR_COBRAR' || t.payment_status === 'PENDIENTE' || (!isPaid && !isPartial);
@@ -265,7 +266,7 @@ export function ClientHistoryModal({
 
     // 3. Abonos a Deuda
     clientPaymentsHistory.forEach((p) => {
-      const ts = new Date(p.created_at || p.date).getTime() || 0;
+      const ts = recordTime(p);
       const acc = accounts.find((a) => a.id === p.account_id);
       const isForeign = p.currency && p.currency !== 'USD' && p.currency !== 'USDT';
 
@@ -314,7 +315,10 @@ export function ClientHistoryModal({
     });
 
     // Ordenar: lo más nuevo primero arriba
-    return list.sort((a, b) => b.timestamp - a.timestamp);
+    return list.sort((a, b) => {
+      if (b.date !== a.date) return b.date.localeCompare(a.date);
+      return b.timestamp - a.timestamp;
+    });
   }, [clientName, clientDetalHistory, clientMayorHistory, clientPaymentsHistory, accounts]);
 
   const filteredMovements = useMemo(() => {
