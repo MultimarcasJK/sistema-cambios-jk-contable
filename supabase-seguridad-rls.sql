@@ -11,11 +11,15 @@
 --     pueden operar.
 --   * Las tablas detal_* solo son accesibles a perfiles con modo 'detal' o
 --     'ambos'; las tablas mayor_* a perfiles con modo 'mayor' o 'ambos'.
+--   * detal_/mayor_auditoria solo admiten leer y agregar; detal_/mayor_ajustes_saldo
+--     leer, agregar y borrar (se respeta el diseño de supabase-contabilidad.sql).
 --   * perfiles_usuarios: cada usuario ve su propio perfil; solo un ADMIN
 --     puede ver todos, crear, cambiar o borrar perfiles.
 --
 -- Cómo usarlo: Supabase > SQL Editor > pegar todo > Run.
--- Es seguro ejecutarlo varias veces.
+-- Es seguro ejecutarlo varias veces. Ejecútalo DESPUÉS de cualquier otro .sql
+-- del proyecto (schema, nómina, contabilidad), y de nuevo si vuelves a correr
+-- alguno de ellos, porque esos archivos crean sus propias políticas.
 -- IMPORTANTE: antes de ejecutarlo, tu usuario debe existir en
 -- perfiles_usuarios con rol = 'ADMIN' y activo = true (el script se detiene
 -- si no encuentra ningún ADMIN activo, para que no te quedes sin acceso).
@@ -111,10 +115,21 @@ BEGIN
       cond := 'public.jk_usuario_activo()';
     END IF;
 
-    EXECUTE format(
-      'CREATE POLICY %I ON public.%I FOR ALL TO authenticated USING (%s) WITH CHECK (%s)',
-      'jk_usuarios_activos', tbl, cond, cond
-    );
+    IF tbl LIKE '%\_auditoria' THEN
+      -- Bitácora (supabase-contabilidad.sql): solo leer y agregar, nunca editar ni borrar
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (%s)', 'jk_leer', tbl, cond);
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR INSERT TO authenticated WITH CHECK (%s)', 'jk_crear', tbl, cond);
+    ELSIF tbl LIKE '%\_ajustes\_saldo' THEN
+      -- Ajustes de saldo: leer, agregar y borrar (reseteo maestro), sin editar
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (%s)', 'jk_leer', tbl, cond);
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR INSERT TO authenticated WITH CHECK (%s)', 'jk_crear', tbl, cond);
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR DELETE TO authenticated USING (%s)', 'jk_borrar', tbl, cond);
+    ELSE
+      EXECUTE format(
+        'CREATE POLICY %I ON public.%I FOR ALL TO authenticated USING (%s) WITH CHECK (%s)',
+        'jk_usuarios_activos', tbl, cond, cond
+      );
+    END IF;
 
     -- Sin sesión (rol anon) no hay ningún permiso sobre la tabla
     EXECUTE format('REVOKE ALL ON public.%I FROM anon', tbl);
