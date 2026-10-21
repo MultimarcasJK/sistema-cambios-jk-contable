@@ -353,38 +353,40 @@ export function DebtorsView({
                 className="p-3 sm:p-3.5 rounded-xl border border-slate-200 hover:border-slate-300 transition flex flex-col justify-between bg-white shadow-2xs"
               >
                 <div>
-                  <div className="flex items-start justify-between gap-1.5">
-                    <div className="min-w-0 flex-1">
-                      <h4
-                        onClick={() => setSelectedClientForHistory(d.client_name)}
-                        className="font-bold text-slate-900 text-xs sm:text-[13px] leading-snug hover:text-blue-600 cursor-pointer flex items-center space-x-1 truncate"
-                        title="Clic para ver extracto de este cliente"
-                      >
-                        <span className="truncate">{d.client_name}</span>
-                        <FileText className="w-3 h-3 text-blue-500 opacity-80 shrink-0" />
-                      </h4>
-                      {d.phone && (
-                        <p className="text-[11px] text-slate-500 mt-0.5 flex items-center space-x-1 truncate">
-                          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span className="truncate">{d.phone}</span>
-                        </p>
-                      )}
-                    </div>
-                    <span
-                      className={`font-mono font-black text-xs px-2.5 py-1 rounded-lg shrink-0 ${
-                        d.current_debt > 0
-                          ? 'text-rose-700 bg-rose-50 border border-rose-200'
-                          : d.current_debt === 0
-                          ? 'text-slate-600 bg-slate-50 border border-slate-200'
-                          : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
-                      }`}
+                  <div>
+                    <h4
+                      onClick={() => setSelectedClientForHistory(d.client_name)}
+                      className="font-bold text-slate-900 text-sm leading-snug hover:text-blue-600 cursor-pointer flex items-center gap-1.5 break-words"
+                      title="Clic para ver extracto de este cliente"
                     >
-                      {d.current_debt > 0
-                        ? `-$${formatCurrency(d.current_debt)} (Debe)`
-                        : d.current_debt === 0
-                        ? '$0.00 (Al día)'
-                        : `+$${formatCurrency(Math.abs(d.current_debt))} (A favor)`}
-                    </span>
+                      <span className="break-words">{d.client_name}</span>
+                      <FileText className="w-3.5 h-3.5 text-blue-500 opacity-80 shrink-0" />
+                    </h4>
+
+                    <div className="mt-1.5 flex items-center">
+                      <span
+                        className={`font-mono font-black text-xs px-2.5 py-0.5 rounded-md inline-block ${
+                          d.current_debt > 0
+                            ? 'text-rose-700 bg-rose-50 border border-rose-200'
+                            : d.current_debt === 0
+                            ? 'text-slate-600 bg-slate-50 border border-slate-200'
+                            : 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                        }`}
+                      >
+                        {d.current_debt > 0
+                          ? `-$${formatCurrency(d.current_debt)} (Debe)`
+                          : d.current_debt === 0
+                          ? '$0.00 (Al día)'
+                          : `+$${formatCurrency(Math.abs(d.current_debt))} (A favor)`}
+                      </span>
+                    </div>
+
+                    {d.phone && (
+                      <p className="text-[11px] text-slate-500 mt-1.5 flex items-center space-x-1 truncate">
+                        <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate">{d.phone}</span>
+                      </p>
+                    )}
                   </div>
 
                   {d.notes && (
