@@ -130,6 +130,6 @@ BEGIN
     FOREACH tbl IN ARRAY tables LOOP
         EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', tbl);
         EXECUTE format('DROP POLICY IF EXISTS %I ON %I;', 'allow_all_for_anon_' || tbl, tbl);
-        EXECUTE format('CREATE POLICY %I ON %I FOR ALL USING (true) WITH CHECK (true);', 'allow_all_for_anon_' || tbl, tbl);
+        -- Política abierta eliminada: la seguridad real está en supabase-seguridad-rls.sql (ejecutarlo después).
     END LOOP;
 END $$;
