@@ -17,7 +17,6 @@ import { PayrollServicesView } from '@/components/PayrollServicesView';
 import { ContabilidadView } from '@/components/ContabilidadView';
 import { RemesasView } from '@/components/RemesasView';
 import { StorageService } from '@/lib/storage';
-import { CLIENTES_EXCEL_DETAL } from '@/lib/clientes-excel-detal';
 import { INITIAL_ACCOUNTS_MAYOR } from '@/lib/initial-data';
 import { SupabaseSyncService } from '@/lib/supabase-sync';
 import { RatesService } from '@/lib/rates-service';
@@ -131,7 +130,12 @@ export default function Home() {
     setIsSyncingRates(false);
   };
 
+  // Solo sincronizar con Supabase cuando hay sesión: sin login la base no entrega datos (RLS)
+  const userId = user?.id;
+
   useEffect(() => {
+    if (!userId) return;
+
     const safetyTimer = setTimeout(() => {
       setIsLoaded(true);
     }, 1500);
@@ -143,11 +147,8 @@ export default function Home() {
       refreshData(initialMode);
       setLastRatesSync(RatesService.getLastSyncTime());
 
-      // ── Seed automático clientes Excel → MODO MAYOR ──
-      const FLAG_VIEJA = 'cambiosjk_excel_detal_imported_v1';
-      const FLAG = 'cambiosjk_excel_mayor_imported_v1';
-
       // Limpiar importación errónea que se hizo en detal (si existe)
+      const FLAG_VIEJA = 'cambiosjk_excel_detal_imported_v1';
       if (typeof window !== 'undefined' && localStorage.getItem(FLAG_VIEJA)) {
         const clientesDetal = StorageService.getClients('detal');
         const sinImportados = clientesDetal.filter((c) => !c.id.startsWith('exc-'));
@@ -155,51 +156,6 @@ export default function Home() {
         localStorage.removeItem(FLAG_VIEJA);
         console.log('[JK] Limpiados clientes importados erróneamente en detal');
       }
-      // ──────────────────────────────────────────────────
-
-      StorageService.syncFromSupabase(initialMode)
-        .then(async () => {
-          refreshData(initialMode);
-
-          // Seed DESPUÉS del sync → no se sobreescribe
-          if (typeof window !== 'undefined' && !localStorage.getItem(FLAG)) {
-            const existentes = StorageService.getClients('mayor');
-            const nombresExistentes = new Set(
-              existentes.map((c) => (c.name || '').trim().toUpperCase())
-            );
-            const ahora = new Date().toISOString();
-            const nuevos: import('@/types').Client[] = [];
-            CLIENTES_EXCEL_DETAL.forEach((nombre, idx) => {
-              const norm = (nombre || '').trim().toUpperCase();
-              if (norm && !nombresExistentes.has(norm)) {
-                nombresExistentes.add(norm);
-                nuevos.push({
-                  id: 'exc-' + idx,
-                  name: nombre.trim(),
-                  identification: '',
-                  phone: '',
-                  address: '',
-                  preferred_account: '',
-                  notes: '',
-                  current_debt: 0,
-                  created_at: ahora,
-                });
-              }
-            });
-            if (nuevos.length > 0) {
-              const todos = [...existentes, ...nuevos];
-              StorageService.saveClients(todos, 'mayor');
-              // Subir a Supabase uno por uno (con ID determinista)
-              for (const c of nuevos) {
-                await SupabaseSyncService.upsertClient(c, 'mayor').catch(() => {});
-              }
-              refreshData('mayor');
-            }
-            localStorage.setItem(FLAG, '1');
-            console.log(`[JK] Clientes Excel importados en MAYOR: ${nuevos.length} nuevos`);
-          }
-        })
-        .catch(() => {});
 
       // ── Seed automático cuentas Excel → MODO MAYOR ──
       const FLAG_ACCOUNTS_MAYOR = 'cambiosjk_excel_mayor_accounts_imported_v1';
@@ -258,12 +214,13 @@ export default function Home() {
           .then(() => setLastRatesSync(RatesService.getLastSyncTime()))
           .catch(() => {});
       };
-      window.addEventListener('focus', handleWindowFocus);
-      document.addEventListener('visibilitychange', () => {
+      const handleVisibilityChange = () => {
         if (document.visibilityState === 'visible') {
           handleWindowFocus();
         }
-      });
+      };
+      window.addEventListener('focus', handleWindowFocus);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
 
       // Auto-sincronizar Supabase en segundo plano cada 10 segundos para multi-dispositivo en vivo
       const supabaseInterval = setInterval(() => {
@@ -283,6 +240,7 @@ export default function Home() {
       return () => {
         clearTimeout(safetyTimer);
         window.removeEventListener('focus', handleWindowFocus);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
         clearInterval(supabaseInterval);
         clearInterval(ratesInterval);
       };
@@ -294,7 +252,7 @@ export default function Home() {
     }
 
     return () => clearTimeout(safetyTimer);
-  }, [refreshData]);
+  }, [refreshData, userId]);
 
   if (isAuthLoading) {
     return (

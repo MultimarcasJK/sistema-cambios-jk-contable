@@ -75,3 +75,4 @@ Si deseas sincronizarlo en la nube con Supabase para compartir datos entre múlt
 1. Crea un proyecto gratuito en [Supabase](https://supabase.com).
 2. Ve al **SQL Editor** en Supabase y pega el contenido del archivo `supabase_schema.sql` (creará todas las tablas y cuentas iniciales).
 3. Renombra el archivo `.env.local.example` a `.env.local` y coloca tu URL y clave anónima (`anon key`).
+4. **Obligatorio:** crea tu usuario ADMIN en `perfiles_usuarios` y luego ejecuta `supabase-seguridad-rls.sql` en el SQL Editor. Sin este paso cualquiera con la clave pública puede leer y borrar los datos. Detalles en [SEGURIDAD.md](SEGURIDAD.md).
