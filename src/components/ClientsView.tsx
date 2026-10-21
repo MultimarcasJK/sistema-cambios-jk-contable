@@ -545,12 +545,25 @@ export function ClientsView({
               <label className="block text-xs font-semibold text-slate-600 mb-1">Nombre Completo *</label>
               <input
                 type="text"
-                placeholder="ej. RAFAEL NUÑEZ"
+                list="clients-list-registration"
+                placeholder="Escribe o selecciona cliente..."
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full text-xs font-bold border border-slate-300 rounded-lg px-3 py-2 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               />
+              <datalist id="clients-list-registration">
+                {clients.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.identification ? `${c.name} (${c.identification})` : c.name}
+                  </option>
+                ))}
+              </datalist>
+              {clients.some((c) => c.name.trim().toUpperCase() === formData.name.trim().toUpperCase() && formData.name.trim() !== '') && (
+                <p className="text-[11px] font-semibold text-amber-600 mt-1 flex items-center gap-1">
+                  <span>ℹ️ Este cliente ya existe. Al guardar se actualizará su información en lugar de duplicarse.</span>
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Cédula / RUC / DNI</label>

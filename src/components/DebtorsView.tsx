@@ -70,6 +70,58 @@ export function DebtorsView({
     notes: '',
   });
 
+  // Lista unificada de nombres de clientes para el desplegable (ordenada A-Z)
+  const allClientOptions = useMemo(() => {
+    const map = new Map<string, { name: string; debt?: number; phone?: string; notes?: string }>();
+
+    (clients || []).forEach((c) => {
+      if (c.name && c.name.trim()) {
+        const upper = c.name.trim().toUpperCase();
+        map.set(upper, {
+          name: upper,
+          phone: c.phone,
+          notes: c.notes,
+          debt: c.current_debt,
+        });
+      }
+    });
+
+    (debtors || []).forEach((d) => {
+      if (d.client_name && d.client_name.trim()) {
+        const upper = d.client_name.trim().toUpperCase();
+        const existing = map.get(upper);
+        map.set(upper, {
+          name: upper,
+          debt: d.current_debt,
+          phone: d.phone || existing?.phone,
+          notes: d.notes || existing?.notes,
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
+    );
+  }, [clients, debtors]);
+
+  const existingDebtorFound = useMemo(() => {
+    const trimmed = (newDebtor.client_name || '').trim().toUpperCase();
+    if (!trimmed) return null;
+    return debtors.find((d) => (d.client_name || '').trim().toUpperCase() === trimmed) || null;
+  }, [newDebtor.client_name, debtors]);
+
+  const handleClientNameChange = (val: string) => {
+    const upper = val.toUpperCase();
+    const matched = allClientOptions.find((c) => c.name === upper.trim());
+
+    setNewDebtor((prev) => ({
+      ...prev,
+      client_name: val,
+      phone: prev.phone || matched?.phone || '',
+      notes: prev.notes || matched?.notes || '',
+    }));
+  };
+
   const totalDebt = useMemo(() => {
     return debtors.filter((d) => (d.current_debt || 0) > 0).reduce((sum, d) => sum + d.current_debt, 0);
   }, [debtors]);
@@ -255,12 +307,44 @@ export function DebtorsView({
               <label className="block text-xs font-semibold text-slate-600 mb-1">Cliente *</label>
               <input
                 type="text"
-                placeholder="Nombre completo"
+                list="debtors-clients-list"
+                placeholder="Escribe o selecciona cliente..."
                 value={newDebtor.client_name}
-                onChange={(e) => setNewDebtor({ ...newDebtor, client_name: e.target.value })}
-                className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 uppercase"
+                onChange={(e) => handleClientNameChange(e.target.value)}
+                className="w-full text-xs font-bold border border-slate-300 rounded-lg px-3 py-2 uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               />
+              <datalist id="debtors-clients-list">
+                {allClientOptions.map((c) => {
+                  const hasDebt = c.debt !== undefined;
+                  const label = hasDebt
+                    ? c.debt! > 0
+                      ? `${c.name} (Debe: $${formatCurrency(c.debt!)})`
+                      : c.debt! < 0
+                      ? `${c.name} (A favor: +$${formatCurrency(Math.abs(c.debt!))})`
+                      : `${c.name} (Al día)`
+                    : c.name;
+                  return (
+                    <option key={c.name} value={c.name}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </datalist>
+
+              {existingDebtorFound && (
+                <div className="mt-1.5 p-2 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-800 flex items-center justify-between">
+                  <span className="font-semibold">ℹ️ Deudor ya registrado</span>
+                  <span className="font-mono font-bold">
+                    Saldo:{' '}
+                    {existingDebtorFound.current_debt > 0
+                      ? `-$${formatCurrency(existingDebtorFound.current_debt)} (Debe)`
+                      : existingDebtorFound.current_debt === 0
+                      ? '$0.00 (Al día)'
+                      : `+$${formatCurrency(Math.abs(existingDebtorFound.current_debt))} (A favor)`}
+                  </span>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Monto Deuda ($)</label>

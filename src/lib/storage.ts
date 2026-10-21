@@ -1501,8 +1501,42 @@ export const StorageService = {
   addDebtor(debtor: Omit<Debtor, 'id' | 'updated_at'>, mode?: AppMode): Debtor {
     const m = mode || this.getAppMode();
     const all = this.getDebtors(m);
+    const upperName = (debtor.client_name || '').trim().toUpperCase();
+
+    // PREVENCIÓN DE DUPLICADOS: Si el deudor ya existe, actualizar su deuda y datos
+    const existingDebtor = all.find((d) => (d.client_name || '').trim().toUpperCase() === upperName);
+    if (existingDebtor) {
+      unmarkDeleted(existingDebtor.id);
+      const newDebt = Number(((existingDebtor.current_debt || 0) + (debtor.current_debt || 0)).toFixed(2));
+      const updated: Debtor = {
+        ...existingDebtor,
+        current_debt: newDebt,
+        phone: debtor.phone || existingDebtor.phone,
+        notes: debtor.notes || existingDebtor.notes,
+        updated_at: new Date().toISOString(),
+      };
+      const updatedList = all.map((d) => (d.id === existingDebtor.id ? updated : d));
+      this.saveDebtors(updatedList, m);
+      SupabaseSyncService.upsertDebtor(updated, m).catch(() => {});
+
+      // Sincronizar en Clientes
+      try {
+        const clients = this.getClients(m);
+        const existingClient = clients.find((c) => (c.name || '').trim().toUpperCase() === upperName);
+        if (existingClient) {
+          const updates: Partial<Client> = {};
+          if (updated.phone && !existingClient.phone) updates.phone = updated.phone;
+          updates.current_debt = updated.current_debt;
+          this.updateClient(existingClient.id, updates, m);
+        }
+      } catch {}
+
+      return updated;
+    }
+
     const newDebtor: Debtor = {
       ...debtor,
+      client_name: upperName,
       id: 'deb-' + Date.now(),
       updated_at: new Date().toISOString(),
     };
