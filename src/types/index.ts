@@ -410,6 +410,8 @@ export interface Remesa {
   monto_enviar: number; // lo que se convierte (moneda origen)
   comision: number; // tarifa al remitente (moneda origen)
   total_cobrado: number; // monto_enviar + comision
+  monto_fiado?: number; // parte del total que el remitente quedó debiendo (moneda_origen)
+  fiado_usd?: number; // la misma deuda en USD, la que va a Deudores
   tasa_cliente: number; // unidades moneda pago por 1 unidad moneda origen
   moneda_pago: Currency;
   monto_pago: number; // lo que recibe el beneficiario

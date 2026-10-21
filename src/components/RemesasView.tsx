@@ -72,6 +72,7 @@ const emptyForm = {
   cuenta_cobro_id: '',
   monto_enviar: '',
   comision: '',
+  fiado: '',
   tasa_cliente: '',
   tasa_costo: '',
   tasa_origen_usd: '1',
@@ -139,6 +140,8 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
   const montoPago = r4(montoEnviar * tasaCliente);
   const costoUsd = tasaCosto > 0 ? r4(montoPago / tasaCosto) : 0;
   const gananciaUsd = r4(totalCobrado / tasaOrigenUsd - costoUsd);
+  const fiado = Math.min(Math.max(parseFormattedNumber(form.fiado) || 0, 0), totalCobrado);
+  const fiadoUsd = r4(fiado / tasaOrigenUsd);
 
   // Tasas sugeridas desde la hoja de tasas al cambiar país o cuenta de cobro
   useEffect(() => {
@@ -256,6 +259,10 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
       window.alert('Escribe el monto a enviar y la tasa.');
       return;
     }
+    if (parseFormattedNumber(form.fiado) > totalCobrado) {
+      window.alert('Lo fiado no puede ser mayor que el total a cobrar.');
+      return;
+    }
     const aliado = suppliers.find((s) => s.id === form.aliado_id);
     try {
       const ben: Beneficiario = {
@@ -304,6 +311,8 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
           monto_enviar: montoEnviar,
           comision,
           total_cobrado: totalCobrado,
+          monto_fiado: fiado || undefined,
+          fiado_usd: fiadoUsd || undefined,
           tasa_cliente: tasaCliente,
           moneda_pago: form.moneda_pago,
           monto_pago: montoPago,
@@ -742,6 +751,16 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                 />
               </div>
               <div>
+                <label className={label}>Fiado: queda debiendo ({monedaOrigen})</label>
+                <input
+                  inputMode="decimal"
+                  value={form.fiado}
+                  onChange={(e) => setForm({ ...form, fiado: e.target.value })}
+                  className={input}
+                  placeholder="0 = pagó todo"
+                />
+              </div>
+              <div>
                 <label className={label}>
                   Tasa al cliente ({form.moneda_pago} por 1 {monedaOrigen}) *
                 </label>
@@ -849,6 +868,11 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
               <div className="text-base font-bold text-slate-900">
                 {amt(totalCobrado, monedaOrigen)} {monedaOrigen}
               </div>
+              {fiado > 0 && (
+                <div className="text-amber-700 font-semibold">
+                  Entra ahora {amt(totalCobrado - fiado, monedaOrigen)} · fiado {amt(fiado, monedaOrigen)} a Deudores
+                </div>
+              )}
             </div>
             <div>
               <div className="text-slate-500">Recibe el beneficiario</div>
@@ -985,6 +1009,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                         <div className="text-slate-500">Cobro</div>
                         <div className="font-semibold">
                           {amt(r.total_cobrado, r.moneda_origen)} {r.moneda_origen} en {accName(r.cuenta_cobro_id)}
+                          {r.monto_fiado ? ` (fiado ${amt(r.monto_fiado, r.moneda_origen)} a Deudores)` : ''}
                         </div>
                         <div className="text-slate-500">
                           Tasa {r.tasa_cliente} · comisión {amt(r.comision, r.moneda_origen)} · ganancia{' '}
