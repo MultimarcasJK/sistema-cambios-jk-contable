@@ -136,14 +136,8 @@ export function DashboardView({
   return (
     <div className="space-y-6">
       {/* Botones de acción rápida directos */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-        <button
-          onClick={() => onNavigate('detal')}
-          className="flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-3 rounded-xl font-semibold text-xs sm:text-sm shadow-sm transition"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>+ Venta Cripto/Dólar</span>
-        </button>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        {/* Botón Cripto/Dolar oculto */}
 
         <button
           onClick={() => onNavigate('mayor')}
