@@ -360,3 +360,72 @@ export interface AuditEntry {
   reason?: string;
   data?: unknown;
 }
+
+// ─── Remesas ───
+
+export interface Beneficiario {
+  id: string;
+  name: string;
+  identification?: string;
+  bank?: string;
+  account_number?: string; // cuenta o teléfono de pago móvil
+  phone?: string;
+  country: string;
+}
+
+export interface Remitente {
+  id: string;
+  name: string;
+  identification?: string;
+  phone?: string;
+  beneficiarios: Beneficiario[];
+  created_at: string;
+}
+
+export type RemesaEstado = 'cobrada' | 'en_proceso' | 'pagada' | 'fallida' | 'anulada';
+
+export type RemesaMetodoPago = 'cuenta_propia' | 'aliado';
+
+export interface RemesaEvento {
+  estado: RemesaEstado;
+  ts: string;
+  date: string;
+  user_email?: string;
+  nota?: string;
+}
+
+export interface Remesa {
+  id: string;
+  numero: number;
+  date: string; // fecha de cobro
+  created_at: string;
+  remitente_id: string;
+  remitente_name: string;
+  remitente_identification?: string;
+  remitente_phone?: string;
+  beneficiario: Beneficiario;
+  pais_pago: string;
+  moneda_origen: Currency;
+  monto_enviar: number; // lo que se convierte (moneda origen)
+  comision: number; // tarifa al remitente (moneda origen)
+  total_cobrado: number; // monto_enviar + comision
+  tasa_cliente: number; // unidades moneda pago por 1 unidad moneda origen
+  moneda_pago: Currency;
+  monto_pago: number; // lo que recibe el beneficiario
+  tasa_costo: number; // tasa de mercado / del aliado (moneda pago por 1 USD)
+  tasa_origen_usd: number; // unidades de moneda origen por 1 USD (1 si es USD)
+  costo_usd: number; // lo que cuesta entregar monto_pago, en USD
+  ganancia_usd: number;
+  cuenta_cobro_id: string;
+  metodo_pago: RemesaMetodoPago;
+  cuenta_pago_id?: string;
+  aliado_id?: string;
+  aliado_name?: string;
+  referencia_cobro?: string;
+  referencia_pago?: string;
+  notes?: string;
+  estado: RemesaEstado;
+  fecha_pago?: string;
+  fecha_anulacion?: string;
+  historial: RemesaEvento[];
+}

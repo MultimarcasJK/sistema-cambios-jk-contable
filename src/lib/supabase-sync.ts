@@ -1,5 +1,7 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import {
+  Remesa,
+  Remitente,
   AuditEntry,
   BalanceAdjustment,
   Account,
@@ -867,6 +869,7 @@ export const SupabaseSyncService = {
 
         const deleteTables = [
           `${m}_ajustes_saldo`,
+        `${m}_remesas`,
           `${m}_gastos_servicios`,
           `${m}_pagos_nomina`,
           `${m}_pagos_proveedores`,
@@ -898,6 +901,8 @@ export const SupabaseSyncService = {
     for (const m of modes) {
       const tables = [
         `${m}_ajustes_saldo`,
+        `${m}_remesas`,
+        `${m}_remitentes`,
         `${m}_gastos_servicios`,
         `${m}_pagos_nomina`,
         `${m}_empleados`,
@@ -998,6 +1003,59 @@ export const SupabaseSyncService = {
         },
         { onConflict: 'id', ignoreDuplicates: true }
       );
+    } catch {
+      /* warn */
+    }
+  },
+  // Remesas y remitentes: se guarda el registro completo en "data" (jsonb)
+  async fetchRemesas(mode: AppMode): Promise<Remesa[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    try {
+      const { data, error } = await supabase.from(`${mode}_remesas`).select('data');
+      if (error) return null;
+      return ((data || []) as any[]).map((row) => row.data).filter(Boolean) as Remesa[];
+    } catch {
+      return null;
+    }
+  },
+
+  async upsertRemesa(remesa: Remesa, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      await supabase.from(`${mode}_remesas`).upsert({
+        id: remesa.id,
+        numero: remesa.numero,
+        date: remesa.date,
+        estado: remesa.estado,
+        pais_pago: remesa.pais_pago,
+        data: remesa,
+        updated_at: new Date().toISOString(),
+      });
+    } catch {
+      /* warn */
+    }
+  },
+
+  async fetchRemitentes(mode: AppMode): Promise<Remitente[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    try {
+      const { data, error } = await supabase.from(`${mode}_remitentes`).select('data');
+      if (error) return null;
+      return ((data || []) as any[]).map((row) => row.data).filter(Boolean) as Remitente[];
+    } catch {
+      return null;
+    }
+  },
+
+  async upsertRemitente(rem: Remitente, mode: AppMode): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      await supabase.from(`${mode}_remitentes`).upsert({
+        id: rem.id,
+        name: rem.name,
+        data: rem,
+        updated_at: new Date().toISOString(),
+      });
     } catch {
       /* warn */
     }

@@ -56,7 +56,8 @@ export interface StatementMovement {
     | 'SUPPLIER_BUY'
     | 'SUPPLIER_PAY'
     | 'DEBT_PAY'
-    | 'ADJUSTMENT';
+    | 'ADJUSTMENT'
+    | 'REMESA';
   categoryLabel: string;
   description: string;
   thirdParty: string;
@@ -418,6 +419,49 @@ export function AccountStatementModal({
         netAmount: adj.delta,
         balanceAfter: 0,
       });
+    });
+
+    // I. Remesas: cobro al remitente, pago al beneficiario con cuenta propia y devolución por anulación
+    const remesas = [...StorageService.getRemesas('detal'), ...StorageService.getRemesas('mayor')];
+    remesas.forEach((r) => {
+      const ref = `#${r.numero} ${r.remitente_name} → ${r.beneficiario?.name || ''}`;
+      const mk = (
+        key: string,
+        date: string,
+        ts: string | undefined,
+        isIn: boolean,
+        amount: number,
+        label: string,
+        description: string,
+        reference: string
+      ) =>
+        items.push({
+          id: key,
+          date,
+          time: ts ? ts.slice(11, 16) : '',
+          sortKey: `${date} ${ts ? ts.slice(11, 16) : '00:00'} ${ts || ''} ${isIn ? '1' : '2'}`,
+          type: isIn ? 'INGRESO' : 'EGRESO',
+          categoryKey: 'REMESA',
+          categoryLabel: label,
+          description,
+          thirdParty: `Remitente: ${r.remitente_name}`,
+          reference,
+          inflow: isIn ? amount : 0,
+          outflow: isIn ? 0 : amount,
+          netAmount: isIn ? amount : -amount,
+          balanceAfter: 0,
+        });
+      if (r.cuenta_cobro_id === accId && r.total_cobrado > 0) {
+        mk(`rms-in-${r.id}`, r.date, r.created_at, true, r.total_cobrado, 'Cobro Remesa', `Cobro remesa ${ref}`, r.referencia_cobro || 'S/R');
+        if (r.estado === 'anulada' && r.fecha_anulacion) {
+          const an = r.historial?.find((h) => h.estado === 'anulada');
+          mk(`rms-dev-${r.id}`, r.fecha_anulacion, an?.ts, false, r.total_cobrado, 'Devolución Remesa', `Devolución remesa anulada ${ref}`, an?.nota || 'S/R');
+        }
+      }
+      if (r.estado === 'pagada' && r.metodo_pago === 'cuenta_propia' && r.cuenta_pago_id === accId && r.fecha_pago) {
+        const pg = r.historial?.find((h) => h.estado === 'pagada');
+        mk(`rms-out-${r.id}`, r.fecha_pago, pg?.ts, false, r.monto_pago, 'Pago Remesa', `Pago remesa ${ref}`, r.referencia_pago || 'S/R');
+      }
     });
 
     // 2. Ordenar cronológicamente ascendente (desde el más antiguo al más reciente)
@@ -958,6 +1002,7 @@ export function AccountStatementModal({
                   <option value="SUPPLIER_PAY">Pagos a Proveedores</option>
                   <option value="DEBT_PAY">Abonos de Deudores</option>
                   <option value="ADJUSTMENT">Ajustes de Saldo</option>
+                  <option value="REMESA">Remesas</option>
                 </select>
 
                 {/* Orden de visualización */}

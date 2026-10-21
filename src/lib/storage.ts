@@ -18,6 +18,11 @@ import {
   ServiceExpense,
   AppMode,
   BalanceAdjustment,
+  Remesa,
+  RemesaEstado,
+  RemesaMetodoPago,
+  Remitente,
+  Beneficiario,
 } from '@/types';
 import {
   INITIAL_ACCOUNTS,
@@ -180,6 +185,18 @@ export const StorageService = {
   getAdjustmentsKey(mode?: AppMode): string {
     const m = mode || this.getAppMode();
     return 'cambiosjk_' + m + '_ajustes_saldo_v1';
+  },
+  getRemesasKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_remesas_v1';
+  },
+  getRemitentesKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_remitentes_v1';
+  },
+  getRemesaPrefsKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_remesas_pref_pais_v1';
   },
 
   // ── Candado de días cerrados ──
@@ -359,10 +376,42 @@ export const StorageService = {
   async syncFromSupabase(mode?: AppMode): Promise<void> {
     const m = mode || this.getAppMode();
     try {
-      const [remoteAdjustments, remoteAudit] = await Promise.all([
+      const [remoteAdjustments, remoteAudit, remoteRemesas, remoteRemitentes] = await Promise.all([
         SupabaseSyncService.fetchAdjustments(m),
         SupabaseSyncService.fetchAuditEntries(m),
+        SupabaseSyncService.fetchRemesas(m),
+        SupabaseSyncService.fetchRemitentes(m),
       ]);
+      if (remoteRemesas !== null) {
+        // Gana la copia que avanzó más en su historial de estados
+        const local = this.getRemesas(m);
+        const byId = new Map<string, Remesa>();
+        remoteRemesas.forEach((r) => byId.set(r.id, r));
+        local.forEach((l) => {
+          const r = byId.get(l.id);
+          if (!r || (l.historial?.length || 0) > (r.historial?.length || 0)) {
+            byId.set(l.id, l);
+            SupabaseSyncService.upsertRemesa(l, m).catch(() => {});
+          }
+        });
+        saveToStorage(
+          this.getRemesasKey(m),
+          Array.from(byId.values()).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+        );
+      }
+      if (remoteRemitentes !== null) {
+        const local = this.getRemitentes(m);
+        const byId = new Map<string, Remitente>();
+        remoteRemitentes.forEach((r) => byId.set(r.id, r));
+        local.forEach((l) => {
+          const r = byId.get(l.id);
+          if (!r || (l.beneficiarios?.length || 0) > (r.beneficiarios?.length || 0)) {
+            byId.set(l.id, l);
+            SupabaseSyncService.upsertRemitente(l, m).catch(() => {});
+          }
+        });
+        saveToStorage(this.getRemitentesKey(m), Array.from(byId.values()));
+      }
       if (remoteAdjustments !== null) {
         const local = this.getAdjustments(m);
         const remoteIds = new Set(remoteAdjustments.map((a) => a.id));
@@ -956,9 +1005,212 @@ export const StorageService = {
         supplierPayments: this.getSupplierPayments(mm).filter(Boolean),
         debtPayments: this.getDebtPayments(mm).filter(Boolean),
         adjustments: this.getAdjustments(mm).filter(Boolean),
+        remesas: this.getRemesas(mm).filter(Boolean),
       };
     });
     return { accounts, byMode };
+  },
+
+  // ── Remesas ──
+  getRemesas(mode?: AppMode): Remesa[] {
+    const m = mode || this.getAppMode();
+    return getFromStorage<Remesa[]>(this.getRemesasKey(m), []);
+  },
+
+  getRemitentes(mode?: AppMode): Remitente[] {
+    const m = mode || this.getAppMode();
+    return getFromStorage<Remitente[]>(this.getRemitentesKey(m), []);
+  },
+
+  // Crea o actualiza un remitente (y agrega el beneficiario si es nuevo)
+  saveRemitente(
+    data: { id?: string; name: string; identification?: string; phone?: string },
+    beneficiario: Beneficiario | null,
+    mode?: AppMode
+  ): { remitente: Remitente; beneficiario: Beneficiario | null } {
+    const m = mode || this.getAppMode();
+    const all = this.getRemitentes(m);
+    const name = data.name.trim().toUpperCase();
+    let rem =
+      all.find((r) => data.id && r.id === data.id) ||
+      all.find((r) => r.name.trim().toUpperCase() === name) ||
+      null;
+    if (!rem) {
+      rem = {
+        id: 'rem-' + Date.now(),
+        name,
+        identification: data.identification?.trim() || '',
+        phone: data.phone?.trim() || '',
+        beneficiarios: [],
+        created_at: new Date().toISOString(),
+      };
+      all.unshift(rem);
+    } else {
+      rem.identification = data.identification?.trim() || rem.identification;
+      rem.phone = data.phone?.trim() || rem.phone;
+    }
+    let ben: Beneficiario | null = null;
+    if (beneficiario) {
+      const bname = beneficiario.name.trim().toUpperCase();
+      ben =
+        rem.beneficiarios.find((b) => b.id === beneficiario.id) ||
+        rem.beneficiarios.find(
+          (b) => b.name.trim().toUpperCase() === bname && b.country === beneficiario.country
+        ) ||
+        null;
+      if (ben) {
+        Object.assign(ben, { ...beneficiario, id: ben.id, name: bname });
+      } else {
+        ben = { ...beneficiario, id: 'ben-' + Date.now(), name: bname };
+        rem.beneficiarios.push(ben);
+      }
+    }
+    saveToStorage(this.getRemitentesKey(m), all);
+    SupabaseSyncService.upsertRemitente(rem, m).catch(() => {});
+    return { remitente: rem, beneficiario: ben };
+  },
+
+  getRemesaPrefs(mode?: AppMode): Record<string, { metodo: RemesaMetodoPago; cuenta_pago_id?: string; aliado_id?: string }> {
+    const m = mode || this.getAppMode();
+    return getFromStorage(this.getRemesaPrefsKey(m), {});
+  },
+
+  saveRemesaPref(pais: string, pref: { metodo: RemesaMetodoPago; cuenta_pago_id?: string; aliado_id?: string }, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const prefs = this.getRemesaPrefs(m);
+    prefs[pais] = pref;
+    saveToStorage(this.getRemesaPrefsKey(m), prefs);
+  },
+
+  persistRemesa(remesa: Remesa, mode: AppMode): void {
+    const all = this.getRemesas(mode);
+    const idx = all.findIndex((r) => r.id === remesa.id);
+    if (idx >= 0) all[idx] = remesa;
+    else all.unshift(remesa);
+    saveToStorage(this.getRemesasKey(mode), all);
+    SupabaseSyncService.upsertRemesa(remesa, mode).catch(() => {});
+  },
+
+  // Registrar una remesa: el dinero del remitente entra a la cuenta de cobro
+  createRemesa(
+    input: Omit<Remesa, 'id' | 'numero' | 'created_at' | 'estado' | 'historial' | 'date'>,
+    mode?: AppMode
+  ): Remesa {
+    const m = mode || this.getAppMode();
+    const today = new Date().toISOString().slice(0, 10);
+    this.assertDayOpen(today, m, 'registrar una remesa');
+    if (!input.cuenta_cobro_id) throw new Error('Falta la cuenta donde se cobró.');
+    if (!(input.total_cobrado > 0) || !(input.monto_pago > 0)) throw new Error('Los montos deben ser mayores que cero.');
+    const all = this.getRemesas(m);
+    const numero = all.reduce((max, r) => Math.max(max, r.numero || 0), 0) + 1;
+    const now = new Date().toISOString();
+    const remesa: Remesa = {
+      ...input,
+      id: 'rms-' + Date.now(),
+      numero,
+      date: today,
+      created_at: now,
+      estado: 'cobrada',
+      historial: [{ estado: 'cobrada', ts: now, date: today, user_email: getActor()?.email }],
+    };
+    this.persistRemesa(remesa, m);
+    this.updateAccountBalance(remesa.cuenta_cobro_id, remesa.total_cobrado, m);
+    this.saveRemesaPref(
+      remesa.pais_pago,
+      { metodo: remesa.metodo_pago, cuenta_pago_id: remesa.cuenta_pago_id, aliado_id: remesa.aliado_id },
+      m
+    );
+    AuditService.log({
+      mode: m,
+      action: 'crear',
+      entity: 'remesa',
+      entityId: remesa.id,
+      summary: `Remesa #${remesa.numero} de ${remesa.remitente_name} a ${remesa.beneficiario.name} (${remesa.pais_pago}): cobrado ${remesa.total_cobrado} ${remesa.moneda_origen}, a pagar ${remesa.monto_pago} ${remesa.moneda_pago}`,
+      data: remesa,
+    });
+    return remesa;
+  },
+
+  // Cambia el estado de una remesa y mueve los saldos que correspondan
+  changeRemesaEstado(
+    id: string,
+    nuevo: RemesaEstado,
+    opts: {
+      nota?: string;
+      referencia_pago?: string;
+      metodo_pago?: RemesaMetodoPago;
+      cuenta_pago_id?: string;
+      aliado_id?: string;
+      aliado_name?: string;
+    } = {},
+    mode?: AppMode
+  ): Remesa {
+    const m = mode || this.getAppMode();
+    const remesa = this.getRemesas(m).find((r) => r.id === id);
+    if (!remesa) throw new Error('No se encontró la remesa.');
+    const allowed: Record<RemesaEstado, RemesaEstado[]> = {
+      cobrada: ['en_proceso', 'pagada', 'anulada'],
+      en_proceso: ['pagada', 'fallida', 'anulada'],
+      fallida: ['en_proceso', 'anulada'],
+      pagada: [],
+      anulada: [],
+    };
+    if (!allowed[remesa.estado].includes(nuevo)) {
+      throw new Error(`Una remesa ${remesa.estado.replace('_', ' ')} no puede pasar a ${nuevo.replace('_', ' ')}.`);
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date().toISOString();
+    const updated: Remesa = { ...remesa, historial: [...(remesa.historial || [])] };
+
+    if (opts.metodo_pago) {
+      updated.metodo_pago = opts.metodo_pago;
+      updated.cuenta_pago_id = opts.metodo_pago === 'cuenta_propia' ? opts.cuenta_pago_id : undefined;
+      updated.aliado_id = opts.metodo_pago === 'aliado' ? opts.aliado_id : undefined;
+      updated.aliado_name = opts.metodo_pago === 'aliado' ? opts.aliado_name : undefined;
+    }
+
+    if (nuevo === 'pagada') {
+      this.assertDayOpen(today, m, 'marcar una remesa como pagada');
+      if (updated.metodo_pago === 'cuenta_propia') {
+        if (!updated.cuenta_pago_id) throw new Error('Elige la cuenta desde donde se pagó.');
+        this.updateAccountBalance(updated.cuenta_pago_id, -updated.monto_pago, m);
+      } else {
+        if (!updated.aliado_id) throw new Error('Elige el aliado que pagó.');
+        this.updateSupplierDebt(updated.aliado_id, updated.costo_usd, m);
+      }
+      updated.fecha_pago = today;
+      updated.referencia_pago = opts.referencia_pago || updated.referencia_pago;
+    }
+
+    if (nuevo === 'anulada') {
+      if (!isActorAdmin()) throw new Error('Solo un ADMIN puede anular una remesa.');
+      if (!(opts.nota || '').trim()) throw new Error('Para anular hace falta un motivo.');
+      this.assertDayOpen(today, m, 'anular una remesa');
+      // Se devuelve al remitente lo cobrado: sale de la cuenta de cobro
+      this.updateAccountBalance(updated.cuenta_cobro_id, -updated.total_cobrado, m);
+      updated.fecha_anulacion = today;
+    }
+
+    updated.estado = nuevo;
+    updated.historial.push({ estado: nuevo, ts: now, date: today, user_email: getActor()?.email, nota: opts.nota });
+    this.persistRemesa(updated, m);
+    if (opts.metodo_pago) {
+      this.saveRemesaPref(
+        updated.pais_pago,
+        { metodo: updated.metodo_pago, cuenta_pago_id: updated.cuenta_pago_id, aliado_id: updated.aliado_id },
+        m
+      );
+    }
+    AuditService.log({
+      mode: m,
+      action: nuevo === 'anulada' ? 'eliminar' : 'editar',
+      entity: 'remesa',
+      entityId: id,
+      summary: `Remesa #${updated.numero} (${updated.beneficiario.name}) pasó de ${remesa.estado.replace('_', ' ')} a ${nuevo.replace('_', ' ')}`,
+      reason: opts.nota,
+      data: { antes: remesa.estado, despues: nuevo, referencia_pago: updated.referencia_pago },
+    });
+    return updated;
   },
 
   // Clients
@@ -2275,6 +2527,8 @@ export const StorageService = {
         summary: 'Reseteo maestro: se borraron todos los datos de ' + m.toUpperCase(),
       });
       saveToStorage(this.getAdjustmentsKey(m), []);
+      saveToStorage(this.getRemesasKey(m), []);
+      saveToStorage(this.getRemitentesKey(m), []);
       saveToStorage(this.getAccountsKey(m), []);
       saveToStorage(this.getClientsKey(m), []);
       saveToStorage(this.getSuppliersKey(m), []);
@@ -2315,6 +2569,7 @@ export const StorageService = {
         summary: 'Reseteo de saldos a cero y borrado de operaciones de ' + m.toUpperCase(),
       });
       saveToStorage(this.getAdjustmentsKey(m), []);
+      saveToStorage(this.getRemesasKey(m), []);
       const accs = this.getAccounts(m).map((a) => ({ ...a, current_balance: 0, initial_balance: 0 }));
       saveToStorage(this.getAccountsKey(m), accs);
 

@@ -14,6 +14,7 @@ import {
   UserCheck,
   Briefcase,
   BookOpen,
+  Send,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth-context';
@@ -30,7 +31,8 @@ export type TabKey =
   | 'closures'
   | 'clients'
   | 'debtors'
-  | 'ledger';
+  | 'ledger'
+  | 'remesas';
 
 interface NavProps {
   activeTab: TabKey;
@@ -46,6 +48,7 @@ export function Navigation({ activeTab, onSelectTab, appMode = 'detal' }: NavPro
   const allTabs = [
     { key: 'dashboard' as TabKey, label: 'Panel', icon: LayoutDashboard },
     { key: 'mayor' as TabKey, label: 'Ventas', icon: TrendingUp },
+    { key: 'remesas' as TabKey, label: 'Remesas', icon: Send },
     { key: 'suppliers' as TabKey, label: 'Proveedores', icon: Truck },
     { key: 'transfers' as TabKey, label: 'Cambio Saldos', icon: ArrowLeftRight },
     { key: 'expenses' as TabKey, label: 'Ingresos/Gastos', icon: Receipt },
