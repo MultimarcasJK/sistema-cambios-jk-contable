@@ -451,11 +451,12 @@ export function AccountStatementModal({
           netAmount: isIn ? amount : -amount,
           balanceAfter: 0,
         });
-      if (r.cuenta_cobro_id === accId && r.total_cobrado > 0) {
-        mk(`rms-in-${r.id}`, r.date, r.created_at, true, r.total_cobrado, 'Cobro Remesa', `Cobro remesa ${ref}`, r.referencia_cobro || 'S/R');
+      const caja = r.total_cobrado - (r.monto_fiado || 0);
+      if (r.cuenta_cobro_id === accId && caja > 0) {
+        mk(`rms-in-${r.id}`, r.date, r.created_at, true, caja, 'Cobro Remesa', `Cobro remesa ${ref}`, r.referencia_cobro || 'S/R');
         if (r.estado === 'anulada' && r.fecha_anulacion) {
           const an = r.historial?.find((h) => h.estado === 'anulada');
-          mk(`rms-dev-${r.id}`, r.fecha_anulacion, an?.ts, false, r.total_cobrado, 'Devolución Remesa', `Devolución remesa anulada ${ref}`, an?.nota || 'S/R');
+          mk(`rms-dev-${r.id}`, r.fecha_anulacion, an?.ts, false, caja, 'Devolución Remesa', `Devolución remesa anulada ${ref}`, an?.nota || 'S/R');
         }
       }
       if (r.estado === 'pagada' && r.metodo_pago === 'cuenta_propia' && r.cuenta_pago_id === accId && r.fecha_pago) {

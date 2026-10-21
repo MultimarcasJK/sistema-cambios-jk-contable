@@ -459,7 +459,10 @@ export function buildLedger(src: LedgerSources): Ledger {
       const ref = `#${r.numero} ${r.remitente_name} → ${r.beneficiario?.name || ''} (${r.pais_pago})`;
 
       const lc: LedgerLine[] = [];
-      if (cobro) push(lc, cobro.key, cobro.moneda, r.total_cobrado);
+      const caja = r.total_cobrado - (r.monto_fiado || 0);
+      if (cobro) push(lc, cobro.key, cobro.moneda, caja);
+      // Lo fiado queda como cuenta por cobrar al remitente (en USD, como el resto de Deudores)
+      if (r.fiado_usd) push(lc, 'CXC', 'USD', r.fiado_usd, r.remitente_name);
       push(lc, 'REM_PAGAR', r.moneda_pago, -r.monto_pago, r.beneficiario?.name);
       add(
         { id: 'as-' + r.id + '-c', fecha: r.date, orden: timeOf(r.created_at), unidad, origen: 'remesa_cobro', origenId: r.id, descripcion: 'Cobro remesa ' + ref },
@@ -486,7 +489,8 @@ export function buildLedger(src: LedgerSources): Ledger {
       if (r.estado === 'anulada' && r.fecha_anulacion) {
         const an = r.historial?.find((h) => h.estado === 'anulada');
         const la: LedgerLine[] = [];
-        if (cobro) push(la, cobro.key, cobro.moneda, -r.total_cobrado);
+        if (cobro) push(la, cobro.key, cobro.moneda, -caja);
+        if (r.fiado_usd) push(la, 'CXC', 'USD', -r.fiado_usd, r.remitente_name);
         push(la, 'REM_PAGAR', r.moneda_pago, r.monto_pago, r.beneficiario?.name);
         add(
           { id: 'as-' + r.id + '-a', fecha: r.fecha_anulacion, orden: timeOf(an?.ts), unidad, origen: 'remesa_anulacion', origenId: r.id, descripcion: 'Anulación remesa ' + ref + (an?.nota ? ': ' + an.nota : '') },

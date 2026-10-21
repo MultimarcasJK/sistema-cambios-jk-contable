@@ -1262,6 +1262,8 @@ export const StorageService = {
     this.assertDayOpen(today, m, 'registrar una remesa');
     if (!input.cuenta_cobro_id) throw new Error('Falta la cuenta donde se cobró.');
     if (!(input.total_cobrado > 0) || !(input.monto_pago > 0)) throw new Error('Los montos deben ser mayores que cero.');
+    if ((input.monto_fiado || 0) < 0 || (input.monto_fiado || 0) > input.total_cobrado)
+      throw new Error('El fiado no puede ser mayor que el total a cobrar.');
     const all = this.getRemesas(m);
     const numero = all.reduce((max, r) => Math.max(max, r.numero || 0), 0) + 1;
     const now = new Date().toISOString();
@@ -1275,7 +1277,8 @@ export const StorageService = {
       historial: [{ estado: 'cobrada', ts: now, date: today, user_email: getActor()?.email }],
     };
     this.persistRemesa(remesa, m);
-    this.updateAccountBalance(remesa.cuenta_cobro_id, remesa.total_cobrado, m);
+    const caja = remesa.total_cobrado - (remesa.monto_fiado || 0);
+    if (caja) this.updateAccountBalance(remesa.cuenta_cobro_id, caja, m);
     this.saveRemesaPref(
       remesa.pais_pago,
       { metodo: remesa.metodo_pago, cuenta_pago_id: remesa.cuenta_pago_id, aliado_id: remesa.aliado_id },
@@ -1286,9 +1289,11 @@ export const StorageService = {
       action: 'crear',
       entity: 'remesa',
       entityId: remesa.id,
-      summary: `Remesa #${remesa.numero} de ${remesa.remitente_name} a ${remesa.beneficiario.name} (${remesa.pais_pago}): cobrado ${remesa.total_cobrado} ${remesa.moneda_origen}, a pagar ${remesa.monto_pago} ${remesa.moneda_pago}`,
+      summary: `Remesa #${remesa.numero} de ${remesa.remitente_name} a ${remesa.beneficiario.name} (${remesa.pais_pago}): cobrado ${remesa.total_cobrado} ${remesa.moneda_origen}${remesa.monto_fiado ? ` (fiado ${remesa.monto_fiado})` : ''}, a pagar ${remesa.monto_pago} ${remesa.moneda_pago}`,
       data: remesa,
     });
+    // El fiado aparece en Deudores (se recalcula desde las remesas)
+    if (remesa.fiado_usd) this.getDebtors(m);
     return remesa;
   },
 
@@ -1348,7 +1353,8 @@ export const StorageService = {
       if (!(opts.nota || '').trim()) throw new Error('Para anular hace falta un motivo.');
       this.assertDayOpen(today, m, 'anular una remesa');
       // Se devuelve al remitente lo cobrado: sale de la cuenta de cobro
-      this.updateAccountBalance(updated.cuenta_cobro_id, -updated.total_cobrado, m);
+      const caja = updated.total_cobrado - (updated.monto_fiado || 0);
+      if (caja) this.updateAccountBalance(updated.cuenta_cobro_id, -caja, m);
       updated.fecha_anulacion = today;
     }
 
@@ -1371,6 +1377,8 @@ export const StorageService = {
       reason: opts.nota,
       data: { antes: remesa.estado, despues: nuevo, referencia_pago: updated.referencia_pago },
     });
+    // Al anular, el fiado sale de Deudores
+    if (nuevo === 'anulada' && updated.fiado_usd) this.getDebtors(m);
     return updated;
   },
 
@@ -2068,7 +2076,11 @@ export const StorageService = {
     const detalTxs = (getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []) || []).filter(Boolean);
     const mayorTxs = (getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []) || []).filter(Boolean);
     const payments = (getFromStorage<DebtPayment[]>(this.getDebtPaymentsKey(m), []) || []).filter(Boolean);
-    const lastActivity = lastActivityByName([...detalTxs, ...mayorTxs, ...payments]);
+    // Remesas fiadas (no anuladas): lo que el remitente quedó debiendo, en USD
+    const remesasFiadas = this.getRemesas(m)
+      .filter((r) => r && r.estado !== 'anulada' && (r.fiado_usd || 0) > 0)
+      .map((r) => ({ client_name: r.remitente_name, created_at: r.created_at, date: r.date, fiado_usd: r.fiado_usd || 0 }));
+    const lastActivity = lastActivityByName([...detalTxs, ...mayorTxs, ...payments, ...remesasFiadas]);
 
     const clientStats = new Map<string, { totalBought: number; totalPaidInTx: number }>();
 
@@ -2097,6 +2109,14 @@ export const StorageService = {
       } else if (t.payment_status === 'PARCIAL' && t.amount_received) {
         st.totalPaidInTx += t.amount_received;
       }
+      clientStats.set(name, st);
+    });
+
+    remesasFiadas.forEach((r) => {
+      const name = (r.client_name || '').trim().toUpperCase();
+      if (!name) return;
+      const st = clientStats.get(name) || { totalBought: 0, totalPaidInTx: 0 };
+      st.totalBought += r.fiado_usd;
       clientStats.set(name, st);
     });
 
