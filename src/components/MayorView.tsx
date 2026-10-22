@@ -495,7 +495,7 @@ export function MayorView({
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Fecha</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Fecha</label>
               <input
                 type="date"
                 value={formData.date}
@@ -506,7 +506,7 @@ export function MayorView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Cliente *</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Cliente *</label>
               <input
                 type="text"
                 list="clients-list-mayor"
@@ -526,7 +526,7 @@ export function MayorView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">
                 Cantidad MONEDA ({selectedCurrency}) *
               </label>
               <input
@@ -541,7 +541,7 @@ export function MayorView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Tasa de Venta *</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Tasa de Venta *</label>
               <input
                 type="number"
                 step="any"
@@ -554,7 +554,7 @@ export function MayorView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Tasa de Compra (Costo)</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Tasa de Compra (Costo)</label>
               <input
                 type="number"
                 step="any"
@@ -566,7 +566,7 @@ export function MayorView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">
                 Pagado Por (Cuenta Salida {selectedCurrency})
               </label>
               <select
@@ -601,7 +601,7 @@ export function MayorView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">
                 Recibido Por (Cuenta de Cobro)
               </label>
               <select
@@ -632,8 +632,8 @@ export function MayorView({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-600">
+              <div className="flex items-center justify-between h-6 mb-1 gap-2 whitespace-nowrap">
+                <label className="block min-w-0 truncate text-xs font-semibold text-slate-600">
                   Cantidad Abonada ($ USD)
                 </label>
                 {formData.received_account_id !== 'POR_COBRAR' && calculations.totalToPay > 0 && (
@@ -662,8 +662,8 @@ export function MayorView({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-600">
+              <div className="flex items-center justify-between h-6 mb-1 gap-2 whitespace-nowrap">
+                <label className="block min-w-0 truncate text-xs font-semibold text-slate-600">
                   Comisión / Intermediario {feeMode === 'fixed' ? '($)' : '(%)'}
                 </label>
                 <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-[11px] font-bold border border-slate-200">
@@ -722,8 +722,8 @@ export function MayorView({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-600">
+              <div className="flex items-center justify-between h-6 mb-1 gap-2 whitespace-nowrap">
+                <label className="block min-w-0 truncate text-xs font-semibold text-slate-600">
                   Comisión al Cliente ($)
                 </label>
                 <button
@@ -758,7 +758,7 @@ export function MayorView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Referencia</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Referencia</label>
               <input
                 type="text"
                 placeholder="ej. Transferencia # o código"
@@ -768,8 +768,8 @@ export function MayorView({
               />
             </div>
 
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Notas / Observaciones</label>
+            <div>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Notas / Observaciones</label>
               <input
                 type="text"
                 placeholder="Condiciones, acuerdo..."
