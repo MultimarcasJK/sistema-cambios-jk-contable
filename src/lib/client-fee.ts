@@ -20,3 +20,21 @@ export function unpackClientFee(notes: string | undefined): { notes: string; cli
     is_vip: m[1] === 'VIP' || undefined,
   };
 }
+
+// Gastos/Ingresos: la tabla de Supabase no tiene columnas de moneda ni equivalente en USD,
+// así que también viajan como marca dentro de "notes".
+const EXP_TAG_RE = /\s*\[MON:([A-Z]{2,5})\|USD:(-?\d+(?:\.\d+)?)\]\s*/;
+
+export function packExpenseMeta(notes: string | undefined, currency?: string, amountUsd?: number): string {
+  const clean = (notes || '').replace(EXP_TAG_RE, ' ').trim();
+  if (!currency) return clean;
+  const tag = `[MON:${currency}|USD:${Number(amountUsd || 0)}]`;
+  return clean ? `${clean} ${tag}` : tag;
+}
+
+export function unpackExpenseMeta(notes: string | undefined): { notes: string; currency?: string; amount_usd?: number } {
+  const raw = notes || '';
+  const m = raw.match(EXP_TAG_RE);
+  if (!m) return { notes: raw };
+  return { notes: raw.replace(EXP_TAG_RE, ' ').trim(), currency: m[1], amount_usd: Number(m[2]) };
+}
