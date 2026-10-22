@@ -45,6 +45,7 @@ export function DebtorsView({
   appMode,
 }: DebtorsProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [showAlDia, setShowAlDia] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [paymentModalDebtor, setPaymentModalDebtor] = useState<Debtor | null>(null);
   const [paymentCurrency, setPaymentCurrency] = useState<Currency>('USD');
@@ -132,11 +133,19 @@ export function DebtorsView({
     return debtors.filter((d) => (d.current_debt || 0) < 0).reduce((sum, d) => sum + Math.abs(d.current_debt), 0);
   }, [debtors]);
 
+  // Los clientes en $0.00 (al día) no se borran: solo se ocultan de la lista.
+  // Si vuelven a deber o quedan con saldo a favor, aparecen solos.
+  const isAlDia = (d: Debtor) => Math.abs(d.current_debt || 0) < 0.005;
+  const alDiaCount = useMemo(() => debtors.filter(isAlDia).length, [debtors]);
+
   const filteredDebtors = useMemo(() => {
+    const term = searchTerm.toLowerCase();
     return debtors
-      .filter((d) => (d.client_name || '').toLowerCase().includes(searchTerm.toLowerCase()))
+      // Al buscar por nombre se muestran todos, incluso los que están al día
+      .filter((d) => showAlDia || term !== '' || !isAlDia(d))
+      .filter((d) => (d.client_name || '').toLowerCase().includes(term))
       .sort((a, b) => (a.client_name || '').localeCompare(b.client_name || '', 'es', { sensitivity: 'base' }));
-  }, [debtors, searchTerm]);
+  }, [debtors, searchTerm, showAlDia]);
 
   const handleAddDebtor = (e: React.FormEvent) => {
     e.preventDefault();
@@ -399,7 +408,7 @@ export function DebtorsView({
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>Cuentas por Cobrar ({debtors.length})</span>
+          <span>Cuentas por Cobrar ({debtors.length - alDiaCount})</span>
         </button>
 
         <button
@@ -419,7 +428,18 @@ export function DebtorsView({
         /* Lista de Deudores */
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <h3 className="text-base font-bold text-slate-900">Listado de Clientes y Deudas</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-base font-bold text-slate-900">Listado de Clientes y Deudas</h3>
+              {alDiaCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAlDia((v) => !v)}
+                  className="text-[11px] font-bold px-2 py-0.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-900 cursor-pointer"
+                >
+                  {showAlDia ? `Ocultar clientes al día (${alDiaCount})` : `Ver clientes al día (${alDiaCount})`}
+                </button>
+              )}
+            </div>
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <input
