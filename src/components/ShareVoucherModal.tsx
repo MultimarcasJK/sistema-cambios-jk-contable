@@ -143,10 +143,10 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, W, H);
 
-      // Cargar logo JK (solo el círculo, sin el camión)
+      // Cargar logo JK (con el camión)
       const logo = new Image();
       logo.crossOrigin = 'anonymous';
-      logo.src = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/logo-jk-circulo.png`;
+      logo.src = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/logo-jk-camion.png`;
 
       const drawContent = (conLogo: boolean) => {
         // Logo + Nombre Empresa, centrados juntos
@@ -154,10 +154,11 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
         ctx.font = `bold 56px ${FONT}`;
         ctx.textBaseline = 'middle';
         const textW = ctx.measureText('CAMBIOS JK').width;
-        const logoW = conLogo ? 112 : 0;
+        const logoH = 112;
+        const logoW = conLogo ? Math.round((logoH * logo.naturalWidth) / (logo.naturalHeight || 1)) : 0;
         const gap = conLogo ? 22 : 0;
         const startX = W / 2 - (logoW + gap + textW) / 2;
-        if (conLogo) ctx.drawImage(logo, startX, 44, logoW, logoW);
+        if (conLogo) ctx.drawImage(logo, startX, 102 - logoH / 2, logoW, logoH);
         ctx.textAlign = 'left';
         ctx.fillText('CAMBIOS JK', startX + logoW + gap, 102);
 
