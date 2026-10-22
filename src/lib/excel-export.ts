@@ -28,6 +28,8 @@ export function exportFullAccountingToExcel() {
     'Monto Recibido': d.amount_received,
     'Ganancia ($)': d.profit_usd,
     'Comisión Banco': d.bank_fee,
+    'Comisión Cliente': d.client_fee || 0,
+    'VIP': d.is_vip ? 'SÍ' : '',
     'Referencia': d.reference || '',
     'Notas': d.notes || '',
   }));
@@ -43,6 +45,8 @@ export function exportFullAccountingToExcel() {
     'Precio Venta': m.sell_price,
     'Total a Pagar': m.total_to_pay,
     'Comisión': m.commission,
+    'Comisión Cliente': m.client_fee || 0,
+    'VIP': m.is_vip ? 'SÍ' : '',
     'Ganancia ($)': m.profit_usd,
     'Referencia': m.reference || '',
     'Notas': m.notes || '',

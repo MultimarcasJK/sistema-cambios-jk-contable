@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase';
+import { packClientFee, unpackClientFee } from './client-fee';
 
 // Varias tablas no guardan la hora de creación; se recupera del id (prefijo-<milisegundos>)
 // para que las listas sigan ordenadas de la más nueva a la más vieja después de sincronizar.
@@ -159,7 +160,7 @@ export const SupabaseSyncService = {
         total_to_pay: Number(row.total_to_pay || 0),
         profit_usd: Number(row.net_profit ?? row.profit_usd ?? 0),
         payment_status: row.payment_status || 'PAGADO',
-        notes: row.notes || '',
+        ...unpackClientFee(row.notes),
         created_at: createdAtOf(row),
       }));
     } catch {
@@ -185,7 +186,7 @@ export const SupabaseSyncService = {
         total_to_pay: tx.total_to_pay,
         net_profit: tx.profit_usd,
         payment_status: tx.payment_status || 'PAGADO',
-        notes: tx.notes || '',
+        notes: packClientFee(tx.notes, tx.client_fee, tx.is_vip),
       };
 
       if (mode === 'mayor') {
@@ -238,7 +239,7 @@ export const SupabaseSyncService = {
         commission: Number(row.commission || 0),
         profit_usd: Number(row.net_profit ?? row.profit_usd ?? 0),
         payment_status: row.payment_status || 'PAGADO',
-        notes: row.notes || '',
+        ...unpackClientFee(row.notes),
         created_at: createdAtOf(row),
       }));
     } catch {
@@ -265,7 +266,7 @@ export const SupabaseSyncService = {
         commission: tx.commission || 0,
         net_profit: tx.profit_usd,
         payment_status: tx.payment_status || 'PAGADO',
-        notes: tx.notes || '',
+        notes: packClientFee(tx.notes, tx.client_fee, tx.is_vip),
       });
     } catch (err) {
       /* warn */
