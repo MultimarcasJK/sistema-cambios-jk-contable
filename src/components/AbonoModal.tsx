@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Account, Client, Currency, Debtor } from '@/types';
 import { CurrencyService } from '@/lib/currencies';
 import { StorageService } from '@/lib/storage';
@@ -60,8 +60,13 @@ export function AbonoModal({
     return Array.from(set).sort();
   }, [clients, debtors]);
 
+  // Limpiar el formulario solo al ABRIR el modal. Si dependiera de "currentDebtor", cada
+  // sincronización automática (trae los deudores de nuevo) borraba lo que el operador escribía.
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (isOpen) {
+    const justOpened = isOpen && !wasOpenRef.current;
+    wasOpenRef.current = isOpen;
+    if (justOpened) {
       setSelectedClientName(preselectedClientName || (currentDebtor ? currentDebtor.client_name : ''));
       setPaymentCurrency('USD');
       setPaymentAmount('');
