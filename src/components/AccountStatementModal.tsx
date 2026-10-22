@@ -30,7 +30,7 @@ import {
   Copy,
   ArrowUpDown,
 } from 'lucide-react';
-import { localDateStr, localDateOf } from '@/lib/dates';
+import { localDateStr, localDateOf, localTimeOf } from '@/lib/dates';
 
 export interface AccountStatementModalProps {
   isOpen: boolean;
@@ -121,8 +121,8 @@ export function AccountStatementModal({
         items.push({
           id: `detal-in-${tx.id}`,
           date: tx.date || (localDateOf(tx.created_at)),
-          time: tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : ''),
-          sortKey: `${tx.date || ''} ${tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : '00:00')} ${tx.created_at || ''} 1`,
+          time: tx.time || (tx.created_at ? localTimeOf(tx.created_at) : ''),
+          sortKey: `${tx.date || ''} ${tx.time || (tx.created_at ? localTimeOf(tx.created_at) : '00:00')} ${tx.created_at || ''} 1`,
           type: 'INGRESO',
           categoryKey: 'DETAL_IN',
           categoryLabel: 'Cobro Detal',
@@ -142,8 +142,8 @@ export function AccountStatementModal({
         items.push({
           id: `detal-out-${tx.id}`,
           date: tx.date || (localDateOf(tx.created_at)),
-          time: tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : ''),
-          sortKey: `${tx.date || ''} ${tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : '00:00')} ${tx.created_at || ''} 2`,
+          time: tx.time || (tx.created_at ? localTimeOf(tx.created_at) : ''),
+          sortKey: `${tx.date || ''} ${tx.time || (tx.created_at ? localTimeOf(tx.created_at) : '00:00')} ${tx.created_at || ''} 2`,
           type: 'EGRESO',
           categoryKey: 'DETAL_OUT',
           categoryLabel: 'Despacho Detal',
@@ -172,8 +172,8 @@ export function AccountStatementModal({
         items.push({
           id: `mayor-in-${tx.id}`,
           date: tx.date || (localDateOf(tx.created_at)),
-          time: tx.created_at ? tx.created_at.slice(11, 16) : '',
-          sortKey: `${tx.date || ''} ${tx.created_at ? tx.created_at.slice(11, 16) : '00:00'} ${
+          time: tx.created_at ? localTimeOf(tx.created_at) : '',
+          sortKey: `${tx.date || ''} ${tx.created_at ? localTimeOf(tx.created_at) : '00:00'} ${
             tx.created_at || ''
           } 1`,
           type: 'INGRESO',
@@ -198,8 +198,8 @@ export function AccountStatementModal({
         items.push({
           id: `mayor-out-${tx.id}`,
           date: tx.date || (localDateOf(tx.created_at)),
-          time: tx.created_at ? tx.created_at.slice(11, 16) : '',
-          sortKey: `${tx.date || ''} ${tx.created_at ? tx.created_at.slice(11, 16) : '00:00'} ${
+          time: tx.created_at ? localTimeOf(tx.created_at) : '',
+          sortKey: `${tx.date || ''} ${tx.created_at ? localTimeOf(tx.created_at) : '00:00'} ${
             tx.created_at || ''
           } 2`,
           type: 'EGRESO',
@@ -231,8 +231,8 @@ export function AccountStatementModal({
         items.push({
           id: `trf-out-${trf.id}`,
           date: trf.date || (localDateOf(trf.created_at)),
-          time: trf.created_at ? trf.created_at.slice(11, 16) : '',
-          sortKey: `${trf.date || ''} ${trf.created_at ? trf.created_at.slice(11, 16) : '00:00'} ${
+          time: trf.created_at ? localTimeOf(trf.created_at) : '',
+          sortKey: `${trf.date || ''} ${trf.created_at ? localTimeOf(trf.created_at) : '00:00'} ${
             trf.created_at || ''
           } 2`,
           type: 'EGRESO',
@@ -256,8 +256,8 @@ export function AccountStatementModal({
         items.push({
           id: `trf-in-${trf.id}`,
           date: trf.date || (localDateOf(trf.created_at)),
-          time: trf.created_at ? trf.created_at.slice(11, 16) : '',
-          sortKey: `${trf.date || ''} ${trf.created_at ? trf.created_at.slice(11, 16) : '00:00'} ${
+          time: trf.created_at ? localTimeOf(trf.created_at) : '',
+          sortKey: `${trf.date || ''} ${trf.created_at ? localTimeOf(trf.created_at) : '00:00'} ${
             trf.created_at || ''
           } 1`,
           type: 'INGRESO',
@@ -287,8 +287,8 @@ export function AccountStatementModal({
         items.push({
           id: `exp-${exp.id}`,
           date: exp.date || (localDateOf(exp.created_at)),
-          time: exp.created_at ? exp.created_at.slice(11, 16) : '',
-          sortKey: `${exp.date || ''} ${exp.created_at ? exp.created_at.slice(11, 16) : '00:00'} ${
+          time: exp.created_at ? localTimeOf(exp.created_at) : '',
+          sortKey: `${exp.date || ''} ${exp.created_at ? localTimeOf(exp.created_at) : '00:00'} ${
             exp.created_at || ''
           } ${isIngreso ? '1' : '2'}`,
           type: isIngreso ? 'INGRESO' : 'EGRESO',
@@ -315,8 +315,8 @@ export function AccountStatementModal({
         items.push({
           id: `pur-${pur.id}`,
           date: pur.date || (localDateOf(pur.created_at)),
-          time: pur.created_at ? pur.created_at.slice(11, 16) : '',
-          sortKey: `${pur.date || ''} ${pur.created_at ? pur.created_at.slice(11, 16) : '00:00'} ${
+          time: pur.created_at ? localTimeOf(pur.created_at) : '',
+          sortKey: `${pur.date || ''} ${pur.created_at ? localTimeOf(pur.created_at) : '00:00'} ${
             pur.created_at || ''
           } 1`,
           type: 'INGRESO',
@@ -343,8 +343,8 @@ export function AccountStatementModal({
         items.push({
           id: `pay-${pay.id}`,
           date: pay.date || (localDateOf(pay.created_at)),
-          time: pay.created_at ? pay.created_at.slice(11, 16) : '',
-          sortKey: `${pay.date || ''} ${pay.created_at ? pay.created_at.slice(11, 16) : '00:00'} ${
+          time: pay.created_at ? localTimeOf(pay.created_at) : '',
+          sortKey: `${pay.date || ''} ${pay.created_at ? localTimeOf(pay.created_at) : '00:00'} ${
             pay.created_at || ''
           } 2`,
           type: 'EGRESO',
@@ -374,8 +374,8 @@ export function AccountStatementModal({
           items.push({
             id: `debtpay-${dp.id}`,
             date: dp.date || (localDateOf(dp.created_at)),
-            time: dp.created_at ? dp.created_at.slice(11, 16) : '',
-            sortKey: `${dp.date || ''} ${dp.created_at ? dp.created_at.slice(11, 16) : '00:00'} ${
+            time: dp.created_at ? localTimeOf(dp.created_at) : '',
+            sortKey: `${dp.date || ''} ${dp.created_at ? localTimeOf(dp.created_at) : '00:00'} ${
               dp.created_at || ''
             } 1`,
             type: 'INGRESO',
@@ -406,8 +406,8 @@ export function AccountStatementModal({
       items.push({
         id: `adj-${adj.id}`,
         date: adj.date || (localDateOf(adj.created_at)),
-        time: adj.created_at ? adj.created_at.slice(11, 16) : '',
-        sortKey: `${adj.date || ''} ${adj.created_at ? adj.created_at.slice(11, 16) : '00:00'} ${
+        time: adj.created_at ? localTimeOf(adj.created_at) : '',
+        sortKey: `${adj.date || ''} ${adj.created_at ? localTimeOf(adj.created_at) : '00:00'} ${
           adj.created_at || ''
         } 3`,
         type: isUp ? 'INGRESO' : 'EGRESO',
@@ -440,8 +440,8 @@ export function AccountStatementModal({
         items.push({
           id: key,
           date,
-          time: ts ? ts.slice(11, 16) : '',
-          sortKey: `${date} ${ts ? ts.slice(11, 16) : '00:00'} ${ts || ''} ${isIn ? '1' : '2'}`,
+          time: ts ? localTimeOf(ts) : '',
+          sortKey: `${date} ${ts ? localTimeOf(ts) : '00:00'} ${ts || ''} ${isIn ? '1' : '2'}`,
           type: isIn ? 'INGRESO' : 'EGRESO',
           categoryKey: 'REMESA',
           categoryLabel: label,
@@ -461,8 +461,14 @@ export function AccountStatementModal({
           mk(`rms-dev-${r.id}`, r.fecha_anulacion, an?.ts, false, caja, 'Devolución Remesa', `Devolución remesa anulada ${ref}`, an?.nota || 'S/R');
         }
       }
+      // Pagos que un ADMIN revirtió: sale el pago y luego el reverso que devolvió el dinero
+      (r.pagos_revertidos || []).forEach((pr, i) => {
+        if (pr.metodo_pago !== 'cuenta_propia' || pr.cuenta_pago_id !== accId) return;
+        mk(`rms-out-${r.id}-${i}`, pr.fecha_pago, pr.ts_pago, false, pr.monto_pago, 'Pago Remesa', `Pago remesa ${ref}`, pr.referencia_pago || 'S/R');
+        mk(`rms-rev-${r.id}-${i}`, pr.fecha_reverso, pr.ts, true, pr.monto_pago, 'Pago Revertido', `Pago revertido remesa ${ref}`, pr.nota || 'S/R');
+      });
       if (r.estado === 'pagada' && r.metodo_pago === 'cuenta_propia' && r.cuenta_pago_id === accId && r.fecha_pago) {
-        const pg = r.historial?.find((h) => h.estado === 'pagada');
+        const pg = [...(r.historial || [])].reverse().find((h) => h.estado === 'pagada');
         mk(`rms-out-${r.id}`, r.fecha_pago, pg?.ts, false, r.monto_pago, 'Pago Remesa', `Pago remesa ${ref}`, r.referencia_pago || 'S/R');
       }
     });
