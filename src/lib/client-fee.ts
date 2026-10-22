@@ -38,3 +38,34 @@ export function unpackExpenseMeta(notes: string | undefined): { notes: string; c
   if (!m) return { notes: raw };
   return { notes: raw.replace(EXP_TAG_RE, ' ').trim(), currency: m[1], amount_usd: Number(m[2]) };
 }
+
+// Cierres diarios: la tabla solo tiene "net_profit_day", así que el desglose
+// (cripto/dólar, regionales, ingresos extra y gastos) viaja como marca dentro de "notes".
+const CLOSE_TAG_RE = /\s*\[CIERRE\|D:(-?[\d.]+)\|M:(-?[\d.]+)\|I:(-?[\d.]+)\|G:(-?[\d.]+)\]\s*/;
+
+export interface ClosureBreakdown {
+  profit_detal: number;
+  profit_mayor: number;
+  extra_income: number;
+  total_expenses: number;
+}
+
+export function packClosureMeta(notes: string | undefined, b: ClosureBreakdown): string {
+  const clean = (notes || '').replace(CLOSE_TAG_RE, ' ').trim();
+  const n = (x: number) => Number(x || 0);
+  const tag = `[CIERRE|D:${n(b.profit_detal)}|M:${n(b.profit_mayor)}|I:${n(b.extra_income)}|G:${n(b.total_expenses)}]`;
+  return clean ? `${clean} ${tag}` : tag;
+}
+
+export function unpackClosureMeta(notes: string | undefined): { notes: string } & Partial<ClosureBreakdown> {
+  const raw = notes || '';
+  const m = raw.match(CLOSE_TAG_RE);
+  if (!m) return { notes: raw };
+  return {
+    notes: raw.replace(CLOSE_TAG_RE, ' ').trim(),
+    profit_detal: Number(m[1]) || 0,
+    profit_mayor: Number(m[2]) || 0,
+    extra_income: Number(m[3]) || 0,
+    total_expenses: Number(m[4]) || 0,
+  };
+}

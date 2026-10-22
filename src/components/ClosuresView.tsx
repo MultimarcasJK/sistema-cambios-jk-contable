@@ -586,23 +586,23 @@ export function ClosuresView({
                           })}
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-emerald-600">
-                          +${c.profit_detal.toFixed(2)}
+                          +${(c.profit_detal || 0).toFixed(2)}
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-indigo-600">
-                          +${c.profit_mayor.toFixed(2)}
+                          +${(c.profit_mayor || 0).toFixed(2)}
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-blue-600">
                           +${(c.extra_income || 0).toFixed(2)}
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-rose-600">
-                          -${c.total_expenses.toFixed(2)}
+                          -${(c.total_expenses || 0).toFixed(2)}
                         </td>
                         <td
                           className={`py-2.5 px-3 text-right font-black ${
                             c.total_net_profit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                           }`}
                         >
-                          {c.total_net_profit >= 0 ? '+' : ''}${c.total_net_profit.toFixed(2)}
+                          {c.total_net_profit >= 0 ? '+' : ''}${(c.total_net_profit || 0).toFixed(2)}
                         </td>
                         <td className="py-2.5 px-3 text-center font-sans">
                           <div className="flex items-center justify-center gap-1.5">
