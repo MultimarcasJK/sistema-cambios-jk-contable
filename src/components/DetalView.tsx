@@ -407,7 +407,7 @@ export function DetalView({
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Fecha</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Fecha</label>
               <input
                 type="date"
                 value={formData.date}
@@ -418,7 +418,7 @@ export function DetalView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Cliente *</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Cliente *</label>
               <input
                 type="text"
                 list="clients-list-detal"
@@ -438,7 +438,7 @@ export function DetalView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Cantidad MONEDA / USDT *</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Cantidad MONEDA / USDT *</label>
               <input
                 type="text"
                 inputMode="decimal"
@@ -451,7 +451,7 @@ export function DetalView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Precio de Venta (Tasa) *</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Precio de Venta (Tasa) *</label>
               <input
                 type="number"
                 step="any"
@@ -464,7 +464,7 @@ export function DetalView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Precio de Compra (Costo)</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Precio de Compra (Costo)</label>
               <input
                 type="number"
                 step="any"
@@ -476,7 +476,7 @@ export function DetalView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Pagado Por (Wallet Origen)</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Pagado Por (Wallet Origen)</label>
               <select
                 value={formData.paid_account_id}
                 onChange={(e) => setFormData({ ...formData, paid_account_id: e.target.value })}
@@ -509,7 +509,7 @@ export function DetalView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">
                 Recibido Por (Cuenta de Ingreso)
               </label>
               <select
@@ -544,8 +544,8 @@ export function DetalView({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-600">
+              <div className="flex items-center justify-between h-6 mb-1 gap-2 whitespace-nowrap">
+                <label className="block min-w-0 truncate text-xs font-semibold text-slate-600">
                   Cantidad Abonada ($ USD)
                 </label>
                 {formData.received_account_id !== 'POR_COBRAR' && calculations.totalToPay > 0 && (
@@ -574,8 +574,8 @@ export function DetalView({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-600">
+              <div className="flex items-center justify-between h-6 mb-1 gap-2 whitespace-nowrap">
+                <label className="block min-w-0 truncate text-xs font-semibold text-slate-600">
                   Comisión Banco {feeMode === 'fixed' ? '($)' : '(%)'}
                 </label>
                 <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-[11px] font-bold border border-slate-200">
@@ -639,8 +639,8 @@ export function DetalView({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-600">
+              <div className="flex items-center justify-between h-6 mb-1 gap-2 whitespace-nowrap">
+                <label className="block min-w-0 truncate text-xs font-semibold text-slate-600">
                   Comisión al Cliente ($)
                 </label>
                 <button
@@ -675,7 +675,7 @@ export function DetalView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Referencia</label>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Referencia</label>
               <input
                 type="text"
                 placeholder="ej. #1409 o comprobante"
@@ -685,8 +685,8 @@ export function DetalView({
               />
             </div>
 
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Notas / Observaciones</label>
+            <div>
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Notas / Observaciones</label>
               <input
                 type="text"
                 placeholder="Condiciones, acuerdo de pago..."
