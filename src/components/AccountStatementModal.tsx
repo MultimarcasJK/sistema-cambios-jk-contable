@@ -31,6 +31,7 @@ import {
   ArrowUpDown,
 } from 'lucide-react';
 import { localDateStr, localDateOf, localTimeOf } from '@/lib/dates';
+import { commissionOutOfAccount } from '@/lib/commission';
 
 export interface AccountStatementModalProps {
   isOpen: boolean;
@@ -191,10 +192,8 @@ export function AccountStatementModal({
 
       // 2. Salida de dinero (Desembolso)
       if (tx.paid_account_id === accId && tx.amount_ves > 0) {
-        let totalOut = tx.amount_ves;
-        if (currentAccount.currency === 'USD') {
-          totalOut += tx.commission || 0;
-        }
+        const comOut = commissionOutOfAccount(tx, currentAccount.currency);
+        const totalOut = tx.amount_ves + comOut;
         items.push({
           id: `mayor-out-${tx.id}`,
           date: tx.date || (localDateOf(tx.created_at)),
@@ -206,7 +205,7 @@ export function AccountStatementModal({
           categoryKey: 'MAYOR_OUT',
           categoryLabel: 'Desembolso Mayor',
           description: `Desembolso Venta Mayor (${tx.currency || 'VES'} ${tx.amount_ves}${
-            tx.commission ? ` + Com. ${tx.commission}` : ''
+            comOut ? ` + Com. ${comOut}` : ''
           })`,
           thirdParty: tx.client_name ? `Cliente: ${tx.client_name}` : 'Cliente Mayor',
           reference: tx.reference || 'S/R',

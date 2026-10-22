@@ -12,6 +12,7 @@ import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatRateD
 import { TrendingUp, Search, CheckCircle, Trash2, ArrowDownLeft, Sparkles, Globe, Coins, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { localDateStr } from '@/lib/dates';
+import { commissionInAccountCurrency } from '@/lib/commission';
 
 interface MayorProps {
   accounts: Account[];
@@ -122,7 +123,7 @@ export function MayorView({
     const sell = parseFormattedNumber(formData.sell_price);
 
     if (ves <= 0 || sell <= 0) {
-      return { totalToPay: 0, effectiveFee: 0, clientFee: 0, profitUsd: 0 };
+      return { totalToPay: 0, effectiveFee: 0, clientFee: 0, profitUsd: 0, commissionAccount: 0, paidAccount: undefined };
     }
 
     let totalToPay = 0;
@@ -158,6 +159,19 @@ export function MayorView({
     // Comisión al cliente (ej. $1 en tasa VIP): se suma a lo que debe pagar y a la ganancia
     const clientFee = parseFormattedNumber(formData.client_fee) || 0;
 
+    // La misma comisión, en la moneda de la cuenta de salida: también sale de esa cuenta
+    const paidAccount = accounts.find((a) => a.id === formData.paid_account_id);
+    const commissionAccount =
+      effectiveFee > 0
+        ? commissionInAccountCurrency({
+            accountCurrency: paidAccount?.currency,
+            amount: ves,
+            costUsd,
+            feeUsd: effectiveFee,
+            percent: feeMode === 'percent' ? pct : undefined,
+          })
+        : 0;
+
     const profitRaw = totalToPay - costUsd - effectiveFee + clientFee;
     const profitUsd = Number(profitRaw.toFixed(4));
 
@@ -166,8 +180,10 @@ export function MayorView({
       effectiveFee: Number(effectiveFee.toFixed(4)),
       clientFee,
       profitUsd: Math.abs(profitUsd) > 0 ? profitUsd : 0,
+      commissionAccount,
+      paidAccount,
     };
-  }, [formData.amount_ves, formData.buy_price, formData.sell_price, formData.commission, formData.client_fee, feeMode, feePercent, selectedCurrency]);
+  }, [formData.amount_ves, formData.buy_price, formData.sell_price, formData.commission, formData.client_fee, formData.paid_account_id, accounts, feeMode, feePercent, selectedCurrency]);
 
   const handleSetFullPayment = () => {
     if (formData.received_account_id === 'POR_COBRAR') {
@@ -257,6 +273,7 @@ export function MayorView({
       payment_status: paymentStatus,
       paid_account_id: formData.paid_account_id || undefined,
       commission: comm,
+      commission_account: formData.paid_account_id ? calculations.commissionAccount : undefined,
       fee_percent: feeMode === 'percent' ? (parseFloat(feePercent) || undefined) : undefined,
       client_fee: calculations.clientFee > 0 ? calculations.clientFee : undefined,
       is_vip: formData.is_vip || undefined,
@@ -718,6 +735,12 @@ export function MayorView({
                   <p className="text-blue-700 font-semibold">
                     Comisión: {feeMode === 'percent' ? `${feePercent}% (-$${calculations.effectiveFee.toFixed(2)} USD)` : `-$${calculations.effectiveFee.toFixed(2)} USD`} (descontado de ganancia)
                   </p>
+                  {calculations.paidAccount && calculations.commissionAccount > 0 && (
+                    <p className="text-blue-700">
+                      y -{formatCurrency(calculations.commissionAccount, 2)} {calculations.paidAccount.currency} descontado de{' '}
+                      <span className="font-semibold">{calculations.paidAccount.name}</span> (cuenta de salida)
+                    </p>
+                  )}
                 </div>
               )}
             </div>
