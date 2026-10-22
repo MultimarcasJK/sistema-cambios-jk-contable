@@ -973,42 +973,72 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
 
         {lista.length === 0 && <p className="text-xs text-slate-500">No hay remesas en esta lista.</p>}
 
-        <div className="space-y-2">
+        <div className="overflow-x-auto border border-slate-200 rounded-xl">
+          <table className="w-full text-left text-xs text-slate-600 min-w-[1000px]">
+            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase text-[11px]">
+              <tr>
+                <th className="py-2.5 px-3">#</th>
+                <th className="py-2.5 px-3">Fecha</th>
+                <th className="py-2.5 px-3">Remitente → Beneficiario</th>
+                <th className="py-2.5 px-3">País</th>
+                <th className="py-2.5 px-3 text-right">Recibe</th>
+                <th className="py-2.5 px-3 text-right">Cobrado</th>
+                <th className="py-2.5 px-3">Paga con</th>
+                {isAdmin && <th className="py-2.5 px-3 text-right">Ganancia ($)</th>}
+                <th className="py-2.5 px-3">Estado</th>
+                <th className="py-2.5 px-3 w-8"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
           {lista.map((r) => {
             const open = abierta === r.id;
             const canAct = PENDIENTES.includes(r.estado);
             return (
-              <div key={r.id} className="rounded-xl border border-slate-200">
-                <button
+              <React.Fragment key={r.id}>
+                <tr
                   onClick={() => abrir(r)}
-                  className="w-full text-left px-3 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs"
+                  className={`cursor-pointer transition ${open ? 'bg-emerald-50/50' : 'hover:bg-slate-50'}`}
                 >
-                  <span className="font-bold text-slate-900">#{r.numero}</span>
-                  <span className="text-slate-500">{r.date}</span>
-                  <span className="font-semibold text-slate-800">
+                  <td className="py-2.5 px-3 font-bold text-slate-900">#{r.numero}</td>
+                  <td className="py-2.5 px-3 font-mono text-slate-500">{r.date}</td>
+                  <td className="py-2.5 px-3 font-semibold text-slate-800">
                     {r.remitente_name} → {r.beneficiario?.name}
-                  </span>
-                  <span className="text-slate-500">{paisName(r.pais_pago)}</span>
-                  <span className="font-bold text-blue-700">
+                  </td>
+                  <td className="py-2.5 px-3 text-slate-500">{paisName(r.pais_pago)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono font-bold text-blue-700">
                     {amt(r.monto_pago, r.moneda_pago)} {r.moneda_pago}
-                  </span>
-                  <span className="text-slate-500">
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono">
+                    {amt(r.total_cobrado, r.moneda_origen)} {r.moneda_origen}
+                  </td>
+                  <td className="py-2.5 px-3 text-slate-500">
                     {r.metodo_pago === 'aliado'
                       ? `Aliado: ${r.aliado_name || 'por elegir'}`
-                      : `Cuenta: ${accName(r.cuenta_pago_id)}`}
-                  </span>
-                  <span className={`ml-auto px-2 py-0.5 rounded-lg border font-semibold ${ESTADO_CLASS[r.estado]}`}>
-                    {ESTADO_LABEL[r.estado]}
-                  </span>
-                  {open ? (
-                    <ChevronUp className="w-4 h-4 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                      : accName(r.cuenta_pago_id)}
+                  </td>
+                  {isAdmin && (
+                    <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-600">
+                      {amt(r.ganancia_usd, 'USD')}
+                    </td>
                   )}
-                </button>
+                  <td className="py-2.5 px-3">
+                    <span className={`px-2 py-0.5 rounded-lg border font-semibold ${ESTADO_CLASS[r.estado]}`}>
+                      {ESTADO_LABEL[r.estado]}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3">
+                    {open ? (
+                      <ChevronUp className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                    )}
+                  </td>
+                </tr>
 
                 {open && (
-                  <div className="border-t border-slate-100 px-3 py-3 space-y-3 text-xs">
+                  <tr>
+                  <td colSpan={isAdmin ? 10 : 9} className="bg-slate-50/60 p-0">
+                  <div className="px-3 py-3 space-y-3 text-xs">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <div className="text-slate-500">Remitente</div>
@@ -1044,14 +1074,18 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                       </div>
                     </div>
 
-                    <div className="text-slate-500">
-                      {[...(r.historial || [])].reverse().map((h, i) => (
-                        <span key={i} className="mr-3">
-                          {ESTADO_LABEL[h.estado]}: {new Date(h.ts).toLocaleString('es-ES')}
-                          {h.user_email ? ` (${h.user_email})` : ''}
-                          {h.nota ? ` — ${h.nota}` : ''}
-                        </span>
-                      ))}
+                    <div>
+                      <div className="text-slate-500 mb-1">Historial</div>
+                      <ul className="space-y-0.5 text-slate-600">
+                        {[...(r.historial || [])].reverse().map((h, i) => (
+                          <li key={i}>
+                            <span className="font-mono text-slate-400">{new Date(h.ts).toLocaleString('es-ES')}</span>{' '}
+                            <span className="font-semibold">{ESTADO_LABEL[h.estado]}</span>
+                            {h.nota ? ` — ${h.nota}` : ''}
+                            {h.user_email ? <span className="text-slate-400"> · {h.user_email}</span> : null}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
 
                     {canAct && (
@@ -1173,10 +1207,14 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                       )}
                     </div>
                   </div>
+                  </td>
+                  </tr>
                 )}
-              </div>
+              </React.Fragment>
             );
           })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
