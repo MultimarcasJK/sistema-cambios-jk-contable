@@ -12,7 +12,7 @@ import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatRateD
 import { TrendingUp, Search, CheckCircle, Trash2, ArrowDownLeft, Sparkles, Globe, Coins, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { localDateStr } from '@/lib/dates';
-import { commissionInAccountCurrency } from '@/lib/commission';
+import { commissionInAccountCurrency, commissionOutOfAccount } from '@/lib/commission';
 
 interface MayorProps {
   accounts: Account[];
@@ -953,9 +953,9 @@ export function MayorView({
                             {txCurrency}
                           </span>
                           {formatRegionalAmount(tx.amount_ves)}
-                          {tx.commission > 0 && paidAcc?.currency === 'USD' && (
+                          {commissionOutOfAccount(tx, paidAcc?.currency) > 0 && (
                             <span className="block text-[10px] text-rose-500 font-sans font-normal">
-                              (Debitado: -{formatRegionalAmount(tx.amount_ves + tx.commission)})
+                              (Debitado: -{formatRegionalAmount(tx.amount_ves + commissionOutOfAccount(tx, paidAcc?.currency))})
                             </span>
                           )}
                         </td>
@@ -970,9 +970,20 @@ export function MayorView({
                               {tx.fee_percent ? (
                                 <span className="font-bold text-purple-700 mr-1">{tx.fee_percent}%</span>
                               ) : null}
-                              <span className="font-mono text-slate-700 font-bold">
-                                (${formatCurrency(tx.commission)})
-                              </span>
+                              {(tx.commission_account || 0) > 0 ? (
+                                <>
+                                  <span className="font-mono text-slate-700 font-bold">
+                                    -{formatRegionalAmount(tx.commission_account || 0)} {paidAcc?.currency || txCurrency}
+                                  </span>
+                                  <span className="block text-[10px] font-mono text-slate-400">
+                                    (-${formatCurrency(tx.commission)})
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="font-mono text-slate-700 font-bold">
+                                  (${formatCurrency(tx.commission)})
+                                </span>
+                              )}
                             </span>
                           ) : (tx.client_fee || 0) > 0 ? null : (
                             <span className="text-slate-400">-</span>
