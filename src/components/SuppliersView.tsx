@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Account, Supplier, SupplierPurchase, SupplierPayment, CurrencyConfig } from '@/types';
 import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
+import { RatesService } from '@/lib/rates-service';
 import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from './ManageCurrenciesModal';
 import { SupplierHistoryModal } from './SupplierHistoryModal';
@@ -165,6 +166,8 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
     else if (newCurr === 'BRL') defaultRate = '5.40';
     else if (newCurr === 'MXN') defaultRate = '19.5';
     else if (newCurr === 'ARS') defaultRate = '1200';
+    // Si App JK tiene la tasa de costo (compra) de hoy, se usa esa en vez del valor fijo
+    defaultRate = RatesService.liveCostRate(newCurr, StorageService.getAppMode()) ?? defaultRate;
 
     setPurchaseForm((prev) => ({
       ...prev,

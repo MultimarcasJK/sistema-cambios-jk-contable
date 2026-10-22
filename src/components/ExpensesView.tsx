@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Account, Expense, Currency, CurrencyConfig } from '@/types';
 import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
+import { RatesService } from '@/lib/rates-service';
 import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from '@/components/ManageCurrenciesModal';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInputNumber } from '@/lib/formatters';
@@ -59,6 +60,8 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
     else if (newCurr === 'NIO') defaultRate = '36.80';
     else if (newCurr === 'CUP') defaultRate = '320';
     else if (newCurr === 'PYG') defaultRate = '7500';
+    // Si App JK tiene la tasa de costo (compra) de hoy, se usa esa en vez del valor fijo
+    defaultRate = RatesService.liveCostRate(newCurr, StorageService.getAppMode()) ?? defaultRate;
 
     setFormData((prev) => ({
       ...prev,
