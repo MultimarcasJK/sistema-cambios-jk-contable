@@ -508,20 +508,14 @@ export function AccountStatementModal({
     };
   }, [currentAccount, allAccounts]);
 
-  // Reconciliación automática: si el saldo guardado en la cuenta difiere del saldo real acumulado de sus movimientos,
-  // actualizarlo automáticamente para mantener la integridad contable en todo el sistema.
-  useEffect(() => {
-    if (!currentAccount) return;
-    const finalCalculated =
-      allMovements.length > 0
-        ? allMovements[allMovements.length - 1].balanceAfter
-        : Number((currentAccount.initial_balance ?? 0).toFixed(4));
-
-    if (Math.abs((currentAccount.current_balance ?? 0) - finalCalculated) > 0.0001) {
-      const m = (currentAccount.scope as any) || StorageService.getAppMode();
-      StorageService.updateAccount(currentAccount.id, { current_balance: finalCalculated }, m);
-    }
-  }, [currentAccount, allMovements]);
+  // El estado de cuenta solo muestra: nunca cambia el saldo guardado. Si no coincide con los movimientos,
+  // se avisa y la diferencia se resuelve en Contabilidad → Cuadre de cuentas.
+  const saldoMovimientos = currentAccount
+    ? allMovements.length > 0
+      ? allMovements[allMovements.length - 1].balanceAfter
+      : Number((currentAccount.initial_balance ?? 0).toFixed(4))
+    : 0;
+  const descuadre = currentAccount ? Number(((currentAccount.current_balance ?? 0) - saldoMovimientos).toFixed(2)) : 0;
 
   // Manejador de botones rápidos de fechas
   const handleApplyDatePreset = (
@@ -1213,6 +1207,13 @@ export function AccountStatementModal({
                 </span>
               </div>
             </div>
+            {Math.abs(descuadre) >= 0.01 && (
+              <div className="mx-4 mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 print:hidden">
+                El saldo guardado de la cuenta ({currentAccount.currency} {currentAccount.current_balance.toFixed(2)}) no
+                coincide con sus movimientos ({currentAccount.currency} {saldoMovimientos.toFixed(2)}). No se cambió nada:
+                revísalo en Contabilidad → Cuadre de cuentas.
+              </div>
+            )}
           </div>
         </div>
 
