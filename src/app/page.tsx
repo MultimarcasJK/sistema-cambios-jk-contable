@@ -19,6 +19,7 @@ import { RemesasView } from '@/components/RemesasView';
 import { StorageService } from '@/lib/storage';
 import { INITIAL_ACCOUNTS_MAYOR } from '@/lib/initial-data';
 import { SupabaseSyncService } from '@/lib/supabase-sync';
+import { supabase } from '@/lib/supabase';
 import { RatesService } from '@/lib/rates-service';
 import {
   Account,
@@ -230,6 +231,23 @@ export default function Home() {
           .catch(() => {});
       }, 10000);
 
+      // Sincronización instantánea: Supabase avisa cuando otra computadora guarda o borra algo.
+      // Se agrupan los avisos seguidos (500 ms) para no sincronizar varias veces por un solo guardado.
+      let realtimeTimer: ReturnType<typeof setTimeout> | null = null;
+      const realtimeChannel = supabase
+        ?.channel('jk-cambios')
+        .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+          const currentMode = StorageService.getAppMode();
+          if (!payload.table?.startsWith(`${currentMode}_`)) return;
+          if (realtimeTimer) clearTimeout(realtimeTimer);
+          realtimeTimer = setTimeout(() => {
+            StorageService.syncFromSupabase(currentMode)
+              .then(() => refreshData(currentMode))
+              .catch(() => {});
+          }, 500);
+        })
+        .subscribe();
+
       // Auto-sincronizar tasas de Google Sheets cada 60 segundos con anti-caché
       const ratesInterval = setInterval(() => {
         RatesService.syncRatesFromSheets()
@@ -243,6 +261,8 @@ export default function Home() {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
         clearInterval(supabaseInterval);
         clearInterval(ratesInterval);
+        if (realtimeTimer) clearTimeout(realtimeTimer);
+        if (realtimeChannel) supabase?.removeChannel(realtimeChannel);
       };
     } catch (err) {
       console.error('Error al inicializar datos:', err);
