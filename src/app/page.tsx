@@ -59,6 +59,8 @@ export default function Home() {
   const [payrollPayments, setPayrollPayments] = useState<PayrollPayment[]>([]);
   const [serviceExpenses, setServiceExpenses] = useState<ServiceExpense[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  // Remesas del modo actual: se releen cada vez que cambian las cuentas (cobro, pago o anulación las mueven)
+  const remesas = useMemo(() => (isLoaded ? StorageService.getRemesas(appMode) : []), [appMode, accounts, isLoaded]);
   // Cambia cada vez que se recargan las operaciones: el libro contable se recalcula con esto
   const dataVersion = useMemo(
     () => ({}),
@@ -336,6 +338,7 @@ export default function Home() {
               mayorTxs={mayorTxs}
               expenses={expenses}
               closures={closures}
+              remesas={remesas}
               onNavigate={setActiveTab}
             />
           )}
@@ -402,6 +405,7 @@ export default function Home() {
               closures={closures}
               accounts={accounts}
               debtors={debtors}
+              remesas={remesas}
               onDataChange={refreshData}
               appMode={appMode}
             />

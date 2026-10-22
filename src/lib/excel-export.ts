@@ -88,6 +88,7 @@ export function exportFullAccountingToExcel() {
     'Hora Cierre': c.closed_at,
     'Ganancia Detal ($)': c.profit_detal,
     'Ganancia Mayor ($)': c.profit_mayor,
+    'Ganancia Remesas ($)': c.profit_remesas || 0,
     'Gastos del Día ($)': c.total_expenses,
     'Total Neto Ganado ($)': c.total_net_profit,
     'Total Deudores ($)': c.total_debtors_usd || 0,

@@ -811,6 +811,7 @@ export const StorageService = {
             profit_mayor: c.profit_mayor ?? loc?.profit_mayor ?? 0,
             extra_income: c.extra_income ?? loc?.extra_income ?? 0,
             total_expenses: c.total_expenses ?? loc?.total_expenses ?? 0,
+            profit_remesas: c.profit_remesas ?? loc?.profit_remesas ?? 0,
           };
         });
         saveToStorage(this.getClosuresKey(m), [...completed, ...localPending]);

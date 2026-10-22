@@ -7,6 +7,7 @@ import {
   TransactionMayor,
   Expense,
   DailyClosure,
+  Remesa,
   Supplier,
   Debtor,
 } from '@/types';
@@ -28,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { localDateStr } from '@/lib/dates';
+import { gananciaRemesasEl } from '@/lib/remesa-profit';
 
 interface DashboardProps {
   accounts: Account[];
@@ -37,6 +39,7 @@ interface DashboardProps {
   mayorTxs: TransactionMayor[];
   expenses: Expense[];
   closures: DailyClosure[];
+  remesas: Remesa[];
   onNavigate: (tab: TabKey) => void;
 }
 
@@ -48,6 +51,7 @@ export function DashboardView({
   mayorTxs,
   expenses,
   closures,
+  remesas,
   onNavigate,
 }: DashboardProps) {
   const { isAdmin } = useAuth();
@@ -119,18 +123,23 @@ export function DashboardView({
       .filter((e) => e.date === todayStr && e.type !== 'ingreso')
       .reduce((sum, e) => sum + (e.amount_usd || 0), 0);
 
-    const netProfitToday = Number((profitDetalToday + profitMayorToday + extraIncomeToday - expensesToday).toFixed(2));
+    const profitRemesasToday = gananciaRemesasEl(remesas, todayStr);
+
+    const netProfitToday = Number(
+      (profitDetalToday + profitMayorToday + profitRemesasToday + extraIncomeToday - expensesToday).toFixed(2)
+    );
 
     return {
       profitDetalToday,
       volumeDetalToday,
       profitMayorToday,
+      profitRemesasToday,
       volumeMayorVesToday,
       extraIncomeToday,
       expensesToday,
       netProfitToday,
     };
-  }, [detalTxs, mayorTxs, expenses, todayStr]);
+  }, [detalTxs, mayorTxs, expenses, remesas, todayStr]);
 
   const totalDebtors = debtors.reduce((sum, d) => sum + (d.current_debt || 0), 0);
   const totalSuppliersDebt = suppliers.reduce((sum, s) => sum + (s.current_debt_usd || 0), 0);
@@ -187,7 +196,8 @@ export function DashboardView({
                 ${formatCurrency(todayMetrics.netProfitToday, 2)} USD
               </div>
               <span className="text-xs text-slate-400">
-                Cripto: +${formatCurrency(todayMetrics.profitDetalToday, 2)} | Reg.: +${formatCurrency(todayMetrics.profitMayorToday, 2)}
+                Cripto: +${formatCurrency(todayMetrics.profitDetalToday, 2)} | Reg.: +${formatCurrency(todayMetrics.profitMayorToday, 2)} | Rem.: +$
+                {formatCurrency(todayMetrics.profitRemesasToday, 2)}
               </span>
             </div>
             <div className="w-12 h-12 rounded-xl bg-slate-800 text-emerald-400 border border-slate-700 flex items-center justify-center">

@@ -37,6 +37,7 @@ describe('desglose del cierre en notes', () => {
       profit_mayor: 30.85,
       extra_income: 0,
       total_expenses: 25.5,
+      profit_remesas: 0,
     });
   });
 });
