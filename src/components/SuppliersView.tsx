@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Account, Supplier, SupplierPurchase, SupplierPayment, CurrencyConfig } from '@/types';
 import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
+import { useAuth } from '@/lib/auth-context';
 import { RatesService } from '@/lib/rates-service';
 import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from './ManageCurrenciesModal';
@@ -23,6 +24,7 @@ import {
   Settings,
   Receipt,
   Trash2,
+  CopyX,
   Edit2,
   UserPlus,
   Building2,
@@ -39,6 +41,7 @@ interface SuppliersProps {
 }
 
 export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersProps) {
+  const { isAdmin } = useAuth();
   const todayStr = localDateStr();
   const [systemCurrencies, setSystemCurrencies] = useState<CurrencyConfig[]>(
     CurrencyService.getCurrencies()
@@ -312,6 +315,36 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
   }, [suppliers]);
 
   const purchasesHistory = newestFirst(StorageService.getSupplierPurchases());
+  // Compras que parecen la misma anotada dos veces (mismo día, proveedor y casi el mismo monto)
+  const posiblesCopias = new Set(
+    purchasesHistory
+      .filter((p) =>
+        purchasesHistory.some(
+          (o) =>
+            o.id !== p.id &&
+            o.date === p.date &&
+            (o.supplier_id === p.supplier_id || o.supplier_name === p.supplier_name) &&
+            Math.abs((o.quantity || 0) - (p.quantity || 0)) < 1,
+        ),
+      )
+      .map((p) => p.id),
+  );
+
+  const handleQuitarCopia = async (p: SupplierPurchase) => {
+    const motivo = window.prompt(
+      `Quitar la compra de ${formatRegionalAmount(p.quantity)} ${p.currency} del ${p.date} como COPIA REPETIDA.\n\n` +
+        'Se borra el registro SIN mover el saldo de la cuenta ni la deuda del proveedor ' +
+        '(úsalo solo con la copia que sobra, la que hace que la cuenta no cuadre). Escribe el motivo:',
+      'Copia repetida por sincronización',
+    );
+    if (motivo === null) return;
+    try {
+      await StorageService.removeDuplicateRecord('compra_proveedor', p.id, motivo);
+      onDataChange();
+    } catch (err) {
+      window.alert((err as Error).message);
+    }
+  };
   const paymentsHistory = newestFirst(StorageService.getSupplierPayments());
 
   const commonCurrencies = ['USDT', 'VES', 'COP', 'PEN', 'EUR', 'USD'];
@@ -675,6 +708,16 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                         >
                           <Trash2 className="w-4 h-4 text-rose-600" />
                         </button>
+                        {isAdmin && posiblesCopias.has(p.id) && (
+                          <button
+                            type="button"
+                            onClick={() => handleQuitarCopia(p)}
+                            title="Quitar copia repetida (no mueve saldos ni deudas)"
+                            className="ml-1.5 p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
+                          >
+                            <CopyX className="w-4 h-4" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

@@ -4,7 +4,8 @@ import React, { useState, useMemo } from 'react';
 import { Account, BalanceTransfer } from '@/types';
 import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
-import { ArrowLeftRight, CheckCircle, Search, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, CheckCircle, CopyX, Search, Trash2 } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInputNumber } from '@/lib/formatters';
 import { localDateStr } from '@/lib/dates';
 
@@ -15,6 +16,7 @@ interface TransfersProps {
 }
 
 export function TransfersView({ accounts, transfers, onDataChange }: TransfersProps) {
+  const { isAdmin } = useAuth();
   const todayStr = localDateStr();
 
   const [feeMode, setFeeMode] = useState<'percent' | 'fixed'>('percent');
@@ -36,6 +38,45 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
     if (confirm('¿Deseas eliminar este registro de CAMBIO SALDOS? Se revertirán los saldos de la cuenta origen y cuenta destino automáticamente.')) {
       await StorageService.deleteTransfer(id);
       onDataChange();
+    }
+  };
+
+  // Traspasos que parecen el mismo anotado dos veces (mismo día, mismas cuentas, mismo monto)
+  const posiblesCopias = useMemo(
+    () =>
+      new Set(
+        transfers
+          .filter(
+            (t) =>
+              t &&
+              transfers.some(
+                (o) =>
+                  o &&
+                  o.id !== t.id &&
+                  o.date === t.date &&
+                  o.from_account_id === t.from_account_id &&
+                  o.to_account_id === t.to_account_id &&
+                  Math.abs((o.amount_sent || 0) - (t.amount_sent || 0)) < 0.005,
+              ),
+          )
+          .map((t) => t.id),
+      ),
+    [transfers],
+  );
+
+  const handleQuitarCopia = async (t: BalanceTransfer) => {
+    const motivo = window.prompt(
+      `Quitar el traspaso de ${t.amount_sent} del ${t.date} como COPIA REPETIDA.\n\n` +
+        'Se borra el registro SIN mover los saldos de las cuentas ' +
+        '(úsalo solo con la copia que sobra, la que hace que las cuentas no cuadren). Escribe el motivo:',
+      'Copia repetida por sincronización',
+    );
+    if (motivo === null) return;
+    try {
+      await StorageService.removeDuplicateRecord('traspaso', t.id, motivo);
+      onDataChange();
+    } catch (err) {
+      window.alert((err as Error).message);
     }
   };
 
@@ -461,6 +502,16 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                        {isAdmin && posiblesCopias.has(t.id) && (
+                          <button
+                            type="button"
+                            onClick={() => handleQuitarCopia(t)}
+                            title="Quitar copia repetida (no mueve saldos)"
+                            className="ml-1.5 p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg transition-all duration-150 shadow-sm border border-amber-200 inline-flex items-center justify-center cursor-pointer"
+                          >
+                            <CopyX className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

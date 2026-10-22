@@ -39,6 +39,7 @@ import {
 } from './initial-data';
 import { SupabaseSyncService } from './supabase-sync';
 import { AuditService } from './audit';
+import { recordTime } from './order';
 import { isActorAdmin, getActor } from './actor';
 import type { LedgerSources } from './ledger';
 import {
@@ -125,6 +126,14 @@ function isDeleted(id: string): boolean {
 // (antes se "resucitaba" lo que otra computadora había borrado).
 function getSeenRemote(storageKey: string): Set<string> {
   return new Set(getFromStorage<string[]>(storageKey + '_vistos_v1', []));
+}
+
+// Si este dispositivo todavía no tiene lista de "vistos" (primera vez con esta versión, o datos viejos),
+// no puede saber si un registro que solo tiene él se borró en otra computadora. Solo vuelve a subir los
+// recién creados; los viejos se dejan (así se resucitaron un traspaso y dos compras el 21/10).
+const RECENT_LOCAL_MS = 2 * 60 * 60 * 1000;
+function isRecentLocal(r: { id?: string; date?: string; created_at?: string }): boolean {
+  return Date.now() - recordTime(r) < RECENT_LOCAL_MS;
 }
 
 function rememberSeenRemote(storageKey: string, seen: Set<string>, remoteIds: Set<string>): void {
@@ -712,7 +721,7 @@ export const StorageService = {
         const local = this.getSuppliers(m);
         const remoteIds = new Set(validRemote.map((s) => s.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getSuppliersKey(m)) : new Set<string>();
-        const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id) && !seenRemote.has(s.id));
+        const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id) && !seenRemote.has(s.id) && (seenRemote.size > 0 || isRecentLocal(s)));
         rememberSeenRemote(this.getSuppliersKey(m), seenRemote, remoteIds);
         localPending.forEach((s) => {
           SupabaseSyncService.upsertSupplier(s, m).catch(() => {});
@@ -730,7 +739,7 @@ export const StorageService = {
         const local = this.getTransfers(m);
         const remoteIds = new Set(validRemote.map((t) => t.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getTransfersKey(m)) : new Set<string>();
-        const localPending = local.filter((t) => t && !remoteIds.has(t.id) && !isDeleted(t.id) && !seenRemote.has(t.id));
+        const localPending = local.filter((t) => t && !remoteIds.has(t.id) && !isDeleted(t.id) && !seenRemote.has(t.id) && (seenRemote.size > 0 || isRecentLocal(t)));
         rememberSeenRemote(this.getTransfersKey(m), seenRemote, remoteIds);
         localPending.forEach((t) => {
           SupabaseSyncService.upsertTransfer(t, m).catch(() => {});
@@ -769,7 +778,7 @@ export const StorageService = {
         });
         const remoteIds = new Set(validRemote.map((e) => e.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getExpensesKey(m)) : new Set<string>();
-        const localPending = local.filter((e) => e && !remoteIds.has(e.id) && !isDeleted(e.id) && !seenRemote.has(e.id));
+        const localPending = local.filter((e) => e && !remoteIds.has(e.id) && !isDeleted(e.id) && !seenRemote.has(e.id) && (seenRemote.size > 0 || isRecentLocal(e)));
         rememberSeenRemote(this.getExpensesKey(m), seenRemote, remoteIds);
         localPending.forEach((e) => {
           SupabaseSyncService.upsertExpense(e, m).catch(() => {});
@@ -787,7 +796,7 @@ export const StorageService = {
         const local = this.getClosures(m);
         const remoteIds = new Set(validRemote.map((c) => c.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getClosuresKey(m)) : new Set<string>();
-        const localPending = local.filter((c) => c && !remoteIds.has(c.id) && !isDeleted(c.id) && !seenRemote.has(c.id));
+        const localPending = local.filter((c) => c && !remoteIds.has(c.id) && !isDeleted(c.id) && !seenRemote.has(c.id) && (seenRemote.size > 0 || isRecentLocal(c)));
         rememberSeenRemote(this.getClosuresKey(m), seenRemote, remoteIds);
         localPending.forEach((c) => {
           SupabaseSyncService.upsertClosure(c, m).catch(() => {});
@@ -817,7 +826,7 @@ export const StorageService = {
         const local = getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []);
         const remoteIds = new Set(validRemote.map((t) => t.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getTransactionsDetalKey(m)) : new Set<string>();
-        const localPending = local.filter((t) => !remoteIds.has(t.id) && !isDeleted(t.id) && !seenRemote.has(t.id));
+        const localPending = local.filter((t) => !remoteIds.has(t.id) && !isDeleted(t.id) && !seenRemote.has(t.id) && (seenRemote.size > 0 || isRecentLocal(t)));
         rememberSeenRemote(this.getTransactionsDetalKey(m), seenRemote, remoteIds);
         localPending.forEach((tx) => {
           SupabaseSyncService.upsertTransactionDetal(tx, m).catch(() => {});
@@ -839,7 +848,7 @@ export const StorageService = {
         const local = getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []);
         const remoteIds = new Set(validRemote.map((t) => t.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getTransactionsMayorKey(m)) : new Set<string>();
-        const localPending = local.filter((t) => !remoteIds.has(t.id) && !isDeleted(t.id) && !seenRemote.has(t.id));
+        const localPending = local.filter((t) => !remoteIds.has(t.id) && !isDeleted(t.id) && !seenRemote.has(t.id) && (seenRemote.size > 0 || isRecentLocal(t)));
         rememberSeenRemote(this.getTransactionsMayorKey(m), seenRemote, remoteIds);
         localPending.forEach((tx) => {
           SupabaseSyncService.upsertTransactionMayor(tx, m).catch(() => {});
@@ -895,7 +904,7 @@ export const StorageService = {
         const local = this.getSupplierPurchases(m);
         const remoteIds = new Set(validRemote.map((p) => p.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getSupplierPurchasesKey(m)) : new Set<string>();
-        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id) && !seenRemote.has(p.id));
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id) && !seenRemote.has(p.id) && (seenRemote.size > 0 || isRecentLocal(p)));
         rememberSeenRemote(this.getSupplierPurchasesKey(m), seenRemote, remoteIds);
         localPending.forEach((p) => {
           SupabaseSyncService.upsertSupplierPurchase(p, m).catch(() => {});
@@ -913,7 +922,7 @@ export const StorageService = {
         const local = this.getSupplierPayments(m);
         const remoteIds = new Set(validRemote.map((p) => p.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getSupplierPaymentsKey(m)) : new Set<string>();
-        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id) && !seenRemote.has(p.id));
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id) && !seenRemote.has(p.id) && (seenRemote.size > 0 || isRecentLocal(p)));
         rememberSeenRemote(this.getSupplierPaymentsKey(m), seenRemote, remoteIds);
         localPending.forEach((p) => {
           SupabaseSyncService.upsertSupplierPayment(p, m).catch(() => {});
@@ -931,7 +940,7 @@ export const StorageService = {
         const local = this.getEmployees(m);
         const remoteIds = new Set(validRemote.map((e) => e.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getEmployeesKey(m)) : new Set<string>();
-        const localPending = local.filter((e) => e && !remoteIds.has(e.id) && !isDeleted(e.id) && !seenRemote.has(e.id));
+        const localPending = local.filter((e) => e && !remoteIds.has(e.id) && !isDeleted(e.id) && !seenRemote.has(e.id) && (seenRemote.size > 0 || isRecentLocal(e)));
         rememberSeenRemote(this.getEmployeesKey(m), seenRemote, remoteIds);
         localPending.forEach((e) => {
           SupabaseSyncService.upsertEmployee(e, m).catch(() => {});
@@ -949,7 +958,7 @@ export const StorageService = {
         const local = this.getPayrollPayments(m);
         const remoteIds = new Set(validRemote.map((p) => p.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getPayrollPaymentsKey(m)) : new Set<string>();
-        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id) && !seenRemote.has(p.id));
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id) && !seenRemote.has(p.id) && (seenRemote.size > 0 || isRecentLocal(p)));
         rememberSeenRemote(this.getPayrollPaymentsKey(m), seenRemote, remoteIds);
         localPending.forEach((p) => {
           SupabaseSyncService.upsertPayrollPayment(p, m).catch(() => {});
@@ -971,7 +980,7 @@ export const StorageService = {
         const local = this.getServiceExpenses(m);
         const remoteIds = new Set(validRemote.map((s) => s.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getServiceExpensesKey(m)) : new Set<string>();
-        const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id) && !seenRemote.has(s.id));
+        const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id) && !seenRemote.has(s.id) && (seenRemote.size > 0 || isRecentLocal(s)));
         rememberSeenRemote(this.getServiceExpensesKey(m), seenRemote, remoteIds);
         localPending.forEach((s) => {
           SupabaseSyncService.upsertServiceExpense(s, m).catch(() => {});
@@ -1813,6 +1822,36 @@ export const StorageService = {
       data: newPayment,
     });
     return newPayment;
+  },
+
+  // Quitar una copia repetida que llegó por sincronización: borra el registro SIN mover saldos ni deudas,
+  // porque esa copia nunca los movió. Solo ADMIN, con motivo y en día abierto.
+  async removeDuplicateRecord(kind: 'traspaso' | 'compra_proveedor', id: string, reason: string, mode?: AppMode): Promise<void> {
+    const m = mode || this.getAppMode();
+    if (!isActorAdmin()) throw new Error('Solo un ADMIN puede quitar copias repetidas.');
+    const motivo = (reason || '').trim();
+    if (!motivo) throw new Error('Hace falta un motivo.');
+    const key = kind === 'traspaso' ? this.getTransfersKey(m) : this.getSupplierPurchasesKey(m);
+    const all = getFromStorage<{ id: string; date: string }[]>(key, []);
+    const rec = all.find((r) => r && r.id === id);
+    if (!rec) return;
+    this.assertDayOpen(rec.date, m, 'quitar una copia repetida');
+    AuditService.log({
+      mode: m,
+      action: 'eliminar',
+      entity: kind,
+      entityId: id,
+      summary: `Quitada copia repetida del ${rec.date} (sin mover saldos ni deudas)`,
+      reason: motivo,
+      data: rec,
+    });
+    markAsDeleted(id);
+    saveToStorage(
+      key,
+      all.filter((r) => r && r.id !== id),
+    );
+    if (kind === 'traspaso') await SupabaseSyncService.deleteTransfer(id, m).catch(() => {});
+    else await SupabaseSyncService.deleteSupplierPurchase(id, m).catch(() => {});
   },
 
   async deleteSupplierPurchase(id: string, mode?: AppMode): Promise<void> {
