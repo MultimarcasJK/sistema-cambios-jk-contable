@@ -169,6 +169,7 @@ export interface TransactionMayor {
   amount_received?: number;
   paid_account_id?: string;
   commission: number;
+  commission_account?: number; // comisión que sale de la cuenta de salida, en su moneda
   fee_percent?: number;
   client_fee?: number; // comisión cobrada al cliente (se suma al total y a la ganancia)
   is_vip?: boolean;

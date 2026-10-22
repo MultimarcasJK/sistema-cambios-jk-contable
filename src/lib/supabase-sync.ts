@@ -6,6 +6,8 @@ import {
   unpackExpenseMeta,
   packClosureMeta,
   unpackClosureMeta,
+  packCommissionAccount,
+  unpackCommissionAccount,
 } from './client-fee';
 
 // Varias tablas no guardan la hora de creación; se recupera del id (prefijo-<milisegundos>)
@@ -246,7 +248,10 @@ export const SupabaseSyncService = {
         commission: Number(row.commission || 0),
         profit_usd: Number(row.net_profit ?? row.profit_usd ?? 0),
         payment_status: row.payment_status || 'PAGADO',
-        ...unpackClientFee(row.notes),
+        ...(() => {
+          const ca = unpackCommissionAccount(row.notes);
+          return { ...unpackClientFee(ca.notes), commission_account: ca.commission_account };
+        })(),
         created_at: createdAtOf(row),
       }));
     } catch {
@@ -273,7 +278,7 @@ export const SupabaseSyncService = {
         commission: tx.commission || 0,
         net_profit: tx.profit_usd,
         payment_status: tx.payment_status || 'PAGADO',
-        notes: packClientFee(tx.notes, tx.client_fee, tx.is_vip),
+        notes: packCommissionAccount(packClientFee(tx.notes, tx.client_fee, tx.is_vip), tx.commission_account),
       });
     } catch (err) {
       /* warn */

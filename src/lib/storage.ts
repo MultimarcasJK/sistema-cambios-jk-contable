@@ -38,6 +38,7 @@ import {
   INITIAL_SUPPLIERS_MAYOR,
 } from './initial-data';
 import { SupabaseSyncService } from './supabase-sync';
+import { commissionOutOfAccount } from './commission';
 import { AuditService } from './audit';
 import { recordTime } from './order';
 import { isActorAdmin, getActor } from './actor';
@@ -2009,10 +2010,7 @@ export const StorageService = {
     if (newTx.paid_account_id && newTx.amount_ves > 0) {
       const accounts = this.getAccounts(m);
       const paidAcc = accounts.find((a) => a.id === newTx.paid_account_id);
-      let totalOut = newTx.amount_ves;
-      if (paidAcc && paidAcc.currency === 'USD') {
-        totalOut += (newTx.commission || 0);
-      }
+      const totalOut = newTx.amount_ves + commissionOutOfAccount(newTx, paidAcc?.currency);
       this.updateAccountBalance(newTx.paid_account_id, -totalOut, m);
     }
     const receivedAmt = newTx.amount_received !== undefined ? newTx.amount_received : 0;
@@ -2062,10 +2060,7 @@ export const StorageService = {
       if (tx.paid_account_id && tx.amount_ves > 0) {
         const accounts = this.getAccounts(m);
         const paidAcc = accounts.find((a) => a.id === tx.paid_account_id);
-        let totalOut = tx.amount_ves;
-        if (paidAcc && paidAcc.currency === 'USD') {
-          totalOut += (tx.commission || 0);
-        }
+        const totalOut = tx.amount_ves + commissionOutOfAccount(tx, paidAcc?.currency);
         this.updateAccountBalance(tx.paid_account_id, totalOut, m);
       }
       if (tx.received_account_id && tx.received_account_id !== 'POR_COBRAR' && receivedAmt > 0) {

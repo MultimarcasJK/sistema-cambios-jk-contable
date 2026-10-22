@@ -12,6 +12,7 @@ import {
   TransactionMayor,
 } from '@/types';
 import { localDateOf } from './dates';
+import { commissionOutOfAccount } from './commission';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Libro contable de partida doble.
@@ -287,7 +288,7 @@ export function buildLedger(src: LedgerSources): Ledger {
       const lines: LedgerLine[] = [];
       const paid = real(tx.paid_account_id);
       if (paid && tx.amount_ves > 0) {
-        const commission = paid.moneda === 'USD' ? tx.commission || 0 : 0;
+        const commission = commissionOutOfAccount(tx, paid.moneda);
         push(lines, paid.key, paid.moneda, -(tx.amount_ves + commission));
         push(lines, 'GTO_COMIS', paid.moneda, commission);
       }

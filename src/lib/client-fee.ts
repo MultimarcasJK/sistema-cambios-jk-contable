@@ -71,3 +71,20 @@ export function unpackClosureMeta(notes: string | undefined): { notes: string } 
     profit_remesas: Number(m[5]) || 0,
   };
 }
+
+// Ventas regionales: comisión que sale de la cuenta de salida (en su moneda).
+const COMCTA_TAG_RE = /\s*\[COMCTA:(-?\d+(?:\.\d+)?)\]\s*/;
+
+export function packCommissionAccount(notes: string | undefined, commissionAccount?: number): string {
+  const clean = (notes || '').replace(COMCTA_TAG_RE, ' ').trim();
+  if (commissionAccount === undefined || commissionAccount === null) return clean;
+  const tag = `[COMCTA:${Number(commissionAccount || 0)}]`;
+  return clean ? `${clean} ${tag}` : tag;
+}
+
+export function unpackCommissionAccount(notes: string | undefined): { notes: string; commission_account?: number } {
+  const raw = notes || '';
+  const m = raw.match(COMCTA_TAG_RE);
+  if (!m) return { notes: raw };
+  return { notes: raw.replace(COMCTA_TAG_RE, ' ').trim(), commission_account: Number(m[1]) || 0 };
+}
