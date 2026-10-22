@@ -27,6 +27,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { localDateStr } from '@/lib/dates';
 
 interface DashboardProps {
   accounts: Account[];
@@ -50,7 +51,7 @@ export function DashboardView({
   onNavigate,
 }: DashboardProps) {
   const { isAdmin } = useAuth();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
 
   const systemCurrencies = useMemo(() => CurrencyService.getCurrencies(), []);
 

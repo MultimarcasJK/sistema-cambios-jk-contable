@@ -11,6 +11,7 @@ import {
   TransactionDetal,
   TransactionMayor,
 } from '@/types';
+import { localDateOf } from './dates';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Libro contable de partida doble.
@@ -237,7 +238,7 @@ export function buildLedger(src: LedgerSources): Ledger {
     add(
       {
         id: 'ap-' + acc.id,
-        fecha: acc.created_at ? acc.created_at.slice(0, 10) : '2000-01-01',
+        fecha: acc.created_at ? localDateOf(acc.created_at) : '2000-01-01',
         orden: '00:00:00',
         unidad: (acc.scope === 'mayor' ? 'mayor' : 'detal') as AppMode,
         origen: 'apertura',

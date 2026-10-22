@@ -8,6 +8,7 @@ import { AuditService } from '@/lib/audit';
 import { useAuth } from '@/lib/auth-context';
 import { buildLedger, entryIsBalanced, accountKey, ORIGIN_LABELS, LedgerEntry } from '@/lib/ledger';
 import { formatRegionalAmount } from '@/lib/formatters';
+import { localDateStr } from '@/lib/dates';
 
 interface ContabilidadProps {
   appMode: AppMode;
@@ -32,7 +33,7 @@ const ACTION_LABELS: Record<string, string> = {
 function daysAgo(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 function amt(n: number, cur?: string): string {
@@ -43,7 +44,7 @@ export function ContabilidadView({ appMode, accounts, dataVersion, onDataChange 
   const { isAdmin } = useAuth();
   const [tab, setTab] = useState<SubTab>('cuadre');
   const [from, setFrom] = useState(daysAgo(7));
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [to, setTo] = useState(localDateStr());
   const [onlyThisUnit, setOnlyThisUnit] = useState(true);
   const [selectedAccount, setSelectedAccount] = useState<string>('');
   const [auditFilter, setAuditFilter] = useState('');

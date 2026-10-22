@@ -53,6 +53,7 @@ import {
   normalizeDebtorName,
   pendingUpsertIds,
 } from './debtor-sync';
+import { localDateStr } from './dates';
 
 let activeAppMode: AppMode = 'detal';
 
@@ -1095,7 +1096,7 @@ export const StorageService = {
     if (Math.abs(delta) < 0.00005) return null;
     const motivo = (reason || '').trim();
     if (!motivo) throw new Error('El ajuste de saldo necesita un motivo.');
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateStr();
     this.assertDayOpen(today, m, 'ajustar un saldo');
     const adj: BalanceAdjustment = {
       id: 'adj-' + Date.now(),
@@ -1124,7 +1125,7 @@ export const StorageService = {
     if (!acc || Math.abs(difference) < 0.00005) return null;
     const motivo = (reason || '').trim();
     if (!motivo) throw new Error('Hace falta un motivo.');
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateStr();
     this.assertDayOpen(today, m, 'reconocer una diferencia de saldo');
     const adj: BalanceAdjustment = {
       id: 'adj-' + Date.now(),
@@ -1316,7 +1317,7 @@ export const StorageService = {
     mode?: AppMode
   ): Remesa {
     const m = mode || this.getAppMode();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateStr();
     this.assertDayOpen(today, m, 'registrar una remesa');
     if (!input.cuenta_cobro_id) throw new Error('Falta la cuenta donde se cobró.');
     if (!(input.total_cobrado > 0) || !(input.monto_pago > 0)) throw new Error('Los montos deben ser mayores que cero.');
@@ -1382,7 +1383,7 @@ export const StorageService = {
     if (!allowed[remesa.estado].includes(nuevo)) {
       throw new Error(`Una remesa ${remesa.estado.replace('_', ' ')} no puede pasar a ${nuevo.replace('_', ' ')}.`);
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateStr();
     const now = new Date().toISOString();
     const updated: Remesa = { ...remesa, historial: [...(remesa.historial || [])] };
 

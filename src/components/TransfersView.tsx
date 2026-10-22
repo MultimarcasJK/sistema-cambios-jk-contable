@@ -6,6 +6,7 @@ import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
 import { ArrowLeftRight, CheckCircle, Search, Trash2 } from 'lucide-react';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInputNumber } from '@/lib/formatters';
+import { localDateStr } from '@/lib/dates';
 
 interface TransfersProps {
   accounts: Account[];
@@ -14,7 +15,7 @@ interface TransfersProps {
 }
 
 export function TransfersView({ accounts, transfers, onDataChange }: TransfersProps) {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
 
   const [feeMode, setFeeMode] = useState<'percent' | 'fixed'>('percent');
   const [formData, setFormData] = useState({

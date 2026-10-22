@@ -42,6 +42,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { SharePayrollVoucherModal } from './SharePayrollVoucherModal';
+import { localDateStr } from '@/lib/dates';
 
 interface PayrollServicesViewProps {
   accounts: Account[];
@@ -61,7 +62,7 @@ export function PayrollServicesView({
   appMode,
 }: PayrollServicesViewProps) {
   const isDark = appMode === 'mayor';
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
 
   // Sub-pestañas internas del módulo
   const [subTab, setSubTab] = useState<'employees' | 'payments' | 'services'>('employees');

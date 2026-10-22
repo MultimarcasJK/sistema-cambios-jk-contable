@@ -11,6 +11,7 @@ import { ManageCurrenciesModal } from '@/components/ManageCurrenciesModal';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatRateDisplay, formatInputNumber } from '@/lib/formatters';
 import { TrendingUp, Search, CheckCircle, Trash2, ArrowDownLeft, Sparkles, Globe, Coins, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { localDateStr } from '@/lib/dates';
 
 interface MayorProps {
   accounts: Account[];
@@ -34,7 +35,7 @@ export function MayorView({
   lastRatesSync,
 }: MayorProps) {
   const { isAdmin } = useAuth();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
   const [systemCurrencies, setSystemCurrencies] = useState<CurrencyConfig[]>(
     CurrencyService.getCurrencies()
   );

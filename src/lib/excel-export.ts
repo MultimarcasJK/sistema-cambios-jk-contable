@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { StorageService } from './storage';
+import { localDateStr } from './dates';
 
 export function exportFullAccountingToExcel() {
   const wb = XLSX.utils.book_new();
@@ -96,7 +97,7 @@ export function exportFullAccountingToExcel() {
   XLSX.utils.book_append_sheet(wb, wsClosures, 'CIERRE Y GANANCIA');
 
   // Descargar archivo Excel en el navegador
-  const fileName = `CAMBIOS_JK_REPORTE_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const fileName = `CAMBIOS_JK_REPORTE_${localDateStr()}.xlsx`;
   XLSX.writeFile(wb, fileName);
 }
 
@@ -150,7 +151,7 @@ export function exportAccountStatementToExcel(
   XLSX.utils.book_append_sheet(wb, wsSummary, 'RESUMEN');
 
   const cleanName = accountName.replace(/[^a-zA-Z0-9_-]/g, '_');
-  const fileName = `ESTADO_CUENTA_${cleanName}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const fileName = `ESTADO_CUENTA_${cleanName}_${localDateStr()}.xlsx`;
   XLSX.writeFile(wb, fileName);
 }
 

@@ -8,6 +8,7 @@ import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from '@/components/ManageCurrenciesModal';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInputNumber } from '@/lib/formatters';
 import { Receipt, CheckCircle, Search, ArrowUpRight, Coins, Trash2 } from 'lucide-react';
+import { localDateStr } from '@/lib/dates';
 
 interface ExpensesProps {
   accounts: Account[];
@@ -16,7 +17,7 @@ interface ExpensesProps {
 }
 
 export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps) {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
 
   const [systemCurrencies, setSystemCurrencies] = useState<CurrencyConfig[]>([]);
   const [isManagingCurrencies, setIsManagingCurrencies] = useState(false);

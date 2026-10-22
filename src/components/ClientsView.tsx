@@ -27,6 +27,7 @@ import {
   Trash2,
   Wallet,
 } from 'lucide-react';
+import { localDateStr } from '@/lib/dates';
 
 interface ClientsProps {
   clients: Client[];
@@ -69,7 +70,7 @@ export function ClientsView({
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentAmountCurrency, setPaymentAmountCurrency] = useState('');
   const [paymentRate, setPaymentRate] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(localDateStr());
   const [paymentAccountId, setPaymentAccountId] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
 
@@ -167,7 +168,7 @@ export function ClientsView({
     setPaymentAmount('');
     setPaymentAmountCurrency('');
     setPaymentRate('');
-    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentDate(localDateStr());
     setPaymentAccountId('');
     setPaymentNotes('');
   };

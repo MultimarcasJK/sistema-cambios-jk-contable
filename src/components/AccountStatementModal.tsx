@@ -30,6 +30,7 @@ import {
   Copy,
   ArrowUpDown,
 } from 'lucide-react';
+import { localDateStr, localDateOf } from '@/lib/dates';
 
 export interface AccountStatementModalProps {
   isOpen: boolean;
@@ -119,7 +120,7 @@ export function AccountStatementModal({
       if (tx.received_account_id === accId && tx.amount_received > 0) {
         items.push({
           id: `detal-in-${tx.id}`,
-          date: tx.date || (tx.created_at ? tx.created_at.slice(0, 10) : ''),
+          date: tx.date || (localDateOf(tx.created_at)),
           time: tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : ''),
           sortKey: `${tx.date || ''} ${tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : '00:00')} ${tx.created_at || ''} 1`,
           type: 'INGRESO',
@@ -140,7 +141,7 @@ export function AccountStatementModal({
         const out = tx.usdt_amount + (tx.bank_fee || 0);
         items.push({
           id: `detal-out-${tx.id}`,
-          date: tx.date || (tx.created_at ? tx.created_at.slice(0, 10) : ''),
+          date: tx.date || (localDateOf(tx.created_at)),
           time: tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : ''),
           sortKey: `${tx.date || ''} ${tx.time || (tx.created_at ? tx.created_at.slice(11, 16) : '00:00')} ${tx.created_at || ''} 2`,
           type: 'EGRESO',
@@ -170,7 +171,7 @@ export function AccountStatementModal({
       if (tx.received_account_id === accId && receivedAmt > 0) {
         items.push({
           id: `mayor-in-${tx.id}`,
-          date: tx.date || (tx.created_at ? tx.created_at.slice(0, 10) : ''),
+          date: tx.date || (localDateOf(tx.created_at)),
           time: tx.created_at ? tx.created_at.slice(11, 16) : '',
           sortKey: `${tx.date || ''} ${tx.created_at ? tx.created_at.slice(11, 16) : '00:00'} ${
             tx.created_at || ''
@@ -196,7 +197,7 @@ export function AccountStatementModal({
         }
         items.push({
           id: `mayor-out-${tx.id}`,
-          date: tx.date || (tx.created_at ? tx.created_at.slice(0, 10) : ''),
+          date: tx.date || (localDateOf(tx.created_at)),
           time: tx.created_at ? tx.created_at.slice(11, 16) : '',
           sortKey: `${tx.date || ''} ${tx.created_at ? tx.created_at.slice(11, 16) : '00:00'} ${
             tx.created_at || ''
@@ -229,7 +230,7 @@ export function AccountStatementModal({
         const totalOut = trf.amount_sent + (trf.commission || 0);
         items.push({
           id: `trf-out-${trf.id}`,
-          date: trf.date || (trf.created_at ? trf.created_at.slice(0, 10) : ''),
+          date: trf.date || (localDateOf(trf.created_at)),
           time: trf.created_at ? trf.created_at.slice(11, 16) : '',
           sortKey: `${trf.date || ''} ${trf.created_at ? trf.created_at.slice(11, 16) : '00:00'} ${
             trf.created_at || ''
@@ -254,7 +255,7 @@ export function AccountStatementModal({
         const fromAcc = allAccounts.find((a) => a.id === trf.from_account_id);
         items.push({
           id: `trf-in-${trf.id}`,
-          date: trf.date || (trf.created_at ? trf.created_at.slice(0, 10) : ''),
+          date: trf.date || (localDateOf(trf.created_at)),
           time: trf.created_at ? trf.created_at.slice(11, 16) : '',
           sortKey: `${trf.date || ''} ${trf.created_at ? trf.created_at.slice(11, 16) : '00:00'} ${
             trf.created_at || ''
@@ -285,7 +286,7 @@ export function AccountStatementModal({
         const isIngreso = exp.type === 'ingreso';
         items.push({
           id: `exp-${exp.id}`,
-          date: exp.date || (exp.created_at ? exp.created_at.slice(0, 10) : ''),
+          date: exp.date || (localDateOf(exp.created_at)),
           time: exp.created_at ? exp.created_at.slice(11, 16) : '',
           sortKey: `${exp.date || ''} ${exp.created_at ? exp.created_at.slice(11, 16) : '00:00'} ${
             exp.created_at || ''
@@ -313,7 +314,7 @@ export function AccountStatementModal({
       if (pur.account_id === accId && pur.quantity > 0) {
         items.push({
           id: `pur-${pur.id}`,
-          date: pur.date || (pur.created_at ? pur.created_at.slice(0, 10) : ''),
+          date: pur.date || (localDateOf(pur.created_at)),
           time: pur.created_at ? pur.created_at.slice(11, 16) : '',
           sortKey: `${pur.date || ''} ${pur.created_at ? pur.created_at.slice(11, 16) : '00:00'} ${
             pur.created_at || ''
@@ -341,7 +342,7 @@ export function AccountStatementModal({
       if (pay.account_id === accId && pay.amount_usd > 0) {
         items.push({
           id: `pay-${pay.id}`,
-          date: pay.date || (pay.created_at ? pay.created_at.slice(0, 10) : ''),
+          date: pay.date || (localDateOf(pay.created_at)),
           time: pay.created_at ? pay.created_at.slice(11, 16) : '',
           sortKey: `${pay.date || ''} ${pay.created_at ? pay.created_at.slice(11, 16) : '00:00'} ${
             pay.created_at || ''
@@ -372,7 +373,7 @@ export function AccountStatementModal({
         if (amt > 0) {
           items.push({
             id: `debtpay-${dp.id}`,
-            date: dp.date || (dp.created_at ? dp.created_at.slice(0, 10) : ''),
+            date: dp.date || (localDateOf(dp.created_at)),
             time: dp.created_at ? dp.created_at.slice(11, 16) : '',
             sortKey: `${dp.date || ''} ${dp.created_at ? dp.created_at.slice(11, 16) : '00:00'} ${
               dp.created_at || ''
@@ -404,7 +405,7 @@ export function AccountStatementModal({
       const isUp = adj.delta > 0;
       items.push({
         id: `adj-${adj.id}`,
-        date: adj.date || (adj.created_at ? adj.created_at.slice(0, 10) : ''),
+        date: adj.date || (localDateOf(adj.created_at)),
         time: adj.created_at ? adj.created_at.slice(11, 16) : '',
         sortKey: `${adj.date || ''} ${adj.created_at ? adj.created_at.slice(11, 16) : '00:00'} ${
           adj.created_at || ''
@@ -522,7 +523,7 @@ export function AccountStatementModal({
   ) => {
     setDatePreset(preset);
     const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = localDateStr(now);
 
     if (preset === 'ALL') {
       setStartDate('');
@@ -533,17 +534,17 @@ export function AccountStatementModal({
     } else if (preset === 'LAST_7') {
       const past = new Date();
       past.setDate(now.getDate() - 7);
-      setStartDate(past.toISOString().slice(0, 10));
+      setStartDate(localDateStr(past));
       setEndDate(todayStr);
     } else if (preset === 'THIS_MONTH') {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-      setStartDate(firstDay.toISOString().slice(0, 10));
+      setStartDate(localDateStr(firstDay));
       setEndDate(todayStr);
     } else if (preset === 'LAST_MONTH') {
       const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
-      setStartDate(firstDay.toISOString().slice(0, 10));
-      setEndDate(lastDay.toISOString().slice(0, 10));
+      setStartDate(localDateStr(firstDay));
+      setEndDate(localDateStr(lastDay));
     }
   };
 
