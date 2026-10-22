@@ -13,12 +13,24 @@ export interface VoucherData {
   notes?: string;
 }
 
+// Nota para el cliente: las notas automáticas del sistema no le dicen nada (y podían contradecir el saldo)
+function notaParaCliente(notes?: string): string {
+  const raw = (notes || '').trim();
+  if (/^(sincronizado de operaciones|abono a favor registrado|generado automáticamente)/i.test(raw)) return '';
+  return raw
+    .replace(/\((detal|mayor)\)/gi, '')
+    .replace(/\bdetal\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 interface ShareVoucherModalProps {
   data: VoucherData;
   onClose: () => void;
 }
 
 export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
+  const cleanNotes = notaParaCliente(data.notes);
   const [copiedImage, setCopiedImage] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -36,166 +48,271 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
   // Generador de Canvas de Alta Definición (async — carga logo real)
   const generateCanvas = (): Promise<HTMLCanvasElement> => {
     return new Promise((resolveCanvas) => {
+      const W = 1000;
+      const H = 1334;
       const canvas = document.createElement('canvas');
-      canvas.width = 1000;
-      canvas.height = 1200;
+      canvas.width = W;
+      canvas.height = H;
       const ctx = canvas.getContext('2d');
-      if (!ctx) { resolveCanvas(canvas); return; }
+      if (!ctx) {
+        resolveCanvas(canvas);
+        return;
+      }
 
-      // Fondo degradado elegante
-      const bgGrad = ctx.createLinearGradient(0, 0, 0, 1200);
-      bgGrad.addColorStop(0, '#0f172a');
-      bgGrad.addColorStop(1, '#1e293b');
+      const FONT = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+      const TEAL = '#2dd4bf';
+      const LABEL = '#93c5fd';
+      const CARD = '#132748';
+      const CARD_BORDER = '#24406a';
+
+      const caja = (x: number, y: number, w: number, h: number, r: number) => {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      };
+      const tarjeta = (x: number, y: number, w: number, h: number, borde: string, grosor: number) => {
+        caja(x, y, w, h, 16);
+        ctx.fillStyle = CARD;
+        ctx.fill();
+        ctx.strokeStyle = borde;
+        ctx.lineWidth = grosor;
+        ctx.stroke();
+      };
+      const linea = (x1: number, y1: number, x2: number, y2: number, color: string, grosor = 2) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = grosor;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      };
+      // Íconos (trazos de lucide, cuadrícula 24x24) centrados en (cx, cy)
+      const icono = (trazos: string[], cx: number, cy: number, size: number, color = TEAL) => {
+        ctx.save();
+        const k = size / 24;
+        ctx.translate(cx - size / 2, cy - size / 2);
+        ctx.scale(k, k);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        trazos.forEach((d) => ctx.stroke(new Path2D(d)));
+        ctx.restore();
+      };
+      const CIRCULO = 'M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0';
+      const I = {
+        usuario: ['M18 20a6 6 0 0 0-12 0', 'M16 10a4 4 0 1 1-8 0a4 4 0 1 1 8 0', CIRCULO],
+        telefono: [
+          'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z',
+        ],
+        calendario: [
+          'M8 2v4',
+          'M16 2v4',
+          'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+          'M3 10h18',
+          'M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01',
+        ],
+        documento: [
+          'M8 2h8a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V6a4 4 0 0 1 4-4z',
+          'M8 9h8',
+          'M8 13h8',
+          'M8 17h8',
+        ],
+        barras: ['M5 20v-6', 'M12 20V9', 'M19 20V4'],
+        dolar: [CIRCULO, 'M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8', 'M12 18V6'],
+        whatsapp: ['M7.9 20A9 9 0 1 0 4 16.1L2 22Z', 'M9 9.5c0 3 2.5 5.5 5.5 5.5l1.2-1.4-2-1-.8.8c-1-.4-1.8-1.2-2.2-2.2l.8-.8-1-2z'],
+        reloj: [CIRCULO, 'M12 6v6l4 2'],
+        alerta: [CIRCULO, 'M12 8v4', 'M12 16h.01'],
+      };
+      // Recorta un texto para que no se salga de su espacio
+      const ajustar = (txt: string, max: number) => {
+        if (ctx.measureText(txt).width <= max) return txt;
+        let t = txt;
+        while (t.length > 1 && ctx.measureText(t + '…').width > max) t = t.slice(0, -1);
+        return t + '…';
+      };
+
+      // Fondo azul noche
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+      bgGrad.addColorStop(0, '#0c1d3b');
+      bgGrad.addColorStop(1, '#0a1730');
       ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, 1000, 1200);
+      ctx.fillRect(0, 0, W, H);
 
-      // Marco exterior
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 4;
-      ctx.strokeRect(30, 30, 940, 1140);
-
-      // Barra superior — gradiente verde JK
-      const topBarGrad = ctx.createLinearGradient(0, 30, 1000, 30);
-      topBarGrad.addColorStop(0, '#10B981');
-      topBarGrad.addColorStop(0.5, '#059669');
-      topBarGrad.addColorStop(1, '#06B77F');
-      ctx.fillStyle = topBarGrad;
-      ctx.fillRect(30, 30, 940, 14);
-
-      // Cargar logo JK
+      // Cargar logo JK (con el camión)
       const logo = new Image();
       logo.crossOrigin = 'anonymous';
-      logo.src = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/logo-jk-transparente.png`;
+      logo.src = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/logo-jk-camion.png`;
 
-      const drawContent = () => {
-        // Logo + Nombre Empresa
-        ctx.drawImage(logo, 400, 60, 80, 80);
-        ctx.textAlign = 'center';
+      const drawContent = (conLogo: boolean) => {
+        // Logo + Nombre Empresa, centrados juntos
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 40px sans-serif';
-        ctx.fillText('CAMBIOS JK', 540, 115);
+        ctx.font = `bold 56px ${FONT}`;
+        ctx.textBaseline = 'middle';
+        const textW = ctx.measureText('CAMBIOS JK').width;
+        const logoH = 112;
+        const logoW = conLogo ? Math.round((logoH * logo.naturalWidth) / (logo.naturalHeight || 1)) : 0;
+        const gap = conLogo ? 22 : 0;
+        const startX = W / 2 - (logoW + gap + textW) / 2;
+        if (conLogo) ctx.drawImage(logo, startX, 102 - logoH / 2, logoW, logoH);
+        ctx.textAlign = 'left';
+        ctx.fillText('CAMBIOS JK', startX + logoW + gap, 102);
 
-        // Línea separadora
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(80, 175);
-        ctx.lineTo(920, 175);
-        ctx.stroke();
-
-        // Título de Comprobante
-        ctx.font = 'bold 24px sans-serif';
-        ctx.fillStyle = '#38bdf8';
-        ctx.fillText('ESTADO DE CUENTA DE CLIENTE', 500, 225);
+        // Título con líneas a los lados
+        ctx.textAlign = 'center';
+        ctx.font = `bold 34px ${FONT}`;
+        ctx.fillStyle = TEAL;
+        const titulo = 'ESTADO DE CUENTA DE CLIENTE';
+        const tW = ctx.measureText(titulo).width;
+        ctx.fillText(titulo, W / 2, 205);
+        linea(53, 205, W / 2 - tW / 2 - 28, 205, TEAL, 3);
+        linea(W / 2 + tW / 2 + 28, 205, 947, 205, TEAL, 3);
 
         // Tarjeta del Cliente
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(80, 260, 840, 150);
-        ctx.strokeStyle = '#475569';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(80, 260, 840, 150);
-
+        tarjeta(53, 257, 894, 209, CARD_BORDER, 2);
+        icono(I.usuario, 110, 315, 58);
         ctx.textAlign = 'left';
-        ctx.font = '16px sans-serif';
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillText('CLIENTE:', 110, 305);
-        ctx.font = 'bold 26px sans-serif';
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = `20px ${FONT}`;
+        ctx.fillStyle = LABEL;
+        ctx.fillText('CLIENTE:', 159, 303);
+        ctx.font = `bold 34px ${FONT}`;
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(data.clientName.toUpperCase(), 110, 340);
+        ctx.fillText(ajustar(data.clientName.toUpperCase(), 740), 159, 342);
+        linea(84, 366, 916, 366, CARD_BORDER, 2);
 
-        ctx.font = '16px sans-serif';
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillText(`TELÉFONO: ${data.phone || 'No registrado'}`, 110, 385);
-        ctx.fillText(`FECHA DE EMISIÓN: ${todayStr}`, 530, 385);
+        icono(I.telefono, 108, 414, 40);
+        ctx.font = `19px ${FONT}`;
+        ctx.fillStyle = LABEL;
+        ctx.fillText('TELÉFONO:', 160, 404);
+        ctx.font = `24px ${FONT}`;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(ajustar(data.phone || 'No registrado', 320), 160, 434);
+        linea(506, 390, 506, 441, CARD_BORDER, 2);
+        icono(I.calendario, 595, 414, 40);
+        ctx.font = `19px ${FONT}`;
+        ctx.fillStyle = LABEL;
+        ctx.fillText('FECHA DE EMISIÓN:', 644, 404);
+        ctx.font = `24px ${FONT}`;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(todayStr, 644, 434);
 
         // Cuadro de Saldo Principal
-        let statusColor = '#10b981';
+        let statusColor = '#059669';
         let statusText = 'AL DÍA / SOLVENTE';
         let amountText = '$0.00 USD';
-
         if (isDebtor) {
-          statusColor = '#ef4444';
+          statusColor = '#dc2626';
           statusText = 'PENDIENTE POR COBRAR';
           amountText = `$${data.currentDebt.toFixed(2)} USD`;
         } else if (hasCredit) {
-          statusColor = '#3b82f6';
+          statusColor = '#2563eb';
           statusText = 'SALDO A FAVOR DEL CLIENTE';
           amountText = `$${Math.abs(data.currentDebt).toFixed(2)} USD`;
         }
+        tarjeta(53, 498, 894, 284, TEAL, 3);
 
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(80, 440, 840, 270);
-        ctx.strokeStyle = statusColor;
-        ctx.lineWidth = 4;
-        ctx.strokeRect(80, 440, 840, 270);
+        // Etiqueta de estado (píldora con ícono)
+        ctx.font = `bold 27px ${FONT}`;
+        const sW = ctx.measureText(statusText).width;
+        const pillW = sW + 44 + 16 + 64;
+        const pillX = W / 2 - pillW / 2;
+        caja(pillX, 530, pillW, 52, 26);
+        ctx.fillStyle = statusColor;
+        ctx.fill();
+        icono(I.alerta, pillX + 32 + 20, 556, 38, '#ffffff');
+        ctx.fillStyle = '#ffffff';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(statusText, pillX + 32 + 44 + 16, 557);
 
         ctx.textAlign = 'center';
-        ctx.font = 'bold 22px sans-serif';
-        ctx.fillStyle = statusColor;
-        ctx.fillText(statusText, 500, 500);
-
-        ctx.font = 'bold 74px monospace';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(amountText, 500, 600);
-
-        ctx.font = '18px sans-serif';
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillText('Saldo consolidado a la fecha', 500, 655);
+        ctx.font = `bold 92px ${FONT}`;
+        ctx.fillText(ajustar(amountText, 820), W / 2, 660);
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = `24px ${FONT}`;
+        ctx.fillStyle = LABEL;
+        ctx.fillText('Saldo consolidado a la fecha', W / 2, 752);
 
         // Cuadro de Detalles
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(80, 745, 840, 240);
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(80, 745, 840, 240);
-
+        tarjeta(53, 815, 894, 385, CARD_BORDER, 2);
+        icono(I.documento, 102, 858, 40);
         ctx.textAlign = 'left';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.fillStyle = '#e2e8f0';
-        ctx.fillText('INFORMACIÓN DE CONTROL & CONCILIACIÓN', 110, 785);
+        ctx.textBaseline = 'middle';
+        ctx.font = `bold 27px ${FONT}`;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('INFORMACIÓN DE CONTROL & CONCILIACIÓN', 148, 859);
+        linea(84, 898, 916, 898, CARD_BORDER, 2);
 
-        ctx.font = '16px sans-serif';
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillText(`• Estado Actual: ${isDebtor ? 'Cuenta con saldo deudor pendiente.' : isSolvent ? 'El cliente se encuentra al día sin deudas.' : 'Saldo a favor disponible para transacciones.'}`, 110, 825);
+        const fila = (ic: string[], y: number, etiqueta: string, valor: string) => {
+          icono(ic, 105, y + 14, 40);
+          ctx.textBaseline = 'alphabetic';
+          if (etiqueta) {
+            ctx.font = `21px ${FONT}`;
+            ctx.fillStyle = LABEL;
+            ctx.fillText(etiqueta, 160, y + 6);
+            ctx.font = `22px ${FONT}`;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(ajustar(valor, 740), 160, y + 36);
+          } else {
+            ctx.font = `22px ${FONT}`;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(ajustar(valor, 740), 160, y + 22);
+          }
+        };
 
+        fila(
+          I.barras,
+          938,
+          'Estado Actual:',
+          isDebtor
+            ? 'Cuenta con saldo deudor pendiente.'
+            : isSolvent
+              ? 'El cliente se encuentra al día sin deudas.'
+              : 'Saldo a favor disponible para transacciones.',
+        );
         if (data.lastPaymentAmount && data.lastPaymentAmount > 0) {
-          ctx.fillText(`• Último Abono Registrado: $${data.lastPaymentAmount.toFixed(2)} USD (${data.lastPaymentDate || 'Reciente'})`, 110, 860);
+          fila(
+            I.dolar,
+            1015,
+            'Último Abono Registrado:',
+            `$${data.lastPaymentAmount.toFixed(2)} USD (${data.lastPaymentDate || 'Reciente'})`,
+          );
         } else {
-          ctx.fillText(`• Moneda de Referencia: Dólares Americanos (USD)`, 110, 860);
+          fila(I.dolar, 1015, 'Moneda de Referencia:', 'Dólares Americanos (USD).');
         }
-
-        const cleanNotes = (data.notes || '')
-          .replace(/\bdetal\b/gi, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-
         if (cleanNotes) {
-          ctx.fillText(`• Observaciones: ${cleanNotes.slice(0, 60)}`, 110, 895);
+          fila(I.whatsapp, 1081, 'Observaciones:', cleanNotes);
         } else {
-          ctx.fillText(`• Soporte y Atención directa vía WhatsApp`, 110, 895);
+          fila(I.whatsapp, 1081, '', 'Soporte y Atención directa vía WhatsApp');
         }
-
-        ctx.fillText(`• Código de Verificación: JK-${Date.now().toString().slice(-6)}`, 110, 930);
+        fila(
+          I.reloj,
+          1147,
+          'Emitido:',
+          new Date().toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' }),
+        );
 
         // Pie de Comprobante
         ctx.textAlign = 'center';
-        ctx.font = '15px sans-serif';
-        ctx.fillStyle = '#64748b';
-        ctx.fillText('Este documento es un comprobante de control administrativo emitido por CAMBIOS JK.', 500, 1055);
-        ctx.fillText('Agradecemos su preferencia y puntualidad en sus transacciones.', 500, 1085);
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = `17px ${FONT}`;
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText('Este documento es un comprobante de control administrativo emitido por CAMBIOS JK.', W / 2, 1258);
+        ctx.fillText('Agradecemos su preferencia y puntualidad en sus transacciones.', W / 2, 1283);
+        const pieW = ctx.measureText('Este documento es un comprobante de control administrativo emitido por CAMBIOS JK.').width;
+        linea(53, 1252, W / 2 - pieW / 2 - 24, 1252, TEAL, 2);
+        linea(W / 2 + pieW / 2 + 24, 1252, 947, 1252, TEAL, 2);
 
         resolveCanvas(canvas);
       };
 
-      logo.onload = drawContent;
-      logo.onerror = () => {
-        // Si falla el logo, dibujar solo texto
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 46px sans-serif';
-        ctx.fillText('CAMBIOS JK', 500, 130);
-        drawContent();
-      };
+      logo.onload = () => drawContent(true);
+      // Si falla el logo, solo el nombre
+      logo.onerror = () => drawContent(false);
     });
   };
 
@@ -276,10 +393,6 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
   };
 
   // Generar texto para WhatsApp
-  const cleanNotes = (data.notes || '')
-    .replace(/\bdetal\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 
   const getFormattedTextMessage = (): string => {
     const estado = isDebtor

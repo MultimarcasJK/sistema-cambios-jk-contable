@@ -72,13 +72,20 @@ export function ShareSupplierVoucherModal({ data, onClose }: ShareSupplierVouche
       logo.crossOrigin = 'anonymous';
       logo.src = `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/logo-jk-transparente.png`;
 
-      const drawContent = () => {
-        // Logo + Nombre Empresa
-        ctx.drawImage(logo, 400, 60, 80, 80);
-        ctx.textAlign = 'center';
+      const drawContent = (conLogo: boolean) => {
+        // Logo + Nombre Empresa, centrados juntos y sin encimarse
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 40px sans-serif';
-        ctx.fillText('CAMBIOS JK', 540, 115);
+        ctx.textBaseline = 'middle';
+        const textW = ctx.measureText('CAMBIOS JK').width;
+        const logoW = conLogo ? 80 : 0;
+        const gap = conLogo ? 18 : 0;
+        const startX = 500 - (logoW + gap + textW) / 2;
+        if (conLogo) ctx.drawImage(logo, startX, 60, 80, 80);
+        ctx.textAlign = 'left';
+        ctx.fillText('CAMBIOS JK', startX + logoW + gap, 100);
+        ctx.textBaseline = 'alphabetic';
+        ctx.textAlign = 'center';
 
         // Línea separadora
         ctx.strokeStyle = '#334155';
@@ -205,15 +212,9 @@ export function ShareSupplierVoucherModal({ data, onClose }: ShareSupplierVouche
         resolveCanvas(canvas);
       };
 
-      logo.onload = drawContent;
-      logo.onerror = () => {
-        // Si falla el logo, dibujar solo texto
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 46px sans-serif';
-        ctx.fillText('CAMBIOS JK', 500, 130);
-        drawContent();
-      };
+      logo.onload = () => drawContent(true);
+      // Si falla el logo, solo el nombre
+      logo.onerror = () => drawContent(false);
     });
   };
 
