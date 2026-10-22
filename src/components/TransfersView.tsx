@@ -97,6 +97,25 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
       ? parseFormattedNumber(formData.amount_received)
       : autoCalculatedReceived;
 
+    // Evita anotar dos veces el mismo traspaso (mismas cuentas, mismo monto, mismo día)
+    const repetido = transfers.find(
+      (t) =>
+        t &&
+        t.date === formData.date &&
+        t.from_account_id === formData.from_account_id &&
+        t.to_account_id === formData.to_account_id &&
+        Math.abs((t.amount_sent || 0) - sent) < 0.005,
+    );
+    if (
+      repetido &&
+      !window.confirm(
+        `Ya hay un traspaso de ${sent} entre esas mismas cuentas el ${formData.date}` +
+          (repetido.concept ? ` (${repetido.concept})` : '') +
+          '.\n\n¿Seguro que es otro traspaso distinto y quieres registrarlo también?',
+      )
+    )
+      return;
+
     StorageService.addTransfer({
       date: formData.date,
       from_account_id: formData.from_account_id,
