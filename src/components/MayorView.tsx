@@ -367,7 +367,7 @@ export function MayorView({
           <button
             type="button"
             onClick={() => setIsAbonoModalOpen(true)}
-            className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-sm cursor-pointer self-start sm:self-auto"
+            className="flex items-center space-x-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-sm cursor-pointer self-start sm:self-auto"
           >
             <ArrowDownLeft className="w-4 h-4" />
             <span>↙ Registrar Abono / Saldo a Favor</span>
