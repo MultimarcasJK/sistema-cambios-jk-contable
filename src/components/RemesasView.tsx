@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Pencil,
   Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { Account, AppMode, Beneficiario, Client, Remesa, RemesaEstado, RemesaMetodoPago, Supplier } from '@/types';
 import { StorageService } from '@/lib/storage';
@@ -396,6 +397,29 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
         },
         appMode,
       );
+      setAbierta(null);
+      setTick((t) => t + 1);
+      onDataChange();
+    } catch (err) {
+      if ((err as Error).name !== 'DiaCerradoError') window.alert((err as Error).message);
+    }
+  };
+
+  const revertirPago = (r: Remesa) => {
+    const destino =
+      r.metodo_pago === 'cuenta_propia'
+        ? `Se devolverán ${amt(r.monto_pago, r.moneda_pago)} ${r.moneda_pago} a la cuenta de pago`
+        : `Se le bajarán ${amt(r.costo_usd, 'USD')} USD de deuda al aliado ${r.aliado_name || ''}`.trim();
+    const txt = window.prompt(
+      `Revertir el pago de la remesa #${r.numero}. ${destino} y la remesa vuelve a Cobrada. Escribe el motivo:`,
+    );
+    if (txt === null) return;
+    if (!txt.trim()) {
+      window.alert('Hace falta un motivo.');
+      return;
+    }
+    try {
+      StorageService.revertirPagoRemesa(r.id, txt.trim(), appMode);
       setAbierta(null);
       setTick((t) => t + 1);
       onDataChange();
@@ -1129,6 +1153,14 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                           className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 font-semibold flex items-center gap-1"
                         >
                           <AlertTriangle className="w-3.5 h-3.5" /> Falló el pago
+                        </button>
+                      )}
+                      {r.estado === 'pagada' && isAdmin && (
+                        <button
+                          onClick={() => revertirPago(r)}
+                          className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 font-semibold flex items-center gap-1"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" /> Revertir pago
                         </button>
                       )}
                       {canAct && isAdmin && (
