@@ -120,6 +120,26 @@ function isDeleted(id: string): boolean {
   return getDeletedIds().has(id);
 }
 
+// Filas que este dispositivo ya vio en Supabase. Si una de ellas desaparece de Supabase es
+// porque otro dispositivo la borró: se quita aquí también en vez de volver a subirla
+// (antes se "resucitaba" lo que otra computadora había borrado).
+function getSeenRemote(storageKey: string): Set<string> {
+  return new Set(getFromStorage<string[]>(storageKey + '_vistos_v1', []));
+}
+
+function rememberSeenRemote(storageKey: string, seen: Set<string>, remoteIds: Set<string>): void {
+  // Supabase devuelve como máximo 1000 filas: con listas así de largas no se puede saber qué se borró
+  if (remoteIds.size >= 1000) return;
+  let changed = false;
+  remoteIds.forEach((id) => {
+    if (!seen.has(id)) {
+      seen.add(id);
+      changed = true;
+    }
+  });
+  if (changed) saveToStorage(storageKey + '_vistos_v1', Array.from(seen));
+}
+
 // Abonos creados en este dispositivo que Supabase todavía no confirmó. La sincronización
 // los conserva y reintenta en vez de reemplazarlos por la lista remota, que aún no los tiene.
 function getPendingDebtPaymentsKey(mode: AppMode): string {
@@ -691,7 +711,9 @@ export const StorageService = {
         });
         const local = this.getSuppliers(m);
         const remoteIds = new Set(validRemote.map((s) => s.id));
-        const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id));
+        const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getSuppliersKey(m)) : new Set<string>();
+        const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id) && !seenRemote.has(s.id));
+        rememberSeenRemote(this.getSuppliersKey(m), seenRemote, remoteIds);
         localPending.forEach((s) => {
           SupabaseSyncService.upsertSupplier(s, m).catch(() => {});
         });
@@ -707,7 +729,9 @@ export const StorageService = {
         });
         const local = this.getTransfers(m);
         const remoteIds = new Set(validRemote.map((t) => t.id));
-        const localPending = local.filter((t) => t && !remoteIds.has(t.id) && !isDeleted(t.id));
+        const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getTransfersKey(m)) : new Set<string>();
+        const localPending = local.filter((t) => t && !remoteIds.has(t.id) && !isDeleted(t.id) && !seenRemote.has(t.id));
+        rememberSeenRemote(this.getTransfersKey(m), seenRemote, remoteIds);
         localPending.forEach((t) => {
           SupabaseSyncService.upsertTransfer(t, m).catch(() => {});
         });
@@ -744,7 +768,9 @@ export const StorageService = {
           return fixed;
         });
         const remoteIds = new Set(validRemote.map((e) => e.id));
-        const localPending = local.filter((e) => e && !remoteIds.has(e.id) && !isDeleted(e.id));
+        const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getExpensesKey(m)) : new Set<string>();
+        const localPending = local.filter((e) => e && !remoteIds.has(e.id) && !isDeleted(e.id) && !seenRemote.has(e.id));
+        rememberSeenRemote(this.getExpensesKey(m), seenRemote, remoteIds);
         localPending.forEach((e) => {
           SupabaseSyncService.upsertExpense(e, m).catch(() => {});
         });
@@ -760,7 +786,9 @@ export const StorageService = {
         });
         const local = this.getClosures(m);
         const remoteIds = new Set(validRemote.map((c) => c.id));
-        const localPending = local.filter((c) => c && !remoteIds.has(c.id) && !isDeleted(c.id));
+        const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getClosuresKey(m)) : new Set<string>();
+        const localPending = local.filter((c) => c && !remoteIds.has(c.id) && !isDeleted(c.id) && !seenRemote.has(c.id));
+        rememberSeenRemote(this.getClosuresKey(m), seenRemote, remoteIds);
         localPending.forEach((c) => {
           SupabaseSyncService.upsertClosure(c, m).catch(() => {});
         });
@@ -776,7 +804,9 @@ export const StorageService = {
         });
         const local = getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []);
         const remoteIds = new Set(validRemote.map((t) => t.id));
-        const localPending = local.filter((t) => !remoteIds.has(t.id) && !isDeleted(t.id));
+        const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getTransactionsDetalKey(m)) : new Set<string>();
+        const localPending = local.filter((t) => !remoteIds.has(t.id) && !isDeleted(t.id) && !seenRemote.has(t.id));
+        rememberSeenRemote(this.getTransactionsDetalKey(m), seenRemote, remoteIds);
         localPending.forEach((tx) => {
           SupabaseSyncService.upsertTransactionDetal(tx, m).catch(() => {});
         });
@@ -796,7 +826,9 @@ export const StorageService = {
         });
         const local = getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []);
         const remoteIds = new Set(validRemote.map((t) => t.id));
-        const localPending = local.filter((t) => !remoteIds.has(t.id) && !isDeleted(t.id));
+        const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getTransactionsMayorKey(m)) : new Set<string>();
+        const localPending = local.filter((t) => !remoteIds.has(t.id) && !isDeleted(t.id) && !seenRemote.has(t.id));
+        rememberSeenRemote(this.getTransactionsMayorKey(m), seenRemote, remoteIds);
         localPending.forEach((tx) => {
           SupabaseSyncService.upsertTransactionMayor(tx, m).catch(() => {});
         });
@@ -850,7 +882,9 @@ export const StorageService = {
         });
         const local = this.getSupplierPurchases(m);
         const remoteIds = new Set(validRemote.map((p) => p.id));
-        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id));
+        const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getSupplierPurchasesKey(m)) : new Set<string>();
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id) && !seenRemote.has(p.id));
+        rememberSeenRemote(this.getSupplierPurchasesKey(m), seenRemote, remoteIds);
         localPending.forEach((p) => {
           SupabaseSyncService.upsertSupplierPurchase(p, m).catch(() => {});
         });
@@ -866,7 +900,9 @@ export const StorageService = {
         });
         const local = this.getSupplierPayments(m);
         const remoteIds = new Set(validRemote.map((p) => p.id));
-        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id));
+        const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getSupplierPaymentsKey(m)) : new Set<string>();
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id) && !seenRemote.has(p.id));
+        rememberSeenRemote(this.getSupplierPaymentsKey(m), seenRemote, remoteIds);
         localPending.forEach((p) => {
           SupabaseSyncService.upsertSupplierPayment(p, m).catch(() => {});
         });
@@ -882,7 +918,9 @@ export const StorageService = {
         });
         const local = this.getEmployees(m);
         const remoteIds = new Set(validRemote.map((e) => e.id));
-        const localPending = local.filter((e) => e && !remoteIds.has(e.id) && !isDeleted(e.id));
+        const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getEmployeesKey(m)) : new Set<string>();
+        const localPending = local.filter((e) => e && !remoteIds.has(e.id) && !isDeleted(e.id) && !seenRemote.has(e.id));
+        rememberSeenRemote(this.getEmployeesKey(m), seenRemote, remoteIds);
         localPending.forEach((e) => {
           SupabaseSyncService.upsertEmployee(e, m).catch(() => {});
         });
@@ -898,7 +936,9 @@ export const StorageService = {
         });
         const local = this.getPayrollPayments(m);
         const remoteIds = new Set(validRemote.map((p) => p.id));
-        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id));
+        const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getPayrollPaymentsKey(m)) : new Set<string>();
+        const localPending = local.filter((p) => p && !remoteIds.has(p.id) && !isDeleted(p.id) && !seenRemote.has(p.id));
+        rememberSeenRemote(this.getPayrollPaymentsKey(m), seenRemote, remoteIds);
         localPending.forEach((p) => {
           SupabaseSyncService.upsertPayrollPayment(p, m).catch(() => {});
         });
@@ -918,7 +958,9 @@ export const StorageService = {
         });
         const local = this.getServiceExpenses(m);
         const remoteIds = new Set(validRemote.map((s) => s.id));
-        const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id));
+        const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getServiceExpensesKey(m)) : new Set<string>();
+        const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id) && !seenRemote.has(s.id));
+        rememberSeenRemote(this.getServiceExpensesKey(m), seenRemote, remoteIds);
         localPending.forEach((s) => {
           SupabaseSyncService.upsertServiceExpense(s, m).catch(() => {});
         });
