@@ -52,6 +52,7 @@ export interface StatementMovement {
     | 'DETAL_OUT'
     | 'MAYOR_IN'
     | 'MAYOR_OUT'
+    | 'COMISION'
     | 'TRANSFER_IN'
     | 'TRANSFER_OUT'
     | 'EXPENSE'
@@ -193,7 +194,7 @@ export function AccountStatementModal({
       // 2. Salida de dinero (Desembolso)
       if (tx.paid_account_id === accId && tx.amount_ves > 0) {
         const comOut = commissionOutOfAccount(tx, currentAccount.currency);
-        const totalOut = tx.amount_ves + comOut;
+        const totalOut = tx.amount_ves;
         items.push({
           id: `mayor-out-${tx.id}`,
           date: tx.date || (localDateOf(tx.created_at)),
@@ -204,9 +205,7 @@ export function AccountStatementModal({
           type: 'EGRESO',
           categoryKey: 'MAYOR_OUT',
           categoryLabel: 'Desembolso Mayor',
-          description: `Desembolso Venta Mayor (${tx.currency || 'VES'} ${tx.amount_ves}${
-            comOut ? ` + Com. ${comOut}` : ''
-          })`,
+          description: `Desembolso Venta Mayor (${tx.currency || 'VES'} ${tx.amount_ves})`,
           thirdParty: tx.client_name ? `Cliente: ${tx.client_name}` : 'Cliente Mayor',
           reference: tx.reference || 'S/R',
           inflow: 0,
@@ -214,6 +213,27 @@ export function AccountStatementModal({
           netAmount: -totalOut,
           balanceAfter: 0,
         });
+        // La comisión del intermediario/banco va en su propia línea, como en el extracto del banco
+        if (comOut > 0) {
+          items.push({
+            id: `mayor-com-${tx.id}`,
+            date: tx.date || localDateOf(tx.created_at),
+            time: tx.created_at ? localTimeOf(tx.created_at) : '',
+            sortKey: `${tx.date || ''} ${tx.created_at ? localTimeOf(tx.created_at) : '00:00'} ${
+              tx.created_at || ''
+            } 3`,
+            type: 'EGRESO',
+            categoryKey: 'COMISION',
+            categoryLabel: 'Comisión Bancaria',
+            description: `Comisión de la venta${tx.fee_percent ? ` (${tx.fee_percent}%)` : ''}`,
+            thirdParty: tx.client_name ? `Cliente: ${tx.client_name}` : 'Cliente Mayor',
+            reference: tx.reference || 'S/R',
+            inflow: 0,
+            outflow: comOut,
+            netAmount: -comOut,
+            balanceAfter: 0,
+          });
+        }
       }
     });
 
@@ -1007,6 +1027,7 @@ export function AccountStatementModal({
                   <option value="DETAL_OUT">Despachos Detal</option>
                   <option value="MAYOR_IN">Cobros Mayor</option>
                   <option value="MAYOR_OUT">Desembolsos Mayor</option>
+                  <option value="COMISION">Comisiones Bancarias</option>
                   <option value="TRANSFER_IN">Traspasos Recibidos</option>
                   <option value="TRANSFER_OUT">Traspasos Enviados</option>
                   <option value="EXPENSE">Gastos Operativos</option>
