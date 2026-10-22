@@ -9,6 +9,7 @@ import {
   Account,
   Debtor,
   Currency,
+  Remesa,
 } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { newestFirst } from '@/lib/order';
@@ -30,6 +31,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
+import { gananciaRemesasEl, remesasPagadasEl } from '@/lib/remesa-profit';
 
 interface ClosuresProps {
   detalTxs: TransactionDetal[];
@@ -38,6 +40,7 @@ interface ClosuresProps {
   closures: DailyClosure[];
   accounts: Account[];
   debtors: Debtor[];
+  remesas: Remesa[];
   onDataChange: () => void;
   appMode?: import('@/types').AppMode;
 }
@@ -49,6 +52,7 @@ export function ClosuresView({
   closures: closuresRaw,
   accounts,
   debtors,
+  remesas,
   onDataChange,
   appMode,
 }: ClosuresProps) {
@@ -89,7 +93,9 @@ export function ClosuresView({
       .filter((e) => e.date === selectedDate && e.type !== 'ingreso')
       .reduce((sum, e) => sum + (e.amount_usd || 0), 0);
 
-    const netProfit = profitDetal + profitMayor + extraIncome - totalExpenses;
+    const profitRemesas = gananciaRemesasEl(remesas, selectedDate);
+
+    const netProfit = profitDetal + profitMayor + profitRemesas + extraIncome - totalExpenses;
 
     const detalCount = detalTxs.filter((t) => t.date === selectedDate).length;
     const mayorCount = mayorTxs.filter((t) => t.date === selectedDate).length;
@@ -99,15 +105,17 @@ export function ClosuresView({
     return {
       profitDetal: Number(profitDetal.toFixed(2)),
       profitMayor: Number(profitMayor.toFixed(2)),
+      profitRemesas: Number(profitRemesas.toFixed(2)),
       extraIncome: Number(extraIncome.toFixed(2)),
       totalExpenses: Number(totalExpenses.toFixed(2)),
       netProfit: Number(netProfit.toFixed(2)),
       detalCount,
       mayorCount,
+      remesasCount: remesasPagadasEl(remesas, selectedDate).length,
       extraCount,
       expensesCount,
     };
-  }, [detalTxs, mayorTxs, expenses, selectedDate]);
+  }, [detalTxs, mayorTxs, expenses, remesas, selectedDate]);
 
   const existingClosure = closures.find((c) => c.date === selectedDate);
 
@@ -118,6 +126,7 @@ export function ClosuresView({
         date: selectedDate,
         profit_detal: daySummary.profitDetal,
         profit_mayor: daySummary.profitMayor,
+        profit_remesas: daySummary.profitRemesas,
         extra_income: daySummary.extraIncome,
         total_expenses: daySummary.totalExpenses,
         total_net_profit: daySummary.netProfit,
@@ -370,7 +379,7 @@ export function ClosuresView({
                   <span>Cierre Diario y Cuadre de Ganancias</span>
                 </h2>
                 <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Fórmula oficial: CRIPTO/DOLAR + MONEDAS REGIONALES + Ingresos Extra - Gastos = Ganancia Neta
+                  Fórmula oficial: CRIPTO/DOLAR + MONEDAS REGIONALES + REMESAS + Ingresos Extra - Gastos = Ganancia Neta
                 </p>
               </div>
 
@@ -388,7 +397,7 @@ export function ClosuresView({
             </div>
 
             {/* Desglose de Ganancias del Día */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 my-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5 my-5">
               {/* Ganancia Detal */}
               <div className={`p-3.5 rounded-xl border transition ${
                 isDark
@@ -435,6 +444,29 @@ export function ClosuresView({
                 </span>
               </div>
 
+              {/* Ganancia Remesas */}
+              <div className={`p-3.5 rounded-xl border transition ${
+                isDark
+                  ? 'bg-slate-800/90 border-slate-700/80'
+                  : 'bg-amber-50/60 border-amber-100'
+              }`}>
+                <span className={`text-[11px] font-semibold uppercase ${
+                  isDark ? 'text-amber-400' : 'text-amber-700'
+                }`}>
+                  3. Remesas
+                </span>
+                <div className={`text-xl font-black font-mono mt-1 ${
+                  isDark ? 'text-white' : 'text-amber-900'
+                }`}>
+                  +${daySummary.profitRemesas.toFixed(2)}
+                </div>
+                <span className={`text-[10px] ${
+                  isDark ? 'text-slate-400' : 'text-amber-600'
+                }`}>
+                  {daySummary.remesasCount} pagadas
+                </span>
+              </div>
+
               {/* Ingresos Extra */}
               <div className={`p-3.5 rounded-xl border transition ${
                 isDark
@@ -444,7 +476,7 @@ export function ClosuresView({
                 <span className={`text-[11px] font-semibold uppercase ${
                   isDark ? 'text-blue-400' : 'text-blue-700'
                 }`}>
-                  3. Ingresos Extra
+                  4. Ingresos Extra
                 </span>
                 <div className={`text-xl font-black font-mono mt-1 ${
                   isDark ? 'text-white' : 'text-blue-900'
@@ -467,7 +499,7 @@ export function ClosuresView({
                 <span className={`text-[11px] font-semibold uppercase ${
                   isDark ? 'text-rose-400' : 'text-rose-700'
                 }`}>
-                  4. Gastos
+                  5. Gastos
                 </span>
                 <div className={`text-xl font-black font-mono mt-1 ${
                   isDark ? 'text-rose-300' : 'text-rose-900'
@@ -560,6 +592,7 @@ export function ClosuresView({
                     <th className="py-2.5 px-3">Hora de Cierre</th>
                     <th className="py-2.5 px-3 text-right">CRIPTO/DOLAR</th>
                     <th className="py-2.5 px-3 text-right">MONEDAS REGIONALES</th>
+                    <th className="py-2.5 px-3 text-right">Remesas</th>
                     <th className="py-2.5 px-3 text-right">Ingresos Extra</th>
                     <th className="py-2.5 px-3 text-right">Gastos</th>
                     <th className="py-2.5 px-3 text-right">Total Ganado ($)</th>
@@ -571,7 +604,7 @@ export function ClosuresView({
                 <tbody className="divide-y divide-slate-100 font-mono">
                   {closures.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-8 text-center text-slate-400 font-sans">
+                      <td colSpan={11} className="py-8 text-center text-slate-400 font-sans">
                         Aún no se han guardado cierres definitivos.
                       </td>
                     </tr>
@@ -590,6 +623,9 @@ export function ClosuresView({
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-indigo-600">
                           +${(c.profit_mayor || 0).toFixed(2)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-amber-600">
+                          +${(c.profit_remesas || 0).toFixed(2)}
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-blue-600">
                           +${(c.extra_income || 0).toFixed(2)}

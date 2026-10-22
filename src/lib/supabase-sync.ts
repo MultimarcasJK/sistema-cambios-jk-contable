@@ -538,6 +538,7 @@ export const SupabaseSyncService = {
           profit_mayor: meta.profit_mayor,
           extra_income: meta.extra_income,
           total_expenses: meta.total_expenses,
+          profit_remesas: meta.profit_remesas,
           total_net_profit: Number(row.net_profit_day ?? row.total_net_profit) || 0,
           notes: meta.notes || undefined,
           accounts_snapshot: row.accounts_snapshot || [],

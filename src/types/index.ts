@@ -229,6 +229,7 @@ export interface DailyClosure {
   closed_at: string;
   profit_detal: number;
   profit_mayor: number;
+  profit_remesas?: number; // ganancia de remesas pagadas ese día
   extra_income: number;
   total_expenses: number;
   total_net_profit: number;
