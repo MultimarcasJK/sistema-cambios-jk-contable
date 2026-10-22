@@ -147,6 +147,8 @@ export interface TransactionDetal {
   paid_account_id?: string;
   bank_fee: number;
   fee_percent?: number;
+  client_fee?: number; // comisión cobrada al cliente (se suma al total y a la ganancia)
+  is_vip?: boolean;
   payment_status?: 'PAGADO' | 'PENDIENTE' | 'PARCIAL';
   reference?: string;
   notes?: string;
@@ -168,6 +170,8 @@ export interface TransactionMayor {
   paid_account_id?: string;
   commission: number;
   fee_percent?: number;
+  client_fee?: number; // comisión cobrada al cliente (se suma al total y a la ganancia)
+  is_vip?: boolean;
   profit_usd: number;
   payment_status?: 'PAGADO' | 'PENDIENTE' | 'PARCIAL';
   reference?: string;

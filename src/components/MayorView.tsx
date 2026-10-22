@@ -80,6 +80,8 @@ export function MayorView({
     amount_received: '',
     paid_account_id: '',
     commission: '0',
+    client_fee: '',
+    is_vip: false,
     reference: '',
     notes: '',
   });
@@ -119,7 +121,7 @@ export function MayorView({
     const sell = parseFormattedNumber(formData.sell_price);
 
     if (ves <= 0 || sell <= 0) {
-      return { totalToPay: 0, effectiveFee: 0, profitUsd: 0 };
+      return { totalToPay: 0, effectiveFee: 0, clientFee: 0, profitUsd: 0 };
     }
 
     let totalToPay = 0;
@@ -152,15 +154,19 @@ export function MayorView({
       ? (totalToPay > 0 ? (totalToPay * pct) / 100 : 0)
       : (parseFormattedNumber(formData.commission) || 0);
 
-    const profitRaw = totalToPay - costUsd - effectiveFee;
+    // Comisión al cliente (ej. $1 en tasa VIP): se suma a lo que debe pagar y a la ganancia
+    const clientFee = parseFormattedNumber(formData.client_fee) || 0;
+
+    const profitRaw = totalToPay - costUsd - effectiveFee + clientFee;
     const profitUsd = Number(profitRaw.toFixed(4));
 
     return {
-      totalToPay: Number(totalToPay.toFixed(2)),
+      totalToPay: Number((totalToPay + clientFee).toFixed(2)),
       effectiveFee: Number(effectiveFee.toFixed(4)),
+      clientFee,
       profitUsd: Math.abs(profitUsd) > 0 ? profitUsd : 0,
     };
-  }, [formData.amount_ves, formData.buy_price, formData.sell_price, formData.commission, feeMode, feePercent, selectedCurrency]);
+  }, [formData.amount_ves, formData.buy_price, formData.sell_price, formData.commission, formData.client_fee, feeMode, feePercent, selectedCurrency]);
 
   const handleSetFullPayment = () => {
     if (formData.received_account_id === 'POR_COBRAR') {
@@ -193,6 +199,18 @@ export function MayorView({
       await StorageService.deleteTransactionMayor(id, appMode);
       onDataChange();
     }
+  };
+
+  const handleToggleVip = () => {
+    setFormData((prev) => {
+      const turningOn = !prev.is_vip;
+      const fee = parseFormattedNumber(prev.client_fee) || 0;
+      return {
+        ...prev,
+        is_vip: turningOn,
+        client_fee: turningOn ? (fee > 0 ? prev.client_fee : '1') : (fee === 1 ? '' : prev.client_fee),
+      };
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -239,6 +257,8 @@ export function MayorView({
       paid_account_id: formData.paid_account_id || undefined,
       commission: comm,
       fee_percent: feeMode === 'percent' ? (parseFloat(feePercent) || undefined) : undefined,
+      client_fee: calculations.clientFee > 0 ? calculations.clientFee : undefined,
+      is_vip: formData.is_vip || undefined,
       profit_usd: calculations.profitUsd,
       reference: formData.reference,
       notes: formData.notes,
@@ -255,6 +275,8 @@ export function MayorView({
       amount_received: '',
       paid_account_id: prev.paid_account_id,
       commission: '0',
+      client_fee: '',
+      is_vip: false,
       reference: '',
       notes: '',
     }));
@@ -700,6 +722,42 @@ export function MayorView({
             </div>
 
             <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-600">
+                  Comisión al Cliente ($)
+                </label>
+                <button
+                  type="button"
+                  onClick={handleToggleVip}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold border transition cursor-pointer ${
+                    formData.is_vip
+                      ? 'bg-amber-400 text-amber-950 border-amber-500 shadow-xs'
+                      : 'bg-slate-100 text-slate-600 border-slate-200 hover:text-slate-900'
+                  }`}
+                  title="Venta con tasa VIP: cobra $1 de comisión al cliente (puedes cambiar el monto)"
+                >
+                  {formData.is_vip ? '★ VIP' : '☆ VIP'}
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="0.00"
+                  value={formData.client_fee}
+                  onChange={(e) => setFormData({ ...formData, client_fee: e.target.value })}
+                  className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 font-mono pr-8"
+                />
+                <span className="absolute right-3 top-2 text-xs font-bold text-slate-400">$</span>
+              </div>
+              {calculations.clientFee > 0 && (
+                <p className="text-[11px] text-emerald-700 font-semibold mt-1.5">
+                  +${calculations.clientFee.toFixed(2)} USD sumado a lo que debe pagar y a la ganancia
+                </p>
+              )}
+            </div>
+
+            <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Referencia</label>
               <input
                 type="text"
@@ -860,6 +918,11 @@ export function MayorView({
                         <td className="py-2.5 px-3 text-slate-500 font-sans">{tx.date}</td>
                         <td className="py-2.5 px-3 font-semibold font-sans text-slate-800">
                           {tx.client_name}
+                          {tx.is_vip && (
+                            <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                              ★ VIP
+                            </span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-slate-900 whitespace-nowrap">
                           <span className="text-[10px] font-bold text-indigo-700 mr-1.5 px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded">
@@ -873,6 +936,11 @@ export function MayorView({
                           )}
                         </td>
                         <td className="py-2.5 px-3 text-right text-slate-600 font-sans whitespace-nowrap">
+                          {(tx.client_fee || 0) > 0 && (
+                            <span className="block text-[10px] font-bold text-emerald-700" title="Comisión cobrada al cliente">
+                              +${formatCurrency(tx.client_fee || 0)} cliente
+                            </span>
+                          )}
                           {tx.commission > 0 ? (
                             <span>
                               {tx.fee_percent ? (
@@ -882,7 +950,7 @@ export function MayorView({
                                 (${formatCurrency(tx.commission)})
                               </span>
                             </span>
-                          ) : (
+                          ) : (tx.client_fee || 0) > 0 ? null : (
                             <span className="text-slate-400">-</span>
                           )}
                         </td>
