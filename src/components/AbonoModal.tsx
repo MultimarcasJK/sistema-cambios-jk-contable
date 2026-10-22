@@ -5,6 +5,7 @@ import { Account, Client, Currency, Debtor } from '@/types';
 import { CurrencyService } from '@/lib/currencies';
 import { StorageService } from '@/lib/storage';
 import { ArrowDownLeft, X } from 'lucide-react';
+import { localDateStr } from '@/lib/dates';
 
 interface AbonoModalProps {
   isOpen: boolean;
@@ -36,7 +37,7 @@ export function AbonoModal({
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentAmountCurrency, setPaymentAmountCurrency] = useState('');
   const [paymentRate, setPaymentRate] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(localDateStr());
   const [paymentAccountId, setPaymentAccountId] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
 
@@ -72,7 +73,7 @@ export function AbonoModal({
       setPaymentAmount('');
       setPaymentAmountCurrency('');
       setPaymentRate('');
-      setPaymentDate(new Date().toISOString().split('T')[0]);
+      setPaymentDate(localDateStr());
       setPaymentAccountId('');
       setPaymentNotes('');
     }

@@ -10,7 +10,7 @@
     "lint": "next lint",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d out -t --nojekyll",
-    "test": "vitest run"
+    "test": "TZ=America/Caracas vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.6",

@@ -9,6 +9,7 @@ import { AbonoModal } from '@/components/AbonoModal';
 import { parseFormattedNumber, formatCurrency, formatRateDisplay, formatInputNumber } from '@/lib/formatters';
 import { Coins, Search, CheckCircle, Trash2, ArrowDownLeft, Sparkles, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { localDateStr } from '@/lib/dates';
 
 interface DetalProps {
   accounts: Account[];
@@ -32,7 +33,7 @@ export function DetalView({
   lastRatesSync,
 }: DetalProps) {
   const { isAdmin } = useAuth();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
   const [ratesVersion, setRatesVersion] = useState(0);
 
   useEffect(() => {

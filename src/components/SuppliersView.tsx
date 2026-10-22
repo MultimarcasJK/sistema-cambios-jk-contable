@@ -29,6 +29,7 @@ import {
   Share2,
   ArrowUp,
 } from 'lucide-react';
+import { localDateStr } from '@/lib/dates';
 
 interface SuppliersProps {
   accounts: Account[];
@@ -37,7 +38,7 @@ interface SuppliersProps {
 }
 
 export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersProps) {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
   const [systemCurrencies, setSystemCurrencies] = useState<CurrencyConfig[]>(
     CurrencyService.getCurrencies()
   );

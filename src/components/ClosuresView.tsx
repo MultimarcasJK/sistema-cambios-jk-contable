@@ -29,6 +29,7 @@ import {
   Eye,
   Filter,
 } from 'lucide-react';
+import { localDateStr } from '@/lib/dates';
 
 interface ClosuresProps {
   detalTxs: TransactionDetal[];
@@ -54,7 +55,7 @@ export function ClosuresView({
   // El cierre más reciente arriba
   const closures = useMemo(() => newestFirst(closuresRaw), [closuresRaw]);
   const isDark = appMode === 'mayor';
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
   const [activeSubTab, setActiveSubTab] = useState<'profits' | 'accounts' | 'debtors'>('profits');
 
   // Estados para pestaña de Ganancias

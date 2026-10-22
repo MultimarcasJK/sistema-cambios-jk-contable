@@ -1,3 +1,4 @@
+import { localDateOf } from './dates';
 // Regla de todo el sistema: en las listas de registros lo más nuevo va arriba,
 // pegado al encabezado, y lo más viejo abajo.
 
@@ -21,8 +22,8 @@ export function recordTime(r: Fechable | null | undefined): number {
 
 // Comparador: fecha del registro (más reciente primero) y, dentro del mismo día, hora de creación
 export function compareNewestFirst(a: Fechable, b: Fechable): number {
-  const da = a.date || (a.created_at || '').slice(0, 10);
-  const db = b.date || (b.created_at || '').slice(0, 10);
+  const da = a.date || localDateOf(a.created_at);
+  const db = b.date || localDateOf(b.created_at);
   if (da !== db) return db.localeCompare(da);
   const diff = recordTime(b) - recordTime(a);
   if (diff) return diff;

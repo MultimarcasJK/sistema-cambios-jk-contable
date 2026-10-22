@@ -20,6 +20,7 @@ import { RatesService } from '@/lib/rates-service';
 import { COUNTRIES_LIST } from '@/lib/countries';
 import { useAuth } from '@/lib/auth-context';
 import { formatRegionalAmount, parseFormattedNumber } from '@/lib/formatters';
+import { localDateStr } from '@/lib/dates';
 
 interface RemesasProps {
   appMode: AppMode;
@@ -444,7 +445,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [remesas]);
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = localDateStr();
   const gananciaHoy = remesas
     .filter((r) => r.estado === 'pagada' && r.fecha_pago === hoy)
     .reduce((s, r) => s + (r.ganancia_usd || 0), 0);

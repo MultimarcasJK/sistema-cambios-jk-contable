@@ -23,6 +23,7 @@ import {
   FileText,
   Trash2,
 } from 'lucide-react';
+import { localDateStr } from '@/lib/dates';
 
 interface DebtorsProps {
   debtors: Debtor[];
@@ -50,7 +51,7 @@ export function DebtorsView({
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentAmountCurrency, setPaymentAmountCurrency] = useState('');
   const [paymentRate, setPaymentRate] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(localDateStr());
   const [paymentAccountId, setPaymentAccountId] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [voucherData, setVoucherData] = useState<VoucherData | null>(null);
@@ -162,7 +163,7 @@ export function DebtorsView({
     setPaymentAmount('');
     setPaymentAmountCurrency('');
     setPaymentRate('');
-    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentDate(localDateStr());
     setPaymentAccountId('');
     setPaymentNotes('');
   };
