@@ -14,3 +14,11 @@ describe('fechas en hora local', () => {
     expect(localDateOf('')).toBe('');
   });
 });
+
+describe('localTimeOf', () => {
+  it('da la hora local de Venezuela, no la UTC', async () => {
+    const { localTimeOf } = await import('@/lib/dates');
+    expect(localTimeOf('2026-10-22T03:15:00.000Z')).toBe('23:15');
+    expect(localTimeOf('')).toBe('');
+  });
+});
