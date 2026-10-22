@@ -237,6 +237,18 @@ export const RatesService = {
     return this.getLastSync();
   },
 
+  /**
+   * Tasa de costo (compra) en vivo de App JK para una moneda local (VES, COP, PEN...), como texto.
+   * null si no hay tasa cargada para esa moneda; USD, USDT y EUR se manejan aparte.
+   */
+  liveCostRate(currency: string, mode: AppMode = 'detal'): string | null {
+    const c = (currency || '').toUpperCase();
+    if (!c || c === 'USD' || c === 'USDT' || c === 'EUR') return null;
+    const info = this.getRateInfo(c, mode);
+    if (info.provider === 'General' && info.costRate === 1) return null;
+    return info.costRate > 0 ? String(info.costRate) : null;
+  },
+
   getRateInfo(
     currency: string,
     mode: AppMode = 'detal'

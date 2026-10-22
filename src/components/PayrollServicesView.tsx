@@ -12,6 +12,7 @@ import {
 } from '@/types';
 import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
+import { RatesService } from '@/lib/rates-service';
 import { CurrencyService } from '@/lib/currencies';
 import { formatInputNumber, parseFormattedNumber } from '@/lib/formatters';
 import {
@@ -143,6 +144,7 @@ export function PayrollServicesView({
     let defaultRate = '1';
     if (emp.salary_currency === 'USD' && liquidationForm.payment_currency === 'VES') defaultRate = '788';
     else if (emp.salary_currency === 'USD' && liquidationForm.payment_currency === 'COP') defaultRate = '4150';
+    if (emp.salary_currency === 'USD') defaultRate = RatesService.liveCostRate(liquidationForm.payment_currency, appMode) ?? defaultRate;
 
     setLiquidationForm((prev) => ({
       ...prev,
@@ -168,6 +170,9 @@ export function PayrollServicesView({
       if (liquidationForm.agreed_currency === 'VES') defaultRate = '788';
       else if (liquidationForm.agreed_currency === 'COP') defaultRate = '4150';
     }
+    // Si App JK tiene la tasa de costo (compra) de hoy, se usa esa en vez del valor fijo
+    if (liquidationForm.agreed_currency === 'USD') defaultRate = RatesService.liveCostRate(newCurr, appMode) ?? defaultRate;
+    else if (newCurr === 'USD') defaultRate = RatesService.liveCostRate(liquidationForm.agreed_currency, appMode) ?? defaultRate;
 
     setLiquidationForm((prev) => ({
       ...prev,
@@ -407,6 +412,7 @@ export function PayrollServicesView({
     else if (newCurr === 'EUR') defaultRate = '1.08';
     else if (newCurr === 'CLP') defaultRate = '950';
     else if (newCurr === 'BRL') defaultRate = '5.40';
+    defaultRate = RatesService.liveCostRate(newCurr, appMode) ?? defaultRate;
 
     setServiceForm((prev) => ({
       ...prev,
