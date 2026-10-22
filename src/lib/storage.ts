@@ -792,7 +792,19 @@ export const StorageService = {
         localPending.forEach((c) => {
           SupabaseSyncService.upsertClosure(c, m).catch(() => {});
         });
-        saveToStorage(this.getClosuresKey(m), [...validRemote, ...localPending]);
+        // Cierres que llegaron sin desglose: se completa con la copia local, o en 0
+        const localById = new Map(local.filter(Boolean).map((c) => [c.id, c]));
+        const completed = validRemote.map((c) => {
+          const loc = localById.get(c.id);
+          return {
+            ...c,
+            profit_detal: c.profit_detal ?? loc?.profit_detal ?? 0,
+            profit_mayor: c.profit_mayor ?? loc?.profit_mayor ?? 0,
+            extra_income: c.extra_income ?? loc?.extra_income ?? 0,
+            total_expenses: c.total_expenses ?? loc?.total_expenses ?? 0,
+          };
+        });
+        saveToStorage(this.getClosuresKey(m), [...completed, ...localPending]);
       }
       if (remoteTxsDetal !== null) {
         const validRemote = remoteTxsDetal.filter((t) => {

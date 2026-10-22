@@ -1,5 +1,12 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-import { packClientFee, unpackClientFee, packExpenseMeta, unpackExpenseMeta } from './client-fee';
+import {
+  packClientFee,
+  unpackClientFee,
+  packExpenseMeta,
+  unpackExpenseMeta,
+  packClosureMeta,
+  unpackClosureMeta,
+} from './client-fee';
 
 // Varias tablas no guardan la hora de creación; se recupera del id (prefijo-<milisegundos>)
 // para que las listas sigan ordenadas de la más nueva a la más vieja después de sincronizar.
@@ -520,7 +527,24 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
-      return (data as DailyClosure[]) || [];
+      return ((data || []) as any[]).map((row) => {
+        const meta = unpackClosureMeta(row.notes);
+        // Sin desglose guardado (cierres viejos): queda undefined y storage lo completa con la copia local
+        return {
+          id: row.id,
+          date: row.date,
+          closed_at: row.closed_at || row.created_at || '',
+          profit_detal: meta.profit_detal,
+          profit_mayor: meta.profit_mayor,
+          extra_income: meta.extra_income,
+          total_expenses: meta.total_expenses,
+          total_net_profit: Number(row.net_profit_day ?? row.total_net_profit) || 0,
+          notes: meta.notes || undefined,
+          accounts_snapshot: row.accounts_snapshot || [],
+          debtors_snapshot: row.debtors_snapshot || [],
+          total_debtors_usd: Number(row.total_debtors_usd) || 0,
+        } as DailyClosure;
+      });
     } catch {
       return null;
     }
@@ -538,7 +562,7 @@ export const SupabaseSyncService = {
         total_debtors_usd: closure.total_debtors_usd || 0,
         accounts_snapshot: closure.accounts_snapshot,
         debtors_snapshot: closure.debtors_snapshot,
-        notes: closure.notes || '',
+        notes: packClosureMeta(closure.notes, closure),
       });
     } catch (err) {
       /* warn */
