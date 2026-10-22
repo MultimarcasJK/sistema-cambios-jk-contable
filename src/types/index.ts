@@ -399,6 +399,24 @@ export interface RemesaEvento {
   nota?: string;
 }
 
+// Pago que un ADMIN revirtió: se guarda para que la contabilidad muestre el pago y su reverso
+export interface RemesaPagoRevertido {
+  fecha_pago: string;
+  ts_pago?: string;
+  fecha_reverso: string;
+  ts: string;
+  metodo_pago: RemesaMetodoPago;
+  cuenta_pago_id?: string;
+  aliado_id?: string;
+  aliado_name?: string;
+  monto_pago: number;
+  costo_usd: number;
+  ganancia_usd: number;
+  referencia_pago?: string;
+  nota: string;
+  user_email?: string;
+}
+
 export interface Remesa {
   id: string;
   numero: number;
@@ -434,5 +452,6 @@ export interface Remesa {
   estado: RemesaEstado;
   fecha_pago?: string;
   fecha_anulacion?: string;
+  pagos_revertidos?: RemesaPagoRevertido[];
   historial: RemesaEvento[];
 }

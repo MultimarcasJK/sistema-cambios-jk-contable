@@ -1505,6 +1505,68 @@ export const StorageService = {
     return updated;
   },
 
+  // Solo ADMIN: deshace el pago de una remesa pagada y la devuelve a "cobrada"
+  revertirPagoRemesa(id: string, nota: string, mode?: AppMode): Remesa {
+    const m = mode || this.getAppMode();
+    const remesa = this.getRemesas(m).find((r) => r.id === id);
+    if (!remesa) throw new Error('No se encontró la remesa.');
+    if (remesa.estado !== 'pagada') throw new Error('Solo se puede revertir el pago de una remesa pagada.');
+    if (!isActorAdmin()) throw new Error('Solo un ADMIN puede revertir el pago de una remesa.');
+    const motivo = (nota || '').trim();
+    if (!motivo) throw new Error('Para revertir el pago hace falta un motivo.');
+    const today = localDateStr();
+    this.assertDayOpen(today, m, 'revertir el pago de una remesa');
+    const now = new Date().toISOString();
+
+    // Se devuelve lo pagado: vuelve a la cuenta de pago, o se le baja la deuda al aliado
+    if (remesa.metodo_pago === 'cuenta_propia') {
+      if (remesa.cuenta_pago_id) this.updateAccountBalance(remesa.cuenta_pago_id, remesa.monto_pago, m);
+    } else if (remesa.aliado_id) {
+      this.updateSupplierDebt(remesa.aliado_id, -remesa.costo_usd, m);
+    }
+
+    const pago = [...(remesa.historial || [])].reverse().find((h) => h.estado === 'pagada');
+    const updated: Remesa = {
+      ...remesa,
+      estado: 'cobrada',
+      fecha_pago: undefined,
+      pagos_revertidos: [
+        ...(remesa.pagos_revertidos || []),
+        {
+          fecha_pago: remesa.fecha_pago || pago?.date || today,
+          ts_pago: pago?.ts,
+          fecha_reverso: today,
+          ts: now,
+          metodo_pago: remesa.metodo_pago,
+          cuenta_pago_id: remesa.cuenta_pago_id,
+          aliado_id: remesa.aliado_id,
+          aliado_name: remesa.aliado_name,
+          monto_pago: remesa.monto_pago,
+          costo_usd: remesa.costo_usd,
+          ganancia_usd: remesa.ganancia_usd,
+          referencia_pago: remesa.referencia_pago,
+          nota: motivo,
+          user_email: getActor()?.email,
+        },
+      ],
+      historial: [
+        ...(remesa.historial || []),
+        { estado: 'cobrada', ts: now, date: today, user_email: getActor()?.email, nota: 'Pago revertido: ' + motivo },
+      ],
+    };
+    this.persistRemesa(updated, m);
+    AuditService.log({
+      mode: m,
+      action: 'editar',
+      entity: 'remesa',
+      entityId: id,
+      summary: `Remesa #${updated.numero} (${updated.beneficiario.name}): pago revertido, vuelve a cobrada`,
+      reason: motivo,
+      data: { antes: 'pagada', despues: 'cobrada', metodo_pago: remesa.metodo_pago, monto_pago: remesa.monto_pago },
+    });
+    return updated;
+  },
+
   // Clients
   getClients(mode?: AppMode): Client[] {
     const m = mode || this.getAppMode();

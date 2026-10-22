@@ -470,20 +470,36 @@ export function buildLedger(src: LedgerSources): Ledger {
         lc
       );
 
-      if (r.estado === 'pagada' && r.fecha_pago) {
-        const pago = r.historial?.find((h) => h.estado === 'pagada');
+      // Pago (y, si un ADMIN lo revirtió, el mismo pago al revés en la fecha del reverso)
+      const pagoLines = (p: { metodo_pago: string; cuenta_pago_id?: string; aliado_name?: string; monto_pago: number; costo_usd: number; ganancia_usd: number }, signo: number) => {
         const lp: LedgerLine[] = [];
-        push(lp, 'REM_PAGAR', r.moneda_pago, r.monto_pago, r.beneficiario?.name);
-        if (r.metodo_pago === 'cuenta_propia') {
-          const cp = real(r.cuenta_pago_id);
-          if (cp) push(lp, cp.key, cp.moneda, -r.monto_pago);
+        push(lp, 'REM_PAGAR', r.moneda_pago, signo * p.monto_pago, r.beneficiario?.name);
+        if (p.metodo_pago === 'cuenta_propia') {
+          const cp = real(p.cuenta_pago_id);
+          if (cp) push(lp, cp.key, cp.moneda, -signo * p.monto_pago);
         } else {
-          push(lp, 'CXP', 'USD', -(r.costo_usd || 0), r.aliado_name);
+          push(lp, 'CXP', 'USD', -signo * (p.costo_usd || 0), p.aliado_name);
         }
-        push(lp, 'ING_REMESAS', 'USD', -(r.ganancia_usd || 0));
+        push(lp, 'ING_REMESAS', 'USD', -signo * (p.ganancia_usd || 0));
+        return lp;
+      };
+
+      (r.pagos_revertidos || []).forEach((pr, i) => {
+        add(
+          { id: 'as-' + r.id + '-p' + i, fecha: pr.fecha_pago, orden: timeOf(pr.ts_pago), unidad, origen: 'remesa_pago', origenId: r.id, descripcion: 'Pago remesa ' + ref },
+          pagoLines(pr, 1)
+        );
+        add(
+          { id: 'as-' + r.id + '-r' + i, fecha: pr.fecha_reverso, orden: timeOf(pr.ts), unidad, origen: 'remesa_pago', origenId: r.id, descripcion: 'Reverso pago remesa ' + ref + ': ' + pr.nota },
+          pagoLines(pr, -1)
+        );
+      });
+
+      if (r.estado === 'pagada' && r.fecha_pago) {
+        const pago = [...(r.historial || [])].reverse().find((h) => h.estado === 'pagada');
         add(
           { id: 'as-' + r.id + '-p', fecha: r.fecha_pago, orden: timeOf(pago?.ts), unidad, origen: 'remesa_pago', origenId: r.id, descripcion: 'Pago remesa ' + ref },
-          lp
+          pagoLines(r, 1)
         );
       }
 
