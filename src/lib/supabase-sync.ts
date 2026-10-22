@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase';
-import { packClientFee, unpackClientFee } from './client-fee';
+import { packClientFee, unpackClientFee, packExpenseMeta, unpackExpenseMeta } from './client-fee';
 
 // Varias tablas no guardan la hora de creación; se recupera del id (prefijo-<milisegundos>)
 // para que las listas sigan ordenadas de la más nueva a la más vieja después de sincronizar.
@@ -468,7 +468,16 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
-      return ((data || []) as any[]).map((row) => ({ ...row, created_at: createdAtOf(row) })) as Expense[];
+      return ((data || []) as any[]).map((row) => {
+        const meta = unpackExpenseMeta(row.notes);
+        return {
+          ...row,
+          concept: row.concept ?? row.category ?? '',
+          currency: row.currency ?? meta.currency,
+          amount_usd: Number(row.amount_usd ?? meta.amount_usd ?? NaN),
+          created_at: createdAtOf(row),
+        };
+      }) as Expense[];
     } catch {
       return null;
     }
@@ -478,7 +487,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return;
     const table = `${mode}_gastos_ingresos`;
     try {
-      await supabase.from(table).upsert({
+      const { error } = await supabase.from(table).upsert({
         id: expense.id,
         date: expense.date,
         type: expense.type,
@@ -486,10 +495,11 @@ export const SupabaseSyncService = {
         description: expense.description,
         amount: expense.amount,
         account_id: expense.account_id || '',
-        notes: '',
+        notes: packExpenseMeta('', expense.currency, expense.amount_usd),
       });
+      if (error) console.error(`[SupabaseSync] Error upserting ${table}:`, error);
     } catch (err) {
-      /* warn */
+      console.error(`[SupabaseSync] Exception in upsertExpense:`, err);
     }
   },
 

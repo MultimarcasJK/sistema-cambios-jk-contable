@@ -4,6 +4,7 @@ import {
   TransactionMayor,
   BalanceTransfer,
   Expense,
+  Currency,
   DailyClosure,
   AccountSnapshot,
   DebtorSnapshot,
@@ -721,12 +722,33 @@ export const StorageService = {
           return true;
         });
         const local = this.getExpenses(m);
+        const localById = new Map(local.filter(Boolean).map((e) => [e.id, e]));
+        // Filas viejas en Supabase no traen moneda ni equivalente USD: se completan con la copia local,
+        // o con la moneda de la cuenta; y se vuelven a subir para que queden guardadas.
+        const accs = this.getAccounts(m);
+        const mergedRemote = validRemote.map((e) => {
+          if (e.currency && Number.isFinite(e.amount_usd)) return e;
+          const loc = localById.get(e.id);
+          const acc = accs.find((a) => a.id === e.account_id);
+          const currency = (loc?.currency || e.currency || acc?.currency || 'USD') as Currency;
+          const isUsd = currency === 'USD' || currency === 'USDT';
+          const amountUsd = Number.isFinite(e.amount_usd)
+            ? e.amount_usd
+            : loc && Number.isFinite(loc.amount_usd)
+            ? loc.amount_usd
+            : isUsd
+            ? Number(e.amount) || 0
+            : 0;
+          const fixed = { ...e, currency, amount_usd: amountUsd };
+          if (loc && loc.currency) SupabaseSyncService.upsertExpense(fixed, m).catch(() => {});
+          return fixed;
+        });
         const remoteIds = new Set(validRemote.map((e) => e.id));
         const localPending = local.filter((e) => e && !remoteIds.has(e.id) && !isDeleted(e.id));
         localPending.forEach((e) => {
           SupabaseSyncService.upsertExpense(e, m).catch(() => {});
         });
-        saveToStorage(this.getExpensesKey(m), [...validRemote, ...localPending]);
+        saveToStorage(this.getExpensesKey(m), [...mergedRemote, ...localPending]);
       }
       if (remoteClosures !== null) {
         const validRemote = remoteClosures.filter((c) => {

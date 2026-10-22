@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { packClientFee, unpackClientFee } from '@/lib/client-fee';
+import { packClientFee, unpackClientFee, packExpenseMeta, unpackExpenseMeta } from '@/lib/client-fee';
 
 describe('comisión al cliente guardada en notas', () => {
   it('ida y vuelta con VIP y $1', () => {
@@ -22,5 +22,16 @@ describe('comisión al cliente guardada en notas', () => {
   it('no duplica la marca al volver a guardar', () => {
     const once = packClientFee('x', 1, true);
     expect(packClientFee(once, 1, true)).toBe(once);
+  });
+});
+
+describe('moneda y equivalente USD de gastos en notas', () => {
+  it('ida y vuelta', () => {
+    const packed = packExpenseMeta('', 'VES', -0.49);
+    expect(packed).toBe('[MON:VES|USD:-0.49]');
+    expect(unpackExpenseMeta(packed)).toEqual({ notes: '', currency: 'VES', amount_usd: -0.49 });
+  });
+  it('filas viejas sin marca', () => {
+    expect(unpackExpenseMeta('')).toEqual({ notes: '' });
   });
 });
