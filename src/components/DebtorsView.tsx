@@ -25,7 +25,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
-import { askNewClientName, knownClientNames } from '@/lib/rename-prompt';
+import { askNewClientName, knownClientNames } from '@/components/RenameClientPicker';
 
 interface DebtorsProps {
   debtors: Debtor[];
