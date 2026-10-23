@@ -93,3 +93,34 @@ describe('sincronización de abonos', () => {
     expect(remote.payments.has(pay.id)).toBe(false);
   });
 });
+
+describe('cambiar cliente de un abono', () => {
+  const debtOf = (name: string) =>
+    StorageService.getDebtors(MODE).find((d) => d.client_name.toUpperCase() === name)?.current_debt ?? 0;
+
+  it('pasa el abono al cliente correcto sin tocar el monto', async () => {
+    const pay = addPayment('LENNYRETH PEREZ', 20);
+    tick();
+    addPayment('MARIA LOPEZ', 5);
+    tick();
+    expect(debtOf('LENNYRETH PEREZ')).toBe(-20);
+
+    StorageService.renameDebtPayment(pay.id, ' maria lopez ', MODE);
+    await flush();
+
+    expect(debtOf('LENNYRETH PEREZ')).toBe(0);
+    expect(debtOf('MARIA LOPEZ')).toBe(-25);
+    const saved = StorageService.getDebtPayments(MODE).find((p) => p.id === pay.id)!;
+    expect(saved.client_name).toBe('MARIA LOPEZ');
+    expect(saved.amount).toBe(20);
+    expect(remote.payments.get(pay.id).client_name).toBe('MARIA LOPEZ');
+  });
+
+  it('crea el deudor si el nombre nuevo no existe', () => {
+    const pay = addPayment('LENNYRETH PEREZ', 15);
+    tick();
+    StorageService.renameDebtPayment(pay.id, 'ANA ROJAS', MODE);
+    expect(debtOf('ANA ROJAS')).toBe(-15);
+    expect(debtOf('LENNYRETH PEREZ')).toBe(0);
+  });
+});

@@ -2676,6 +2676,54 @@ export const StorageService = {
     return newPayment;
   },
 
+  // Corrige el cliente de un abono sin anularlo: la deuda vuelve al cliente anterior y se
+  // descuenta al nuevo. Monto, cuenta y fecha quedan igual, así que no toca saldos de cuentas.
+  renameDebtPayment(id: string, newClientName: string, mode?: AppMode): DebtPayment | null {
+    const m = mode || this.getAppMode();
+    const upperNew = newClientName.trim().toUpperCase();
+    const all = this.getDebtPayments(m);
+    const pay = all.find((p) => p.id === id);
+    if (!pay || !upperNew) return null;
+    const upperOld = pay.client_name.trim().toUpperCase();
+    if (upperOld === upperNew) return pay;
+
+    const debtors = this.getDebtors(m);
+    const oldDebtor = debtors.find(
+      (d) => d.id === pay.debtor_id || d.client_name.trim().toUpperCase() === upperOld
+    );
+    if (oldDebtor) this.updateDebtorDebt(oldDebtor.id, pay.amount, m);
+
+    let newDebtor = this.getDebtors(m).find((d) => d.client_name.trim().toUpperCase() === upperNew);
+    if (newDebtor) {
+      this.updateDebtorDebt(newDebtor.id, -pay.amount, m);
+    } else {
+      newDebtor = this.addDebtor(
+        {
+          client_name: upperNew,
+          current_debt: -pay.amount,
+          notes: 'Creado por abono a deuda (' + m.toUpperCase() + ')',
+        },
+        m
+      );
+    }
+
+    const updated: DebtPayment = { ...pay, client_name: upperNew, debtor_id: newDebtor.id };
+    saveToStorage(
+      this.getDebtPaymentsKey(m),
+      all.map((p) => (p.id === id ? updated : p))
+    );
+    pushDebtPayment(updated, m);
+    AuditService.log({
+      mode: m,
+      action: 'editar',
+      entity: 'abono_cliente',
+      entityId: id,
+      summary: `Abono de ${pay.amount} USD pasado de ${pay.client_name} a ${upperNew}`,
+      data: updated,
+    });
+    return updated;
+  },
+
   async deleteDebtPayment(id: string, mode?: AppMode): Promise<void> {
     const m = mode || this.getAppMode();
     const all = this.getDebtPayments(m);
