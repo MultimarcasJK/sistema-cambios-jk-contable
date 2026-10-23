@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Account, AppMode, Beneficiario, Client, Remesa, RemesaEstado, RemesaMetodoPago, Supplier } from '@/types';
 import { StorageService } from '@/lib/storage';
-import { askNewClientName, knownClientNames } from '@/lib/rename-prompt';
+import { askNewClientName, knownClientNames } from '@/components/RenameClientPicker';
 import { newestFirst } from '@/lib/order';
 import { RatesService } from '@/lib/rates-service';
 import { COUNTRIES_LIST } from '@/lib/countries';

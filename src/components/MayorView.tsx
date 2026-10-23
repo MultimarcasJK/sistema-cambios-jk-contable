@@ -13,7 +13,7 @@ import { TrendingUp, Search, CheckCircle, Trash2, Pencil, ArrowDownLeft, Sparkle
 import { useAuth } from '@/lib/auth-context';
 import { localDateStr } from '@/lib/dates';
 import { commissionInAccountCurrency, commissionOutOfAccount } from '@/lib/commission';
-import { askNewClientName, knownClientNames } from '@/lib/rename-prompt';
+import { askNewClientName, knownClientNames } from '@/components/RenameClientPicker';
 
 interface MayorProps {
   accounts: Account[];

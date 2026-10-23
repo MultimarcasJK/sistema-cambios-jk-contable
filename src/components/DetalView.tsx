@@ -10,7 +10,7 @@ import { parseFormattedNumber, formatCurrency, formatRateDisplay, formatInputNum
 import { Coins, Search, CheckCircle, Trash2, Pencil, ArrowDownLeft, Sparkles, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { localDateStr } from '@/lib/dates';
-import { askNewClientName, knownClientNames } from '@/lib/rename-prompt';
+import { askNewClientName, knownClientNames } from '@/components/RenameClientPicker';
 
 interface DetalProps {
   accounts: Account[];
