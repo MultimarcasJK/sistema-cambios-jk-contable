@@ -13,6 +13,7 @@ import { TrendingUp, Search, CheckCircle, Trash2, Pencil, ArrowDownLeft, Sparkle
 import { useAuth } from '@/lib/auth-context';
 import { localDateStr } from '@/lib/dates';
 import { commissionInAccountCurrency, commissionOutOfAccount } from '@/lib/commission';
+import { askNewClientName } from '@/lib/rename-prompt';
 
 interface MayorProps {
   accounts: Account[];
@@ -1041,7 +1042,19 @@ export function MayorView({
                           )}
                         </td>
                         {isAdmin && (
-                          <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                          <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap">
+                            <button
+                              onClick={() => {
+                                const nuevo = askNewClientName(tx.client_name);
+                                if (!nuevo) return;
+                                StorageService.renameTransactionMayor(tx.id, nuevo, appMode);
+                                onDataChange();
+                              }}
+                              title="Cambiar cliente de la venta"
+                              className="p-1.5 mr-1 bg-sky-50 hover:bg-sky-100 text-sky-600 hover:text-sky-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
+                            >
+                              <Pencil className="w-4 h-4 text-sky-600" />
+                            </button>
                             <button
                               onClick={() => handleDeleteTx(tx.id)}
                               title="Eliminar operación"
@@ -1103,12 +1116,8 @@ export function MayorView({
                         <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap">
                           <button
                             onClick={() => {
-                              const nuevo = prompt(
-                                `Nombre correcto del cliente para este abono (${pay.client_name}):`,
-                                pay.client_name
-                              );
-                              if (!nuevo || !nuevo.trim()) return;
-                              if (nuevo.trim().toUpperCase() === pay.client_name.trim().toUpperCase()) return;
+                              const nuevo = askNewClientName(pay.client_name);
+                              if (!nuevo) return;
                               StorageService.renameDebtPayment(pay.id, nuevo, appMode);
                               onDataChange();
                             }}

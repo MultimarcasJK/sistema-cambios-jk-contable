@@ -1590,6 +1590,35 @@ export const StorageService = {
     return updated;
   },
 
+  // Corrige el remitente de una remesa. La deuda fiada se recalcula sola en Deudores porque
+  // sale de remitente_name; el beneficiario se copia al remitente nuevo.
+  renameRemesaRemitente(id: string, newName: string, mode?: AppMode): Remesa | null {
+    const m = mode || this.getAppMode();
+    const remesa = this.getRemesas(m).find((r) => r.id === id);
+    const upperNew = newName.trim().toUpperCase();
+    if (!remesa || !upperNew) return null;
+    if (remesa.remitente_name.trim().toUpperCase() === upperNew) return remesa;
+    const { remitente } = this.saveRemitente({ name: upperNew }, remesa.beneficiario, m);
+    const updated: Remesa = {
+      ...remesa,
+      remitente_id: remitente.id,
+      remitente_name: remitente.name,
+      remitente_identification: remitente.identification,
+      remitente_phone: remitente.phone,
+    };
+    this.persistRemesa(updated, m);
+    if (remesa.fiado_usd) this.getDebtors(m);
+    AuditService.log({
+      mode: m,
+      action: 'editar',
+      entity: 'remesa',
+      entityId: id,
+      summary: `Remesa #${remesa.numero}: remitente cambiado de ${remesa.remitente_name} a ${remitente.name}`,
+      data: updated,
+    });
+    return updated;
+  },
+
   // Clients
   getClients(mode?: AppMode): Client[] {
     const m = mode || this.getAppMode();
@@ -2069,6 +2098,63 @@ export const StorageService = {
     }
     saveToStorage(this.getTransactionsMayorKey(m), all.filter((tx) => tx.id !== id));
     await SupabaseSyncService.deleteTransactionMayor(id, m).catch(() => {});
+  },
+
+  // Corrige el cliente de una venta sin anularla. Si quedó fiada, la deuda pasa al cliente nuevo;
+  // montos, tasas y cuentas no cambian.
+  renameTransactionDetal(id: string, newClientName: string, mode?: AppMode): TransactionDetal | null {
+    const m = mode || this.getAppMode();
+    const all = this.getTransactionsDetal(m);
+    const tx = all.find((t) => t.id === id);
+    const upperNew = newClientName.trim().toUpperCase();
+    if (!tx || !upperNew) return null;
+    if (tx.client_name.trim().toUpperCase() === upperNew) return tx;
+    const unpaid = Number(((tx.total_to_pay || 0) - (tx.amount_received || 0)).toFixed(2));
+    if (unpaid > 0) {
+      this.increaseClientDebt(tx.client_name, -unpaid, m);
+      this.increaseClientDebt(upperNew, unpaid, m);
+    }
+    const client = this.getClients(m).find((c) => c.name.trim().toUpperCase() === upperNew);
+    const updated: TransactionDetal = { ...tx, client_name: upperNew, client_id: client?.id };
+    saveToStorage(this.getTransactionsDetalKey(m), all.map((t) => (t.id === id ? updated : t)));
+    SupabaseSyncService.upsertTransactionDetal(updated, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'editar',
+      entity: 'venta_detal',
+      entityId: id,
+      summary: `Venta detal del ${tx.date} pasada de ${tx.client_name} a ${upperNew}`,
+      data: updated,
+    });
+    return updated;
+  },
+
+  renameTransactionMayor(id: string, newClientName: string, mode?: AppMode): TransactionMayor | null {
+    const m = mode || this.getAppMode();
+    const all = this.getTransactionsMayor(m);
+    const tx = all.find((t) => t.id === id);
+    const upperNew = newClientName.trim().toUpperCase();
+    if (!tx || !upperNew) return null;
+    if (tx.client_name.trim().toUpperCase() === upperNew) return tx;
+    const receivedAmt = tx.amount_received !== undefined ? tx.amount_received : 0;
+    const unpaid = Number(((tx.total_to_pay || 0) - receivedAmt).toFixed(2));
+    if (unpaid > 0) {
+      this.increaseClientDebt(tx.client_name, -unpaid, m);
+      this.increaseClientDebt(upperNew, unpaid, m);
+    }
+    const client = this.getClients(m).find((c) => c.name.trim().toUpperCase() === upperNew);
+    const updated: TransactionMayor = { ...tx, client_name: upperNew, client_id: client?.id };
+    saveToStorage(this.getTransactionsMayorKey(m), all.map((t) => (t.id === id ? updated : t)));
+    SupabaseSyncService.upsertTransactionMayor(updated, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'editar',
+      entity: 'venta_mayor',
+      entityId: id,
+      summary: `Venta mayor del ${tx.date} pasada de ${tx.client_name} a ${upperNew}`,
+      data: updated,
+    });
+    return updated;
   },
 
   // Transfers

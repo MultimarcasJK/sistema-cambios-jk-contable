@@ -124,3 +124,38 @@ describe('cambiar cliente de un abono', () => {
     expect(debtOf('LENNYRETH PEREZ')).toBe(0);
   });
 });
+
+describe('cambiar cliente de una venta', () => {
+  const debtOf = (name: string) =>
+    StorageService.getDebtors(MODE).find((d) => d.client_name.toUpperCase() === name)?.current_debt ?? 0;
+  const today = () => new Date().toISOString().slice(0, 10);
+
+  it('venta mayor fiada: la deuda pasa al cliente nuevo', () => {
+    const tx = StorageService.addTransactionMayor(
+      { date: today(), client_name: 'PEDRO', amount_ves: 100, total_to_pay: 50, amount_received: 20,
+        payment_status: 'PARCIAL', received_account_id: '', paid_account_id: '' } as any,
+      MODE
+    );
+    tick();
+    expect(debtOf('PEDRO')).toBe(30);
+    StorageService.renameTransactionMayor(tx.id, 'juan', MODE);
+    expect(debtOf('PEDRO')).toBe(0);
+    expect(debtOf('JUAN')).toBe(30);
+    const saved = StorageService.getTransactionsMayor(MODE).find((t) => t.id === tx.id)!;
+    expect(saved.client_name).toBe('JUAN');
+    expect(saved.amount_ves).toBe(100);
+  });
+
+  it('venta detal pagada: solo cambia el nombre', () => {
+    const tx = StorageService.addTransactionDetal(
+      { date: today(), client_name: 'PEDRO', usdt_amount: 10, total_to_pay: 10, amount_received: 10,
+        payment_status: 'PAGADO', received_account_id: '', paid_account_id: '' } as any,
+      MODE
+    );
+    tick();
+    StorageService.renameTransactionDetal(tx.id, 'JUAN', MODE);
+    expect(StorageService.getTransactionsDetal(MODE)[0].client_name).toBe('JUAN');
+    expect(debtOf('JUAN')).toBe(0);
+    expect(debtOf('PEDRO')).toBe(0);
+  });
+});

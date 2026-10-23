@@ -22,8 +22,10 @@ import {
   Coins,
   FileText,
   Trash2,
+  Pencil,
 } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
+import { askNewClientName } from '@/lib/rename-prompt';
 
 interface DebtorsProps {
   debtors: Debtor[];
@@ -634,7 +636,20 @@ export function DebtorsView({
                           ) : null}
                           <span className="italic">{pay.notes || '-'}</span>
                         </td>
-                        <td className="p-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                        <td className="p-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nuevo = askNewClientName(pay.client_name);
+                              if (!nuevo) return;
+                              StorageService.renameDebtPayment(pay.id, nuevo, appMode);
+                              onDataChange();
+                            }}
+                            title="Cambiar cliente del abono"
+                            className="p-1.5 mr-1 text-sky-600 hover:text-white hover:bg-sky-600 rounded-lg transition-all duration-150 shadow-sm border border-sky-200 hover:border-sky-600 inline-flex items-center justify-center cursor-pointer"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleDeletePayment(pay.id)}

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Account, AppMode, Beneficiario, Client, Remesa, RemesaEstado, RemesaMetodoPago, Supplier } from '@/types';
 import { StorageService } from '@/lib/storage';
+import { askNewClientName } from '@/lib/rename-prompt';
 import { newestFirst } from '@/lib/order';
 import { RatesService } from '@/lib/rates-service';
 import { COUNTRIES_LIST } from '@/lib/countries';
@@ -1195,6 +1196,19 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                           className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 font-semibold flex items-center gap-1"
                         >
                           <RotateCcw className="w-3.5 h-3.5" /> Revertir pago
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button
+                          onClick={() => {
+                            const nuevo = askNewClientName(r.remitente_name, 'remitente');
+                            if (!nuevo) return;
+                            StorageService.renameRemesaRemitente(r.id, nuevo, appMode);
+                            onDataChange();
+                          }}
+                          className="px-3 py-1.5 rounded-xl border border-sky-300 text-sky-700 font-semibold flex items-center gap-1"
+                        >
+                          <Pencil className="w-3.5 h-3.5" /> Cambiar remitente
                         </button>
                       )}
                       {canAct && isAdmin && (
