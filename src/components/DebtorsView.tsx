@@ -25,7 +25,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
-import { askNewClientName } from '@/lib/rename-prompt';
+import { askNewClientName, knownClientNames } from '@/lib/rename-prompt';
 
 interface DebtorsProps {
   debtors: Debtor[];
@@ -639,8 +639,8 @@ export function DebtorsView({
                         <td className="p-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap">
                           <button
                             type="button"
-                            onClick={() => {
-                              const nuevo = askNewClientName(pay.client_name);
+                            onClick={async () => {
+                              const nuevo = await askNewClientName(pay.client_name, knownClientNames(appMode));
                               if (!nuevo) return;
                               StorageService.renameDebtPayment(pay.id, nuevo, appMode);
                               onDataChange();

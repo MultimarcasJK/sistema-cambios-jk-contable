@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Account, AppMode, Beneficiario, Client, Remesa, RemesaEstado, RemesaMetodoPago, Supplier } from '@/types';
 import { StorageService } from '@/lib/storage';
-import { askNewClientName } from '@/lib/rename-prompt';
+import { askNewClientName, knownClientNames } from '@/lib/rename-prompt';
 import { newestFirst } from '@/lib/order';
 import { RatesService } from '@/lib/rates-service';
 import { COUNTRIES_LIST } from '@/lib/countries';
@@ -1200,8 +1200,8 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                       )}
                       {isAdmin && (
                         <button
-                          onClick={() => {
-                            const nuevo = askNewClientName(r.remitente_name, 'remitente');
+                          onClick={async () => {
+                            const nuevo = await askNewClientName(r.remitente_name, knownClientNames(appMode, true), 'remitente');
                             if (!nuevo) return;
                             StorageService.renameRemesaRemitente(r.id, nuevo, appMode);
                             onDataChange();

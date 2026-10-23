@@ -10,7 +10,7 @@ import { parseFormattedNumber, formatCurrency, formatRateDisplay, formatInputNum
 import { Coins, Search, CheckCircle, Trash2, Pencil, ArrowDownLeft, Sparkles, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { localDateStr } from '@/lib/dates';
-import { askNewClientName } from '@/lib/rename-prompt';
+import { askNewClientName, knownClientNames } from '@/lib/rename-prompt';
 
 interface DetalProps {
   accounts: Account[];
@@ -923,8 +923,8 @@ export function DetalView({
                         {isAdmin && (
                           <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap">
                             <button
-                              onClick={() => {
-                                const nuevo = askNewClientName(tx.client_name);
+                              onClick={async () => {
+                                const nuevo = await askNewClientName(tx.client_name, knownClientNames(appMode));
                                 if (!nuevo) return;
                                 StorageService.renameTransactionDetal(tx.id, nuevo, appMode);
                                 onDataChange();
@@ -991,8 +991,8 @@ export function DetalView({
                       {isAdmin && (
                         <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap">
                           <button
-                            onClick={() => {
-                              const nuevo = askNewClientName(pay.client_name);
+                            onClick={async () => {
+                              const nuevo = await askNewClientName(pay.client_name, knownClientNames(appMode));
                               if (!nuevo) return;
                               StorageService.renameDebtPayment(pay.id, nuevo, appMode);
                               onDataChange();
