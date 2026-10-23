@@ -98,3 +98,16 @@ describe('remesas fiadas', () => {
     expect(() => nuevaRemesa(200)).toThrow();
   });
 });
+
+describe('cambiar remitente de una remesa', () => {
+  it('la deuda fiada pasa al remitente nuevo y el saldo no cambia', () => {
+    const r = nuevaRemesa(30);
+    StorageService.renameRemesaRemitente(r.id, 'ana perez', MODE);
+    const saved = StorageService.getRemesas(MODE).find((x) => x.id === r.id)!;
+    expect(saved.remitente_name).toBe('ANA PEREZ');
+    expect(saved.remitente_id).not.toBe('rem-1');
+    expect(deuda() ?? 0).toBe(0);
+    expect(StorageService.getDebtors(MODE).find((d) => d.client_name === 'ANA PEREZ')?.current_debt).toBe(30);
+    expect(balance()).toBe(1075);
+  });
+});
