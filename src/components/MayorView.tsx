@@ -13,7 +13,7 @@ import { TrendingUp, Search, CheckCircle, Trash2, Pencil, ArrowDownLeft, Sparkle
 import { useAuth } from '@/lib/auth-context';
 import { localDateStr } from '@/lib/dates';
 import { commissionInAccountCurrency, commissionOutOfAccount } from '@/lib/commission';
-import { askNewClientName, knownClientNames } from '@/components/RenameClientPicker';
+import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
 
 interface MayorProps {
   accounts: Account[];
@@ -90,6 +90,8 @@ export function MayorView({
   });
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterPaidAcc, setFilterPaidAcc] = useState('');
+  const [filterRecvAcc, setFilterRecvAcc] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [isAbonoModalOpen, setIsAbonoModalOpen] = useState(false);
   const [feeMode, setFeeMode] = useState<'fixed' | 'percent'>('fixed');
@@ -346,9 +348,16 @@ export function MayorView({
         ('reference' in item.data && item.data.reference?.toLowerCase().includes(search)) ||
         ('notes' in item.data && item.data.notes?.toLowerCase().includes(search));
       const matchDate = filterDate ? item.date === filterDate : true;
-      return matchSearch && matchDate;
+      // Las filas de abono no tienen cuenta de salida; su "recibido por" es la cuenta del abono
+      const matchPaid = filterPaidAcc
+        ? item.type === 'tx' && item.data.paid_account_id === filterPaidAcc
+        : true;
+      const recvId =
+        item.type === 'tx' ? item.data.received_account_id || 'POR_COBRAR' : item.data.account_id || '';
+      const matchRecv = filterRecvAcc ? recvId === filterRecvAcc : true;
+      return matchSearch && matchDate && matchPaid && matchRecv;
     });
-  }, [mayorTxs, allPayments, searchTerm, filterDate]);
+  }, [mayorTxs, allPayments, searchTerm, filterDate, filterPaidAcc, filterRecvAcc]);
 
   const filteredTxs = useMemo(() => {
     return mayorTxs.filter((tx) => {
@@ -356,9 +365,11 @@ export function MayorView({
         tx.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (tx.reference && tx.reference.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchDate = filterDate ? tx.date === filterDate : true;
-      return matchSearch && matchDate;
+      const matchPaid = filterPaidAcc ? tx.paid_account_id === filterPaidAcc : true;
+      const matchRecv = filterRecvAcc ? (tx.received_account_id || 'POR_COBRAR') === filterRecvAcc : true;
+      return matchSearch && matchDate && matchPaid && matchRecv;
     });
-  }, [mayorTxs, searchTerm, filterDate]);
+  }, [mayorTxs, searchTerm, filterDate, filterPaidAcc, filterRecvAcc]);
 
   const totalVolumeVes = useMemo(() => {
     return filteredTxs.reduce((sum, tx) => sum + tx.amount_ves, 0);
@@ -868,7 +879,7 @@ export function MayorView({
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <input
@@ -879,15 +890,46 @@ export function MayorView({
                 className="pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
+            <select
+              value={filterPaidAcc}
+              onChange={(e) => setFilterPaidAcc(e.target.value)}
+              title="Filtrar por cuenta de salida"
+              className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg max-w-[150px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Cuenta salida: todas</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name || a.bank_name} · {a.currency}
+                </option>
+              ))}
+            </select>
+            <select
+              value={filterRecvAcc}
+              onChange={(e) => setFilterRecvAcc(e.target.value)}
+              title="Filtrar por cuenta donde se recibió"
+              className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg max-w-[150px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Recibido por: todas</option>
+              <option value="POR_COBRAR">Por Cobrar</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name || a.bank_name} · {a.currency}
+                </option>
+              ))}
+            </select>
             <input
               type="date"
               value={filterDate}
               onChange={(e) => setFilterDate(e.target.value)}
               className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
-            {filterDate && (
+            {(filterDate || filterPaidAcc || filterRecvAcc) && (
               <button
-                onClick={() => setFilterDate('')}
+                onClick={() => {
+                  setFilterDate('');
+                  setFilterPaidAcc('');
+                  setFilterRecvAcc('');
+                }}
                 className="text-xs text-blue-600 hover:underline cursor-pointer"
               >
                 Limpiar
@@ -1045,12 +1087,38 @@ export function MayorView({
                           <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap">
                             <button
                               onClick={async () => {
-                                const nuevo = await askNewClientName(tx.client_name, knownClientNames(appMode));
-                                if (!nuevo) return;
-                                StorageService.renameTransactionMayor(tx.id, nuevo, appMode);
-                                onDataChange();
+                                const ch = await openEditRecord({
+                                  title: 'Editar venta',
+                                  nameLabel: 'Cliente',
+                                  currentName: tx.client_name,
+                                  nameOptions: knownClientNames(appMode),
+                                  accounts: accounts,
+                                  accountFields: [
+                                    { key: 'paid_account_id', label: 'Cuenta de Salida', current: tx.paid_account_id },
+                                    {
+                                      key: 'received_account_id',
+                                      label: 'Recibido Por',
+                                      current: tx.received_account_id,
+                                      lockedReason:
+                                        !tx.received_account_id || tx.received_account_id === 'POR_COBRAR'
+                                          ? 'Por Cobrar: registra un abono para cobrarla.'
+                                          : undefined,
+                                    },
+                                  ],
+                                });
+                                if (!ch) return;
+                                if (
+                                  runEdit(() =>
+                                    StorageService.editTransactionMayor(
+                                      tx.id,
+                                      { client_name: ch.name, paid_account_id: ch.paid_account_id, received_account_id: ch.received_account_id },
+                                      appMode
+                                    )
+                                  )
+                                )
+                                  onDataChange();
                               }}
-                              title="Cambiar cliente de la venta"
+                              title="Editar venta (cliente y cuentas)"
                               className="p-1.5 mr-1 bg-sky-50 hover:bg-sky-100 text-sky-600 hover:text-sky-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
                             >
                               <Pencil className="w-4 h-4 text-sky-600" />
@@ -1116,12 +1184,19 @@ export function MayorView({
                         <td className="py-2.5 px-3 text-center font-sans sticky right-0 bg-white group-hover:bg-slate-50 z-10 border-l border-slate-100 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap">
                           <button
                             onClick={async () => {
-                              const nuevo = await askNewClientName(pay.client_name, knownClientNames(appMode));
-                              if (!nuevo) return;
-                              StorageService.renameDebtPayment(pay.id, nuevo, appMode);
-                              onDataChange();
+                              const ch = await openEditRecord({
+                                title: 'Editar abono',
+                                nameLabel: 'Cliente',
+                                currentName: pay.client_name,
+                                nameOptions: knownClientNames(appMode),
+                                accounts: accounts,
+                                accountFields: [{ key: 'account_id', label: 'Cuenta donde entró', current: pay.account_id }],
+                              });
+                              if (!ch) return;
+                              if (runEdit(() => StorageService.editDebtPayment(pay.id, { client_name: ch.name, account_id: ch.account_id }, appMode)))
+                                onDataChange();
                             }}
-                            title="Cambiar cliente del abono"
+                            title="Editar abono (cliente y cuenta)"
                             className="p-1.5 mr-1 bg-sky-50 hover:bg-sky-100 text-sky-600 hover:text-sky-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
                           >
                             <Pencil className="w-4 h-4 text-sky-600" />

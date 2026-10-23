@@ -25,7 +25,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
-import { askNewClientName, knownClientNames } from '@/components/RenameClientPicker';
+import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
 
 interface DebtorsProps {
   debtors: Debtor[];
@@ -640,12 +640,19 @@ export function DebtorsView({
                           <button
                             type="button"
                             onClick={async () => {
-                              const nuevo = await askNewClientName(pay.client_name, knownClientNames(appMode));
-                              if (!nuevo) return;
-                              StorageService.renameDebtPayment(pay.id, nuevo, appMode);
-                              onDataChange();
+                              const ch = await openEditRecord({
+                                title: 'Editar abono',
+                                nameLabel: 'Cliente',
+                                currentName: pay.client_name,
+                                nameOptions: knownClientNames(appMode),
+                                accounts: accounts || [],
+                                accountFields: [{ key: 'account_id', label: 'Cuenta donde entró', current: pay.account_id }],
+                              });
+                              if (!ch) return;
+                              if (runEdit(() => StorageService.editDebtPayment(pay.id, { client_name: ch.name, account_id: ch.account_id }, appMode)))
+                                onDataChange();
                             }}
-                            title="Cambiar cliente del abono"
+                            title="Editar abono (cliente y cuenta)"
                             className="p-1.5 mr-1 text-sky-600 hover:text-white hover:bg-sky-600 rounded-lg transition-all duration-150 shadow-sm border border-sky-200 hover:border-sky-600 inline-flex items-center justify-center cursor-pointer"
                           >
                             <Pencil className="w-3.5 h-3.5" />

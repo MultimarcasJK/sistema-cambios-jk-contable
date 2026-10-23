@@ -111,3 +111,19 @@ describe('cambiar remitente de una remesa', () => {
     expect(balance()).toBe(1075);
   });
 });
+
+describe('editar cuenta de cobro de una remesa', () => {
+  it('mueve lo cobrado (sin lo fiado) a la cuenta nueva', () => {
+    const accs = StorageService.getAccounts(MODE);
+    localStorage.setItem(
+      StorageService.getAccountsKey(MODE),
+      JSON.stringify([...accs, { ...accs[0], id: 'acc-usd-2', name: 'BINANCE', current_balance: 0 }])
+    );
+    const r = nuevaRemesa(30);
+    expect(balance()).toBe(1075);
+    StorageService.editRemesa(r.id, { cuenta_cobro_id: 'acc-usd-2' }, MODE);
+    expect(balance()).toBe(1000);
+    expect(StorageService.getAccounts(MODE).find((a) => a.id === 'acc-usd-2')!.current_balance).toBe(75);
+    expect(StorageService.getRemesas(MODE).find((x) => x.id === r.id)!.cuenta_cobro_id).toBe('acc-usd-2');
+  });
+});
