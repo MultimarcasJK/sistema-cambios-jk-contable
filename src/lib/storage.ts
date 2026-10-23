@@ -1619,6 +1619,54 @@ export const StorageService = {
     return updated;
   },
 
+  editRemesa(
+    id: string,
+    changes: { remitente_name?: string; cuenta_cobro_id?: string; cuenta_pago_id?: string },
+    mode?: AppMode
+  ): Remesa | null {
+    const m = mode || this.getAppMode();
+    let remesa = this.getRemesas(m).find((r) => r.id === id);
+    if (!remesa) return null;
+    const cobroChanged = !!changes.cuenta_cobro_id && changes.cuenta_cobro_id !== remesa.cuenta_cobro_id;
+    const pagoChanged =
+      !!changes.cuenta_pago_id &&
+      changes.cuenta_pago_id !== remesa.cuenta_pago_id &&
+      remesa.estado === 'pagada' &&
+      remesa.metodo_pago === 'cuenta_propia';
+    if (cobroChanged || pagoChanged) {
+      this.assertDayOpen(remesa.date, m, 'cambiar la cuenta de una remesa');
+      if (cobroChanged && remesa.estado !== 'anulada') {
+        const caja = remesa.total_cobrado - (remesa.monto_fiado || 0);
+        this.moveAccountEffect(remesa.cuenta_cobro_id, changes.cuenta_cobro_id!, caja, m);
+      } else if (cobroChanged) {
+        this.moveAccountEffect(remesa.cuenta_cobro_id, changes.cuenta_cobro_id!, 0, m);
+      }
+      if (pagoChanged) {
+        this.moveAccountEffect(remesa.cuenta_pago_id, changes.cuenta_pago_id!, -remesa.monto_pago, m);
+      }
+      const updated: Remesa = {
+        ...remesa,
+        cuenta_cobro_id: cobroChanged ? changes.cuenta_cobro_id! : remesa.cuenta_cobro_id,
+        cuenta_pago_id: pagoChanged ? changes.cuenta_pago_id : remesa.cuenta_pago_id,
+      };
+      this.persistRemesa(updated, m);
+      AuditService.log({
+        mode: m,
+        action: 'editar',
+        entity: 'remesa',
+        entityId: id,
+        summary: `Remesa #${remesa.numero}: cuentas cambiadas`,
+        data: {
+          antes: { cobro: remesa.cuenta_cobro_id, pago: remesa.cuenta_pago_id },
+          despues: { cobro: updated.cuenta_cobro_id, pago: updated.cuenta_pago_id },
+        },
+      });
+      remesa = updated;
+    }
+    if (changes.remitente_name) remesa = this.renameRemesaRemitente(id, changes.remitente_name, m) || remesa;
+    return remesa;
+  },
+
   // Clients
   getClients(mode?: AppMode): Client[] {
     const m = mode || this.getAppMode();
@@ -2155,6 +2203,117 @@ export const StorageService = {
       data: updated,
     });
     return updated;
+  },
+
+  // Cambia la cuenta de un registro sin tocar el monto: lo que se aplicó en la cuenta vieja
+  // (applied, con su signo) se devuelve y se aplica igual en la nueva. Solo entre cuentas de
+  // la misma moneda, para que ningún número cambie.
+  moveAccountEffect(oldId: string | undefined, newId: string, applied: number, mode: AppMode): void {
+    if (!newId || oldId === newId) return;
+    const accounts = this.getAccounts(mode);
+    const oldAcc = accounts.find((a) => a.id === oldId);
+    const newAcc = accounts.find((a) => a.id === newId);
+    if (!newAcc) throw new Error('La cuenta nueva no existe.');
+    if (oldAcc && oldAcc.currency !== newAcc.currency) {
+      throw new Error(`La cuenta nueva debe ser en ${oldAcc.currency}, igual que la anterior.`);
+    }
+    if (!applied) return;
+    if (oldAcc) this.updateAccountBalance(oldAcc.id, -applied, mode);
+    this.updateAccountBalance(newAcc.id, applied, mode);
+  },
+
+  editTransactionDetal(
+    id: string,
+    changes: { client_name?: string; paid_account_id?: string; received_account_id?: string },
+    mode?: AppMode
+  ): TransactionDetal | null {
+    const m = mode || this.getAppMode();
+    let tx = this.getTransactionsDetal(m).find((t) => t.id === id);
+    if (!tx) return null;
+    const paidChanged = !!changes.paid_account_id && changes.paid_account_id !== tx.paid_account_id;
+    const recvChanged = !!changes.received_account_id && changes.received_account_id !== tx.received_account_id;
+    if (recvChanged && (!tx.received_account_id || tx.received_account_id === 'POR_COBRAR')) {
+      throw new Error('Esta venta está Por Cobrar: registra un abono en vez de cambiar la cuenta.');
+    }
+    if (paidChanged || recvChanged) this.assertDayOpen(tx.date, m, 'cambiar la cuenta de una venta');
+    if (paidChanged) {
+      const out = tx.usdt_amount > 0 ? tx.usdt_amount + (tx.bank_fee || 0) : 0;
+      this.moveAccountEffect(tx.paid_account_id, changes.paid_account_id!, -out, m);
+    }
+    if (recvChanged) {
+      this.moveAccountEffect(tx.received_account_id, changes.received_account_id!, tx.amount_received > 0 ? tx.amount_received : 0, m);
+    }
+    if (paidChanged || recvChanged) {
+      const updated: TransactionDetal = {
+        ...tx,
+        paid_account_id: paidChanged ? changes.paid_account_id! : tx.paid_account_id,
+        received_account_id: recvChanged ? changes.received_account_id! : tx.received_account_id,
+      };
+      saveToStorage(
+        this.getTransactionsDetalKey(m),
+        this.getTransactionsDetal(m).map((t) => (t.id === id ? updated : t))
+      );
+      SupabaseSyncService.upsertTransactionDetal(updated, m).catch(() => {});
+      AuditService.log({
+        mode: m,
+        action: 'editar',
+        entity: 'venta_detal',
+        entityId: id,
+        summary: `Venta detal del ${tx.date}: cuentas cambiadas`,
+        data: { antes: { paid: tx.paid_account_id, recv: tx.received_account_id }, despues: { paid: updated.paid_account_id, recv: updated.received_account_id } },
+      });
+      tx = updated;
+    }
+    if (changes.client_name) tx = this.renameTransactionDetal(id, changes.client_name, m) || tx;
+    return tx;
+  },
+
+  editTransactionMayor(
+    id: string,
+    changes: { client_name?: string; paid_account_id?: string; received_account_id?: string },
+    mode?: AppMode
+  ): TransactionMayor | null {
+    const m = mode || this.getAppMode();
+    let tx = this.getTransactionsMayor(m).find((t) => t.id === id);
+    if (!tx) return null;
+    const paidChanged = !!changes.paid_account_id && changes.paid_account_id !== tx.paid_account_id;
+    const recvChanged = !!changes.received_account_id && changes.received_account_id !== tx.received_account_id;
+    if (recvChanged && (!tx.received_account_id || tx.received_account_id === 'POR_COBRAR')) {
+      throw new Error('Esta venta está Por Cobrar: registra un abono en vez de cambiar la cuenta.');
+    }
+    if (paidChanged || recvChanged) this.assertDayOpen(tx.date, m, 'cambiar la cuenta de una venta');
+    if (paidChanged) {
+      const paidAcc = this.getAccounts(m).find((a) => a.id === tx!.paid_account_id);
+      const out = tx.amount_ves > 0 ? tx.amount_ves + commissionOutOfAccount(tx, paidAcc?.currency) : 0;
+      this.moveAccountEffect(tx.paid_account_id, changes.paid_account_id!, -out, m);
+    }
+    if (recvChanged) {
+      const receivedAmt = tx.amount_received !== undefined ? tx.amount_received : 0;
+      this.moveAccountEffect(tx.received_account_id, changes.received_account_id!, receivedAmt > 0 ? receivedAmt : 0, m);
+    }
+    if (paidChanged || recvChanged) {
+      const updated: TransactionMayor = {
+        ...tx,
+        paid_account_id: paidChanged ? changes.paid_account_id! : tx.paid_account_id,
+        received_account_id: recvChanged ? changes.received_account_id! : tx.received_account_id,
+      };
+      saveToStorage(
+        this.getTransactionsMayorKey(m),
+        this.getTransactionsMayor(m).map((t) => (t.id === id ? updated : t))
+      );
+      SupabaseSyncService.upsertTransactionMayor(updated, m).catch(() => {});
+      AuditService.log({
+        mode: m,
+        action: 'editar',
+        entity: 'venta_mayor',
+        entityId: id,
+        summary: `Venta mayor del ${tx.date}: cuentas cambiadas`,
+        data: { antes: { paid: tx.paid_account_id, recv: tx.received_account_id }, despues: { paid: updated.paid_account_id, recv: updated.received_account_id } },
+      });
+      tx = updated;
+    }
+    if (changes.client_name) tx = this.renameTransactionMayor(id, changes.client_name, m) || tx;
+    return tx;
   },
 
   // Transfers
@@ -2808,6 +2967,38 @@ export const StorageService = {
       data: updated,
     });
     return updated;
+  },
+
+  editDebtPayment(
+    id: string,
+    changes: { client_name?: string; account_id?: string },
+    mode?: AppMode
+  ): DebtPayment | null {
+    const m = mode || this.getAppMode();
+    let pay = this.getDebtPayments(m).find((p) => p.id === id);
+    if (!pay) return null;
+    if (changes.account_id && changes.account_id !== pay.account_id) {
+      this.assertDayOpen(pay.date, m, 'cambiar la cuenta de un abono');
+      const credited = pay.amount_currency && pay.amount_currency > 0 ? pay.amount_currency : pay.amount;
+      this.moveAccountEffect(pay.account_id, changes.account_id, credited > 0 ? credited : 0, m);
+      const updated: DebtPayment = { ...pay, account_id: changes.account_id };
+      saveToStorage(
+        this.getDebtPaymentsKey(m),
+        this.getDebtPayments(m).map((p) => (p.id === id ? updated : p))
+      );
+      pushDebtPayment(updated, m);
+      AuditService.log({
+        mode: m,
+        action: 'editar',
+        entity: 'abono_cliente',
+        entityId: id,
+        summary: `Abono de ${pay.client_name}: cuenta cambiada`,
+        data: { antes: pay.account_id, despues: changes.account_id },
+      });
+      pay = updated;
+    }
+    if (changes.client_name) pay = this.renameDebtPayment(id, changes.client_name, m) || pay;
+    return pay;
   },
 
   async deleteDebtPayment(id: string, mode?: AppMode): Promise<void> {
