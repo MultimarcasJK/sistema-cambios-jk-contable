@@ -258,3 +258,22 @@ describe('historial de la deuda anotada a mano', () => {
     expect(getManualEntries(d.notes)[0].at).toBeTruthy();
   });
 });
+
+describe('teléfonos que repiten el nombre', () => {
+  it('no se muestran en clientes ni en deudores', () => {
+    localStorage.setItem(
+      StorageService.getClientsKey(MODE),
+      JSON.stringify([
+        { id: 'c1', name: 'ALI UZ', phone: 'ALI UZ' },
+        { id: 'c2', name: 'ANA', phone: '0414-1234567' },
+      ])
+    );
+    const clients = StorageService.getClients(MODE);
+    expect(clients.find((c) => c.id === 'c1')?.phone).toBe('');
+    expect(clients.find((c) => c.id === 'c2')?.phone).toBe('0414-1234567');
+
+    StorageService.addDebtor({ client_name: 'Pedro', current_debt: 5, phone: 'pedro ' }, MODE);
+    tick();
+    expect(StorageService.getDebtors(MODE).find((d) => d.client_name === 'PEDRO')?.phone).toBeUndefined();
+  });
+});
