@@ -182,6 +182,12 @@ function pushDebtPayment(payment: DebtPayment, mode: AppMode): void {
 
 // Lápidas de deudores: propias de cada modo, con fecha y sin límite de tamaño, para que
 // un borrado no se pierda cuando la lista genérica de IDs borrados supera 500 entradas.
+// Hubo clientes guardados con su propio nombre en el campo teléfono (ej. "ALI UZ" → "ALI UZ")
+export function isPhoneJustName(phone?: string | null, name?: string | null): boolean {
+  const p = (phone || '').trim().toUpperCase();
+  return p !== '' && p === (name || '').trim().toUpperCase();
+}
+
 function getDebtorTombstonesKey(mode: AppMode): string {
   return 'cambiosjk_' + mode + '_debtor_tombstones_v1';
 }
@@ -686,6 +692,12 @@ export const StorageService = {
             return false;
           }
           return true;
+        }).map((c) => {
+          // Limpieza: teléfonos que solo repiten el nombre del cliente se borran también en Supabase
+          if (!c || !isPhoneJustName(c.phone, c.name)) return c;
+          const cleaned = { ...c, phone: '' };
+          SupabaseSyncService.upsertClient(cleaned, m).catch(() => {});
+          return cleaned;
         });
 
         const local = this.getClients(m);
@@ -1732,7 +1744,9 @@ export const StorageService = {
       const item = localStorage.getItem(key);
       if (item !== null) {
         try {
-          const list: Client[] = JSON.parse(item) || [];
+          const list: Client[] = (JSON.parse(item) || []).map((c: Client) =>
+            c && isPhoneJustName(c.phone, c.name) ? { ...c, phone: '' } : c
+          );
           return list.sort((a, b) =>
             (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' })
           );
@@ -2766,7 +2780,7 @@ export const StorageService = {
           const newClient: Client = {
             id: 'cli-deb-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
             name: d.client_name.trim(),
-            phone: d.phone || '',
+            phone: isPhoneJustName(d.phone, d.client_name) ? '' : d.phone || '',
             current_debt: d.current_debt || 0,
             created_at: new Date().toISOString(),
           };
@@ -2782,6 +2796,7 @@ export const StorageService = {
 
     return debtors.map((d) => ({
       ...d,
+      phone: isPhoneJustName(d.phone, d.client_name) ? undefined : d.phone,
       notes: d.notes ? d.notes.replace(/\bdetal\b/gi, '').replace(/\s+/g, ' ').trim() : d.notes,
     })).sort((a, b) =>
       (a.client_name || '').localeCompare(b.client_name || '', 'es', { sensitivity: 'base' })
