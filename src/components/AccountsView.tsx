@@ -9,7 +9,7 @@ import { INITIAL_ACCOUNTS_MAYOR } from '@/lib/initial-data';
 import { ManageCurrenciesModal } from './ManageCurrenciesModal';
 import { AccountStatementModal } from './AccountStatementModal';
 import { EditAccountModal } from './EditAccountModal';
-import { Wallet, Plus, Edit2, Trash2, CheckCircle, RefreshCw, Landmark, Coins, ArrowLeft, ChevronRight, Globe, FileText, GripVertical } from 'lucide-react';
+import { Wallet, Plus, Edit2, Trash2, CheckCircle, RefreshCw, Landmark, Coins, ArrowLeft, ChevronRight, Globe, FileText, GripVertical, Search } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
 interface AccountsProps {
@@ -23,6 +23,7 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [selectedCurrency, setSelectedCurrency] = useState<string>('ALL');
   const [isAddingAccount, setIsAddingAccount] = useState(false);
+  const [accountSearch, setAccountSearch] = useState('');
   const [isManagingCurrencies, setIsManagingCurrencies] = useState(false);
   const [statementAccount, setStatementAccount] = useState<Account | null>(null);
   const [isStatementOpen, setIsStatementOpen] = useState(false);
@@ -279,11 +280,14 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
 
   // Cuentas filtradas por moneda dentro del país (o global)
   const displayedAccounts = useMemo(() => {
+    const q = accountSearch.trim().toUpperCase();
     return accountsInActiveCountry.filter((a) => {
-      if (selectedCurrency === 'ALL') return true;
-      return a.currency === selectedCurrency;
+      if (selectedCurrency !== 'ALL' && a.currency !== selectedCurrency) return false;
+      if (!q) return true;
+      return [a.name, a.bank_name, a.responsible, a.account_number]
+        .some((v) => (v || '').toUpperCase().includes(q));
     });
-  }, [accountsInActiveCountry, selectedCurrency]);
+  }, [accountsInActiveCountry, selectedCurrency, accountSearch]);
 
   // Monedas presentes en el país seleccionado
   const currencyFilterOptions = useMemo(() => {
@@ -512,6 +516,7 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                   type="button"
                   onClick={() => {
                     setSelectedCountry(country.id);
+                    setAccountSearch('');
                     setSelectedCurrency('ALL');
                   }}
                   className={`group text-left p-4 rounded-2xl border transition-all duration-150 flex flex-col justify-between cursor-pointer ${
@@ -599,6 +604,7 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                 onClick={() => {
                   setSelectedCountry(null);
                   setSelectedCurrency('ALL');
+                  setAccountSearch('');
                 }}
                 className="flex items-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3.5 py-2 rounded-xl text-xs transition cursor-pointer"
                 title="Regresar a la selección de países"
@@ -659,14 +665,26 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                 </div>
               )}
 
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={accountSearch}
+                  onChange={(e) => setAccountSearch(e.target.value)}
+                  placeholder="Buscar cuenta..."
+                  className="w-44 pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
               {isAdmin && (
                 <button
                   type="button"
                   onClick={() => handleOpenAddAccount(selectedCountry)}
-                  className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer"
+                  title={`Nueva cuenta en ${activeCountryInfo?.name || ''}`}
+                  className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>+ Nueva Cuenta en {activeCountryInfo?.name}</span>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Nueva cuenta</span>
                 </button>
               )}
             </div>
@@ -777,7 +795,11 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
           )}
 
           {/* Grid de Cuentas del País */}
-          {displayedAccounts.length === 0 ? (
+          {displayedAccounts.length === 0 && accountSearch.trim() ? (
+            <div className="bg-white p-8 text-center rounded-2xl border border-dashed border-slate-300 text-xs text-slate-500">
+              Ninguna cuenta coincide con &quot;{accountSearch.trim()}&quot;.
+            </div>
+          ) : displayedAccounts.length === 0 ? (
             <div className="bg-white p-12 text-center rounded-2xl border border-dashed border-slate-300 space-y-3">
               <div className="flex justify-center">
                 {activeCountryInfo?.iso2 ? (
