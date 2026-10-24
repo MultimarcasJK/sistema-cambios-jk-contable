@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Account } from '@/types';
 
 vi.mock('../src/lib/supabase-sync', () => {
@@ -17,11 +17,27 @@ const acc = (id: string, currency: string) =>
 const bal = (id: string) => StorageService.getAccounts(MODE).find((a) => a.id === id)!;
 const today = () => new Date().toISOString().slice(0, 10);
 
+// Los ids usan Date.now(): cada registro en su propio milisegundo, como en el uso real
+let clock = new Date('2026-10-23T15:00:00Z').getTime();
+const realAddExpense = StorageService.addExpense.bind(StorageService);
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(clock);
+  vi.spyOn(StorageService, 'addExpense').mockImplementation((e: any, m?: any) => {
+    clock += 1000;
+    vi.setSystemTime(clock);
+    return realAddExpense(e, m);
+  });
   localStorage.clear();
   setActor({ id: 'u1', email: 'admin@test', rol: 'ADMIN' });
   localStorage.setItem(StorageService.getAccountsKey(MODE), JSON.stringify([acc('VES1', 'VES'), acc('USD1', 'USD')]));
   localStorage.setItem(StorageService.getAccountsKey('detal'), JSON.stringify([]));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe('aperturas y restaurar saldos', () => {
