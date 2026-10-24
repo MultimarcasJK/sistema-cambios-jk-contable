@@ -205,3 +205,37 @@ describe('sincronización con Supabase', () => {
     expect(names()).not.toContain('LUIS');
   });
 });
+
+describe('deuda anotada a mano', () => {
+  const debtOf = (name: string) =>
+    StorageService.getDebtors(MODE).find((d) => d.client_name === name)?.current_debt;
+
+  it('no se borra al recalcular si el cliente ya tiene ventas a crédito', () => {
+    addCreditSale('NEUDY', 30);
+    tick();
+    expect(debtOf('NEUDY')).toBe(30);
+    StorageService.addManualDebt({ client_name: 'Neudy', amount: 100 }, MODE);
+    tick();
+    expect(debtOf('NEUDY')).toBe(130);
+    // Lecturas siguientes (recalculan) la mantienen
+    expect(debtOf('NEUDY')).toBe(130);
+    addCreditSale('NEUDY', 20);
+    tick();
+    expect(debtOf('NEUDY')).toBe(150);
+  });
+
+  it('se acumula si se anota dos veces y se descuenta con abonos', () => {
+    StorageService.addManualDebt({ client_name: 'Neudy', amount: 100 }, MODE);
+    tick();
+    StorageService.addManualDebt({ client_name: 'Neudy', amount: 50 }, MODE);
+    tick();
+    expect(debtOf('NEUDY')).toBe(150);
+    StorageService.addDebtPayment(
+      { debtor_id: '', client_name: 'NEUDY', date: '2026-10-01', amount: 40 } as any,
+      MODE
+    );
+    tick();
+    expect(debtOf('NEUDY')).toBe(110);
+    expect(debtOf('NEUDY')).toBe(110);
+  });
+});

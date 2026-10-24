@@ -163,3 +163,24 @@ export function enqueueDebtorOp(queue: DebtorOutboxEntry[], entry: DebtorOutboxO
 export function pendingUpsertIds(queue: DebtorOutboxEntry[], mode: AppMode): Set<string> {
   return new Set(queue.filter((q) => q.mode === mode && q.op === 'upsert').map((q) => q.id));
 }
+
+// Deuda anotada a mano en Deudores ("Agregar Cliente / Deuda"). Se guarda dentro de las notas
+// como [MANUAL:x] para que viaje a Supabase sin cambiar la tabla, y se suma al recalcular la
+// deuda desde ventas, remesas y abonos (si no, el recálculo la borraba).
+const MANUAL_TAG = /\s*\[MANUAL:(-?\d+(?:\.\d+)?)\]/;
+
+export function getManualDebt(notes?: string | null): number {
+  const m = (notes || '').match(MANUAL_TAG);
+  return m ? Number(m[1]) || 0 : 0;
+}
+
+export function stripManualTag(notes?: string | null): string {
+  return (notes || '').replace(MANUAL_TAG, '').trim();
+}
+
+export function withManualDebt(notes: string | undefined | null, amount: number): string {
+  const base = stripManualTag(notes);
+  const rounded = Number(amount.toFixed(2));
+  if (rounded === 0) return base;
+  return (base ? base + ' ' : '') + '[MANUAL:' + rounded + ']';
+}

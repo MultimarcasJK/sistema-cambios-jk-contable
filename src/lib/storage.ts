@@ -54,6 +54,8 @@ import {
   lastActivityByName,
   mergeRemoteDebtors,
   normalizeDebtorName,
+  getManualDebt,
+  withManualDebt,
   pendingUpsertIds,
 } from './debtor-sync';
 import { localDateStr } from './dates';
@@ -443,7 +445,7 @@ export const StorageService = {
       const curDebtors = getFromStorage<Debtor[]>(this.getDebtorsKey('detal'), []);
       const cleaned = curDebtors.filter((d) => {
         if (!d) return false;
-        const isAuto = Boolean(d.id?.startsWith('deb-auto-') || (d.notes && d.notes.toLowerCase().includes('sincronizado de operaciones')));
+        const isAuto = getManualDebt(d.notes) === 0 && Boolean(d.id?.startsWith('deb-auto-') || (d.notes && d.notes.toLowerCase().includes('sincronizado de operaciones')));
         if (isAuto && !activeClients.has((d.client_name || '').trim().toUpperCase())) {
           recordDebtorDeletion('detal', d.id);
           queueDebtorRemote({ op: 'delete', mode: 'detal', id: d.id });
@@ -2673,7 +2675,8 @@ export const StorageService = {
       );
 
       // Saldo neto: > 0 = Deuda por cobrar (cliente debe); < 0 = Saldo a Favor (crédito del cliente)
-      const calculatedNetDebt = Number((st.totalBought - st.totalPaidInTx - clientAbonos).toFixed(2));
+      const manualDebt = existingIndex === -1 ? 0 : getManualDebt(debtors[existingIndex].notes);
+      const calculatedNetDebt = Number((st.totalBought - st.totalPaidInTx - clientAbonos + manualDebt).toFixed(2));
       const hasActivity = st.totalBought > 0 || clientAbonos > 0;
 
       if (existingIndex === -1) {
@@ -2707,7 +2710,7 @@ export const StorageService = {
     const orphanedIds: string[] = [];
     const filteredDebtors = debtors.filter((d) => {
       if (!d) return false;
-      const isAuto = Boolean(d.id?.startsWith('deb-auto-') || (d.notes && d.notes.toLowerCase().includes('sincronizado de operaciones')));
+      const isAuto = getManualDebt(d.notes) === 0 && Boolean(d.id?.startsWith('deb-auto-') || (d.notes && d.notes.toLowerCase().includes('sincronizado de operaciones')));
       if (isAuto) {
         const name = (d.client_name || '').trim().toUpperCase();
         const hasActiveTx = clientStats.has(name) && ((clientStats.get(name)?.totalBought || 0) > 0 || (clientStats.get(name)?.totalPaidInTx || 0) > 0);
@@ -2915,6 +2918,37 @@ export const StorageService = {
     } catch {}
 
     return newDebtor;
+  },
+
+  // Deuda anotada a mano desde Deudores. Queda guardada aparte ([MANUAL:x] en notas) para que
+  // el recálculo desde ventas y abonos la sume en vez de borrarla.
+  addManualDebt(
+    data: { client_name: string; amount: number; phone?: string; notes?: string },
+    mode?: AppMode
+  ): Debtor {
+    const m = mode || this.getAppMode();
+    const upperName = (data.client_name || '').trim().toUpperCase();
+    const existing = this.getDebtors(m).find((d) => (d.client_name || '').trim().toUpperCase() === upperName);
+    const prevManual = existing ? getManualDebt(existing.notes) : 0;
+    const baseNotes = data.notes || existing?.notes;
+    const result = this.addDebtor(
+      {
+        client_name: upperName,
+        current_debt: data.amount,
+        phone: data.phone,
+        notes: withManualDebt(baseNotes, prevManual + data.amount) || undefined,
+      },
+      m
+    );
+    AuditService.log({
+      mode: m,
+      action: 'crear',
+      entity: 'deudor',
+      entityId: result.id,
+      summary: `Deuda anotada a mano a ${upperName}: ${data.amount} USD`,
+      data: { client_name: upperName, amount: data.amount },
+    });
+    return result;
   },
 
   // Debt Payments (Abonos de Deudores) - 100% aislados por modo

@@ -25,6 +25,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
+import { stripManualTag } from '@/lib/debtor-sync';
 import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
 
 interface DebtorsProps {
@@ -99,7 +100,7 @@ export function DebtorsView({
           name: upper,
           debt: d.current_debt,
           phone: d.phone || existing?.phone,
-          notes: d.notes || existing?.notes,
+          notes: stripManualTag(d.notes) || existing?.notes,
         });
       }
     });
@@ -156,9 +157,9 @@ export function DebtorsView({
       return;
     }
 
-    StorageService.addDebtor({
+    StorageService.addManualDebt({
       client_name: newDebtor.client_name.trim().toUpperCase(),
-      current_debt: parseFloat(newDebtor.current_debt) || 0,
+      amount: parseFloat(newDebtor.current_debt) || 0,
       phone: newDebtor.phone.trim() || undefined,
       notes: newDebtor.notes.trim() || undefined,
     }, appMode);
@@ -268,7 +269,7 @@ export function DebtorsView({
       currentDebt: debtor.current_debt,
       lastPaymentDate: lastPayment?.date,
       lastPaymentAmount: lastPayment?.amount,
-      notes: debtor.notes,
+      notes: stripManualTag(debtor.notes) || undefined,
     });
   };
 
@@ -497,10 +498,10 @@ export function DebtorsView({
                     )}
                   </div>
 
-                  {d.notes && (
-                    <div className="mt-2 p-1.5 rounded-lg contact-payment-box flex items-start space-x-1.5 text-[10px]" title={d.notes}>
+                  {stripManualTag(d.notes) && (
+                    <div className="mt-2 p-1.5 rounded-lg contact-payment-box flex items-start space-x-1.5 text-[10px]" title={stripManualTag(d.notes)}>
                       <Wallet className="w-3 h-3 text-blue-500 mt-0.5 shrink-0" />
-                      <span className="font-semibold break-words leading-tight truncate">{d.notes}</span>
+                      <span className="font-semibold break-words leading-tight truncate">{stripManualTag(d.notes)}</span>
                     </div>
                   )}
                 </div>
