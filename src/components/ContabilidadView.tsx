@@ -144,6 +144,50 @@ export function ContabilidadView({ appMode, accounts, dataVersion, onDataChange 
     }
   };
 
+  const aperturas = useMemo(
+    () => StorageService.getAperturaIncomes(appMode),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [appMode, dataVersion, accounts]
+  );
+
+  const handleConvertAperturas = () => {
+    if (
+      !window.confirm(
+        `Se pasarán ${aperturas.length} ingresos de APERTURA al saldo inicial de su cuenta y se borrarán ` +
+          'de Ingresos/Gastos. El saldo de las cuentas no cambia. ¿Continuar?'
+      )
+    )
+      return;
+    try {
+      const n = StorageService.convertAperturaIncomes(appMode);
+      onDataChange();
+      window.alert(`Listo: ${n} aperturas pasadas a saldo inicial.`);
+    } catch (err) {
+      window.alert((err as Error).message);
+    }
+  };
+
+  const handleRestoreAll = () => {
+    if (
+      !window.confirm(
+        `Se cambiará el saldo de ${withDifference.length} cuentas al "Saldo según libro" ` +
+          '(saldo inicial + todas sus operaciones). Úsalo cuando los saldos se perdieron o quedaron mal. ' +
+          'Cada cambio queda en la bitácora. ¿Continuar?'
+      )
+    )
+      return;
+    try {
+      const n = StorageService.restoreBalancesFromLedger(
+        withDifference.map((c) => ({ accountId: c.account.id, libro: c.libro })),
+        appMode
+      );
+      onDataChange();
+      window.alert(`Listo: ${n} cuentas restauradas.`);
+    } catch (err) {
+      window.alert((err as Error).message);
+    }
+  };
+
   const tabs: { key: SubTab; label: string; icon: React.ElementType }[] = [
     { key: 'cuadre', label: 'Cuadre de cuentas', icon: Scale },
     { key: 'diario', label: 'Libro diario', icon: ListOrdered },
@@ -220,6 +264,26 @@ export function ContabilidadView({ appMode, accounts, dataVersion, onDataChange 
 
       {tab === 'cuadre' && (
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+          {isAdmin && (aperturas.length > 0 || withDifference.length > 0) && (
+            <div className="flex flex-wrap gap-2">
+              {aperturas.length > 0 && (
+                <button
+                  onClick={handleConvertAperturas}
+                  className="px-3 py-1.5 rounded-xl border border-indigo-300 text-indigo-700 hover:bg-indigo-50 text-xs font-semibold"
+                >
+                  Pasar {aperturas.length} ingresos APERTURA a saldo inicial
+                </button>
+              )}
+              {withDifference.length > 0 && (
+                <button
+                  onClick={handleRestoreAll}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                >
+                  Restaurar saldos según libro ({withDifference.length})
+                </button>
+              )}
+            </div>
+          )}
           <p className="text-xs text-slate-600">
             <b>Saldo según libro</b> = saldo inicial + todas las operaciones registradas. Si no coincide con el
             saldo de la cuenta, alguien cambió el número a mano. Desde ahora los cambios de saldo se hacen con un
