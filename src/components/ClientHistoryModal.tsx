@@ -10,6 +10,8 @@ import {
 } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { recordTime } from '@/lib/order';
+import { localDateOf } from '@/lib/dates';
+import { getManualEntries, stripManualTag } from '@/lib/debtor-sync';
 import { VoucherData } from './ShareVoucherModal';
 import {
   CreditCard,
@@ -71,7 +73,7 @@ export function ClientHistoryModal({
       id: deb ? deb.id : 'client-' + clean,
       name: clean,
       phone: deb?.phone || undefined,
-      notes: deb?.notes || undefined,
+      notes: stripManualTag(deb?.notes) || undefined,
     } as Client;
   }, [clientName, allClients, allDebtors]);
 
@@ -143,7 +145,7 @@ export function ClientHistoryModal({
 
     const list: Array<{
       id: string;
-      type: 'CRIPTO' | 'EMERGENTES' | 'ABONO';
+      type: 'CRIPTO' | 'EMERGENTES' | 'ABONO' | 'MANUAL';
       date: string;
       timestamp: number;
       badgeLabel: string;
@@ -314,12 +316,43 @@ export function ClientHistoryModal({
       });
     });
 
+    // 4. Deuda anotada a mano en Deudores (p. ej. lo que debía en el sistema viejo)
+    const manualDebtor = allDebtors.find((d) => d.client_name.trim().toUpperCase() === clientName.trim().toUpperCase());
+    getManualEntries(manualDebtor?.notes).forEach((e, idx) => {
+      const at = e.at || manualDebtor?.updated_at;
+      list.push({
+        id: `manual-${manualDebtor?.id}-${idx}`,
+        type: 'MANUAL',
+        date: at ? localDateOf(at) : '',
+        timestamp: at ? Date.parse(at) || 0 : 0,
+        badgeLabel: 'Deuda anotada a mano',
+        badgeColor: 'bg-rose-50 text-rose-700 border-rose-200',
+        dotColor: 'bg-rose-500',
+        rowBorder: 'hover:border-rose-300',
+        detail: (
+          <strong className="text-rose-700 font-mono">
+            {e.amount >= 0 ? `$${e.amount.toFixed(2)} USD` : `-$${Math.abs(e.amount).toFixed(2)} USD (a favor)`}
+          </strong>
+        ),
+        debePagarFormatted: `$${e.amount.toFixed(2)} USD`,
+        amountPaidFormatted: '-',
+        statusBadge: (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+            Anotada a mano
+          </span>
+        ),
+        isAbono: false,
+        profitFormatted: '-',
+        notesOrAccount: 'Agregada en Deudores',
+      });
+    });
+
     // Ordenar: lo más nuevo primero arriba
     return list.sort((a, b) => {
       if (b.date !== a.date) return b.date.localeCompare(a.date);
       return b.timestamp - a.timestamp;
     });
-  }, [clientName, clientDetalHistory, clientMayorHistory, clientPaymentsHistory, accounts]);
+  }, [clientName, clientDetalHistory, clientMayorHistory, clientPaymentsHistory, accounts, allDebtors]);
 
   const filteredMovements = useMemo(() => {
     if (movementFilter === 'ALL') return unifiedMovements;

@@ -165,22 +165,46 @@ export function pendingUpsertIds(queue: DebtorOutboxEntry[], mode: AppMode): Set
 }
 
 // Deuda anotada a mano en Deudores ("Agregar Cliente / Deuda"). Se guarda dentro de las notas
-// como [MANUAL:x] para que viaje a Supabase sin cambiar la tabla, y se suma al recalcular la
-// deuda desde ventas, remesas y abonos (si no, el recálculo la borraba).
-const MANUAL_TAG = /\s*\[MANUAL:(-?\d+(?:\.\d+)?)\]/;
+// como [MANUAL:fecha=monto;fecha=monto] para que viaje a Supabase sin cambiar la tabla, y se suma
+// al recalcular la deuda desde ventas, remesas y abonos (si no, el recálculo la borraba).
+// Cada anotación guarda su fecha para mostrarla en el historial del cliente. El formato viejo
+// [MANUAL:monto] (sin fecha) se sigue leyendo.
+const MANUAL_TAG = /\s*\[MANUAL:([^\]]*)\]/;
+
+export interface ManualDebtEntry {
+  at?: string; // fecha ISO de cuando se anotó
+  amount: number;
+}
+
+export function getManualEntries(notes?: string | null): ManualDebtEntry[] {
+  const m = (notes || '').match(MANUAL_TAG);
+  if (!m) return [];
+  return m[1]
+    .split(';')
+    .map((part) => {
+      const eq = part.lastIndexOf('=');
+      const at = eq >= 0 ? part.slice(0, eq).trim() : '';
+      const amount = Number(eq >= 0 ? part.slice(eq + 1) : part);
+      return { at: at || undefined, amount };
+    })
+    .filter((e) => Number.isFinite(e.amount) && e.amount !== 0);
+}
 
 export function getManualDebt(notes?: string | null): number {
-  const m = (notes || '').match(MANUAL_TAG);
-  return m ? Number(m[1]) || 0 : 0;
+  return Number(getManualEntries(notes).reduce((sum, e) => sum + e.amount, 0).toFixed(2));
 }
 
 export function stripManualTag(notes?: string | null): string {
   return (notes || '').replace(MANUAL_TAG, '').trim();
 }
 
-export function withManualDebt(notes: string | undefined | null, amount: number): string {
-  const base = stripManualTag(notes);
+// Agrega una anotación a las notas. `text` (opcional) reemplaza el texto libre de las notas.
+export function withManualEntry(notes: string | undefined | null, amount: number, at: string, text?: string): string {
+  const base = (text ?? stripManualTag(notes)).trim();
+  const entries = getManualEntries(notes);
   const rounded = Number(amount.toFixed(2));
-  if (rounded === 0) return base;
-  return (base ? base + ' ' : '') + '[MANUAL:' + rounded + ']';
+  if (rounded !== 0) entries.push({ at, amount: rounded });
+  if (entries.length === 0) return base;
+  const tag = '[MANUAL:' + entries.map((e) => (e.at ? e.at + '=' : '') + e.amount).join(';') + ']';
+  return (base ? base + ' ' : '') + tag;
 }

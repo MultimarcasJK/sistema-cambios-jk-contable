@@ -55,7 +55,7 @@ import {
   mergeRemoteDebtors,
   normalizeDebtorName,
   getManualDebt,
-  withManualDebt,
+  withManualEntry,
   pendingUpsertIds,
 } from './debtor-sync';
 import { localDateStr } from './dates';
@@ -2929,14 +2929,12 @@ export const StorageService = {
     const m = mode || this.getAppMode();
     const upperName = (data.client_name || '').trim().toUpperCase();
     const existing = this.getDebtors(m).find((d) => (d.client_name || '').trim().toUpperCase() === upperName);
-    const prevManual = existing ? getManualDebt(existing.notes) : 0;
-    const baseNotes = data.notes || existing?.notes;
     const result = this.addDebtor(
       {
         client_name: upperName,
         current_debt: data.amount,
         phone: data.phone,
-        notes: withManualDebt(baseNotes, prevManual + data.amount) || undefined,
+        notes: withManualEntry(existing?.notes, data.amount, new Date().toISOString(), data.notes) || undefined,
       },
       m
     );
