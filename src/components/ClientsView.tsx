@@ -27,7 +27,8 @@ import {
   Trash2,
   Wallet,
 } from 'lucide-react';
-import { localDateStr } from '@/lib/dates';
+import { localDateStr, localDateOf } from '@/lib/dates';
+import { getManualEntries, stripManualTag } from '@/lib/debtor-sync';
 
 interface ClientsProps {
   clients: Client[];
@@ -252,7 +253,7 @@ export function ClientsView({
       currentDebt: debtorEntry ? debtorEntry.current_debt : 0,
       lastPaymentDate: lastPayment?.date,
       lastPaymentAmount: lastPayment?.amount,
-      notes: debtorEntry?.notes || client.notes,
+      notes: stripManualTag(debtorEntry?.notes) || client.notes,
     });
   };
 
@@ -335,7 +336,7 @@ export function ClientsView({
 
     const list: Array<{
       id: string;
-      type: 'CRIPTO' | 'EMERGENTES' | 'ABONO';
+      type: 'CRIPTO' | 'EMERGENTES' | 'ABONO' | 'MANUAL';
       date: string;
       timestamp: number;
       badgeLabel: string;
@@ -504,6 +505,37 @@ export function ClientsView({
       });
     });
 
+    // 4. Deuda anotada a mano en Deudores (p. ej. lo que debía en el sistema viejo)
+    const manualDebtor = debtors.find((d) => d.client_name.trim().toUpperCase() === selectedClientForHistory.name.trim().toUpperCase());
+    getManualEntries(manualDebtor?.notes).forEach((e, idx) => {
+      const at = e.at || manualDebtor?.updated_at;
+      list.push({
+        id: `manual-${manualDebtor?.id}-${idx}`,
+        type: 'MANUAL',
+        date: at ? localDateOf(at) : '',
+        timestamp: at ? Date.parse(at) || 0 : 0,
+        badgeLabel: 'Deuda anotada a mano',
+        badgeColor: 'bg-rose-50 text-rose-700 border-rose-200',
+        dotColor: 'bg-rose-500',
+        rowBorder: 'hover:border-rose-300',
+        detail: (
+          <strong className="text-rose-700 font-mono">
+            {e.amount >= 0 ? `$${e.amount.toFixed(2)} USD` : `-$${Math.abs(e.amount).toFixed(2)} USD (a favor)`}
+          </strong>
+        ),
+        debePagarFormatted: `$${e.amount.toFixed(2)} USD`,
+        amountPaidFormatted: '-',
+        statusBadge: (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+            Anotada a mano
+          </span>
+        ),
+        isAbono: false,
+        profitFormatted: '-',
+        notesOrAccount: 'Agregada en Deudores',
+      });
+    });
+
     // Ordenar: las más nuevas primero arriba, las más antiguas abajo
     return list.sort((a, b) => {
       if (b.date !== a.date) {
@@ -511,7 +543,7 @@ export function ClientsView({
       }
       return b.timestamp - a.timestamp;
     });
-  }, [selectedClientForHistory, clientDetalHistory, clientMayorHistory, clientPaymentsHistory, accounts]);
+  }, [selectedClientForHistory, clientDetalHistory, clientMayorHistory, clientPaymentsHistory, accounts, debtors]);
 
   const filteredMovements = useMemo(() => {
     if (movementFilter === 'ALL') return unifiedMovements;

@@ -239,3 +239,22 @@ describe('deuda anotada a mano', () => {
     expect(debtOf('NEUDY')).toBe(110);
   });
 });
+
+describe('historial de la deuda anotada a mano', () => {
+  it('guarda cada anotación con su fecha y lee el formato viejo', async () => {
+    const { getManualEntries, getManualDebt, withManualEntry } = await import('@/lib/debtor-sync');
+    expect(getManualDebt('Debe del sistema viejo [MANUAL:100]')).toBe(100);
+    const notes = withManualEntry('Debe del sistema viejo [MANUAL:100]', 50, '2026-10-24T18:00:00.000Z');
+    expect(getManualEntries(notes)).toEqual([
+      { at: undefined, amount: 100 },
+      { at: '2026-10-24T18:00:00.000Z', amount: 50 },
+    ]);
+    expect(getManualDebt(notes)).toBe(150);
+
+    StorageService.addManualDebt({ client_name: 'Neudy', amount: 80, notes: 'Sistema viejo' }, MODE);
+    tick();
+    const d = StorageService.getDebtors(MODE).find((x) => x.client_name === 'NEUDY')!;
+    expect(getManualEntries(d.notes)).toHaveLength(1);
+    expect(getManualEntries(d.notes)[0].at).toBeTruthy();
+  });
+});
