@@ -17,8 +17,6 @@ import { PayrollServicesView } from '@/components/PayrollServicesView';
 import { ContabilidadView } from '@/components/ContabilidadView';
 import { RemesasView } from '@/components/RemesasView';
 import { StorageService } from '@/lib/storage';
-import { INITIAL_ACCOUNTS_MAYOR } from '@/lib/initial-data';
-import { SupabaseSyncService } from '@/lib/supabase-sync';
 import { supabase } from '@/lib/supabase';
 import { RatesService } from '@/lib/rates-service';
 import {
@@ -160,37 +158,9 @@ export default function Home() {
         console.log('[JK] Limpiados clientes importados erróneamente en detal');
       }
 
-      // ── Seed automático cuentas Excel → MODO MAYOR ──
-      const FLAG_ACCOUNTS_MAYOR = 'cambiosjk_excel_mayor_accounts_imported_v1';
-      if (typeof window !== 'undefined' && !localStorage.getItem(FLAG_ACCOUNTS_MAYOR)) {
-        const cuentasMayorExistentes = StorageService.getAccounts('mayor');
-        const nombresExistentes = new Set(
-          cuentasMayorExistentes.map((a) => a.name.trim().toUpperCase())
-        );
-        const cuentasNuevas = [...cuentasMayorExistentes];
-        let agregadas = 0;
-
-        INITIAL_ACCOUNTS_MAYOR.forEach((acc) => {
-          if (!nombresExistentes.has(acc.name.trim().toUpperCase())) {
-            cuentasNuevas.push(acc);
-            nombresExistentes.add(acc.name.trim().toUpperCase());
-            agregadas++;
-          }
-        });
-
-        if (agregadas > 0 || cuentasNuevas.length > 0) {
-          StorageService.saveAccounts(cuentasNuevas, 'mayor');
-          cuentasNuevas.forEach((acc) => {
-            SupabaseSyncService.upsertAccount(acc, 'mayor').catch(() => {});
-          });
-        }
-        localStorage.setItem(FLAG_ACCOUNTS_MAYOR, '1');
-        console.log(`[JK] Cuentas Excel importadas en MODO MAYOR: ${agregadas} cuentas`);
-        if (initialMode === 'mayor') {
-          refreshData('mayor');
-        }
-      }
-      // ──────────────────────────────────────────────────
+      // Antes aquí se "sembraban" las cuentas del Excel en un navegador nuevo y se subían a
+      // Supabase con saldo 0, pisando los saldos reales. Las cuentas ya existen en Supabase
+      // y llegan con la sincronización de abajo.
 
       StorageService.syncFromSupabase(initialMode)
         .then(() => refreshData(initialMode))

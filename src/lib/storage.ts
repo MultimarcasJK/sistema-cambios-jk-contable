@@ -1204,6 +1204,61 @@ export const StorageService = {
     return adj;
   },
 
+  // Deja el saldo de cada cuenta igual al saldo según libro (saldo inicial + operaciones).
+  // Sirve para recuperar saldos que se pisaron; cada cambio queda en la bitácora.
+  restoreBalancesFromLedger(rows: { accountId: string; libro: number }[], mode?: AppMode): number {
+    const m = mode || this.getAppMode();
+    if (!isActorAdmin()) throw new Error('Solo un ADMIN puede restaurar saldos.');
+    const accounts = this.getAccounts(m);
+    let changed = 0;
+    rows.forEach(({ accountId, libro }) => {
+      const acc = accounts.find((a) => a.id === accountId);
+      if (!acc || Math.abs((acc.current_balance || 0) - libro) < 0.005) return;
+      this.updateAccount(acc.id, { current_balance: Number(libro.toFixed(4)) }, m);
+      changed++;
+    });
+    return changed;
+  },
+
+  // Ingresos marcados como APERTURA (saldo con que arrancó la cuenta)
+  getAperturaIncomes(mode?: AppMode): Expense[] {
+    const m = mode || this.getAppMode();
+    return this.getExpenses(m).filter(
+      (e) => e && e.type === 'ingreso' && !!e.account_id && /^\s*APERTUR/i.test(e.description || '')
+    );
+  },
+
+  // Pasa esos ingresos al saldo inicial de su cuenta y los borra. El saldo actual no cambia:
+  // el monto ya estaba sumado por el ingreso y ahora queda como saldo inicial.
+  convertAperturaIncomes(mode?: AppMode): number {
+    const m = mode || this.getAppMode();
+    if (!isActorAdmin()) throw new Error('Solo un ADMIN puede cambiar saldos iniciales.');
+    const aperturas = this.getAperturaIncomes(m);
+    if (aperturas.length === 0) return 0;
+    const byAccount = new Map<string, number>();
+    aperturas.forEach((e) => byAccount.set(e.account_id!, (byAccount.get(e.account_id!) || 0) + e.amount));
+    byAccount.forEach((sum, accountId) => {
+      const acc = this.getAccounts(m).find((a) => a.id === accountId);
+      if (!acc) return;
+      this.updateAccount(accountId, { initial_balance: Number(((acc.initial_balance || 0) + sum).toFixed(4)) }, m);
+    });
+    const ids = new Set(aperturas.filter((e) => byAccount.has(e.account_id!)).map((e) => e.id));
+    ids.forEach((id) => {
+      markAsDeleted(id);
+      SupabaseSyncService.deleteExpense(id, m).catch(() => {});
+    });
+    saveToStorage(this.getExpensesKey(m), this.getExpenses(m).filter((e) => !ids.has(e.id)));
+    AuditService.log({
+      mode: m,
+      action: 'editar',
+      entity: 'cuenta',
+      entityId: 'aperturas',
+      summary: `${ids.size} ingresos de APERTURA pasados a saldo inicial de su cuenta`,
+      data: aperturas,
+    });
+    return ids.size;
+  },
+
   // Reconoce en el libro una diferencia que ya existe en el saldo (no cambia el saldo)
   recognizeDifference(accountId: string, difference: number, reason: string, mode?: AppMode): BalanceAdjustment | null {
     const m = mode || this.getAppMode();
