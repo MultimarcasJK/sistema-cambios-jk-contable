@@ -353,3 +353,24 @@ select option {
 }
 
 
+
+/* Barra de desplazamiento lateral fija al pie (FloatingScrollbar) */
+.float-hscroll {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 8px;
+  box-shadow: 0 -1px 6px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  user-select: none;
+}
+.float-hscroll-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  background: #334155;
+  border-radius: 6px;
+}
+.float-hscroll-thumb:hover,
+.float-hscroll:active .float-hscroll-thumb {
+  background: #0f172a;
+}

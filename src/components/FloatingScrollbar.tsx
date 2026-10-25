@@ -10,6 +10,8 @@ import { useEffect, useRef } from 'react';
 // `data-no-float-scroll`.
 
 const BAR_HEIGHT = 16;
+// Separación del borde inferior de la pantalla (~1 mm)
+const BAR_GAP = 6;
 
 type Box = { top: number; bottom: number; left: number; right: number };
 
@@ -82,30 +84,62 @@ function headBackground(thead: HTMLElement): string {
 
 export function FloatingScrollbar() {
   const barRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const bar = barRef.current;
-    const inner = innerRef.current;
-    if (!bar || !inner) return;
+    const thumb = thumbRef.current;
+    if (!bar || !thumb) return;
 
     let target: HTMLElement | null = null;
-    let syncing = false;
     let frame = 0;
+    let drag: { startX: number; startScroll: number } | null = null;
 
-    const onTargetScroll = () => {
-      if (!target || syncing) return;
-      syncing = true;
-      bar.scrollLeft = target.scrollLeft;
-      syncing = false;
+    // La barra se dibuja a mano (no la del navegador) para que se vea igual en todos los equipos
+    const paintThumb = () => {
+      if (!target) return;
+      const trackW = bar.clientWidth;
+      const max = target.scrollWidth - target.clientWidth;
+      const thumbW = Math.max(40, (target.clientWidth / target.scrollWidth) * trackW);
+      const left = max > 0 ? (target.scrollLeft / max) * (trackW - thumbW) : 0;
+      thumb.style.width = thumbW + 'px';
+      thumb.style.transform = `translateX(${left}px)`;
     };
 
-    const onBarScroll = () => {
-      if (!target || syncing) return;
-      syncing = true;
-      target.scrollLeft = bar.scrollLeft;
-      syncing = false;
+    const scrollFromPointer = (dx: number) => {
+      if (!target || !drag) return;
+      const trackW = bar.clientWidth;
+      const thumbW = thumb.getBoundingClientRect().width;
+      const max = target.scrollWidth - target.clientWidth;
+      const ratio = trackW - thumbW > 0 ? max / (trackW - thumbW) : 0;
+      target.scrollLeft = drag.startScroll + dx * ratio;
     };
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (!target) return;
+      e.preventDefault();
+      const thumbRect = thumb.getBoundingClientRect();
+      // Clic fuera del agarrador: salta hasta ahí y sigue arrastrando
+      if (e.clientX < thumbRect.left || e.clientX > thumbRect.right) {
+        const barRect = bar.getBoundingClientRect();
+        const trackW = bar.clientWidth;
+        const thumbW = thumbRect.width;
+        const max = target.scrollWidth - target.clientWidth;
+        const pos = Math.min(Math.max(0, e.clientX - barRect.left - thumbW / 2), trackW - thumbW);
+        target.scrollLeft = trackW - thumbW > 0 ? (pos / (trackW - thumbW)) * max : 0;
+      }
+      drag = { startX: e.clientX, startScroll: target.scrollLeft };
+      bar.setPointerCapture(e.pointerId);
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (drag) scrollFromPointer(e.clientX - drag.startX);
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      drag = null;
+      if (bar.hasPointerCapture(e.pointerId)) bar.releasePointerCapture(e.pointerId);
+    };
+
+    const onTargetScroll = () => paintThumb();
 
     const setTarget = (next: HTMLElement | null) => {
       if (next === target) return;
@@ -172,20 +206,18 @@ export function FloatingScrollbar() {
       bar.style.display = 'block';
       bar.style.left = r.left + 'px';
       bar.style.width = el.clientWidth + 'px';
-      bar.style.bottom = navH + 'px';
-      inner.style.width = el.scrollWidth + 'px';
-      if (Math.abs(bar.scrollLeft - el.scrollLeft) > 1) {
-        syncing = true;
-        bar.scrollLeft = el.scrollLeft;
-        syncing = false;
-      }
+      bar.style.bottom = navH + BAR_GAP + 'px';
+      paintThumb();
     };
 
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(update);
     };
 
-    bar.addEventListener('scroll', onBarScroll, { passive: true });
+    bar.addEventListener('pointerdown', onPointerDown);
+    bar.addEventListener('pointermove', onPointerMove);
+    bar.addEventListener('pointerup', onPointerUp);
+    bar.addEventListener('pointercancel', onPointerUp);
     window.addEventListener('scroll', schedule, { passive: true, capture: true });
     window.addEventListener('resize', schedule);
     // Las tablas cambian al cargar datos o filtrar: revisar de vez en cuando
@@ -193,7 +225,10 @@ export function FloatingScrollbar() {
     schedule();
 
     return () => {
-      bar.removeEventListener('scroll', onBarScroll);
+      bar.removeEventListener('pointerdown', onPointerDown);
+      bar.removeEventListener('pointermove', onPointerMove);
+      bar.removeEventListener('pointerup', onPointerUp);
+      bar.removeEventListener('pointercancel', onPointerUp);
       window.removeEventListener('scroll', schedule, { capture: true });
       window.removeEventListener('resize', schedule);
       window.clearInterval(interval);
@@ -210,13 +245,12 @@ export function FloatingScrollbar() {
         position: 'fixed',
         display: 'none',
         height: BAR_HEIGHT,
-        overflowX: 'scroll',
-        overflowY: 'hidden',
         zIndex: 70,
+        touchAction: 'none',
       }}
-      className="bg-slate-100/90 border-t border-slate-300 shadow-[0_-2px_6px_rgba(0,0,0,0.08)] rounded-t"
+      className="float-hscroll"
     >
-      <div ref={innerRef} style={{ height: 1 }} />
+      <div ref={thumbRef} className="float-hscroll-thumb" />
     </div>
   );
 }
