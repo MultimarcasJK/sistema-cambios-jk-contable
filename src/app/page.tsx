@@ -16,6 +16,7 @@ import { DebtorsView } from '@/components/DebtorsView';
 import { PayrollServicesView } from '@/components/PayrollServicesView';
 import { ContabilidadView } from '@/components/ContabilidadView';
 import { RemesasView } from '@/components/RemesasView';
+import { FloatingScrollbar } from '@/components/FloatingScrollbar';
 import { StorageService } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { RatesService } from '@/lib/rates-service';
@@ -281,6 +282,7 @@ export default function Home() {
 
   return (
     <div className={`min-h-screen flex flex-col selection:bg-emerald-500 selection:text-white transition-colors duration-300 ${isDark ? 'bg-[#0f172a]' : 'bg-slate-50'}`} data-theme={appMode}>
+      <FloatingScrollbar />
       <Header
         appMode={appMode}
         onModeChange={handleModeChange}
