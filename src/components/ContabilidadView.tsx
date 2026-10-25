@@ -30,6 +30,31 @@ const ACTION_LABELS: Record<string, string> = {
   bloqueado: 'Intento bloqueado',
 };
 
+// Campos donde los registros guardan la cuenta (banco, wallet o caja) que movieron
+const AUDIT_ACCOUNT_FIELDS = [
+  'account_id',
+  'received_account_id',
+  'paid_account_id',
+  'from_account_id',
+  'to_account_id',
+  'cuenta_cobro_id',
+  'cuenta_pago_id',
+];
+
+// Nombres de las cuentas que tocó un registro de la bitácora, para mostrarlos después del monto
+function auditAccountNames(e: AuditEntry, accById: Map<string, Account>): string {
+  const d = e.data as Record<string, unknown> | null | undefined;
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return '';
+  const names: string[] = [];
+  AUDIT_ACCOUNT_FIELDS.forEach((f) => {
+    const id = d[f];
+    const acc = typeof id === 'string' ? accById.get(id) : undefined;
+    const name = acc ? acc.name || acc.bank_name : '';
+    if (name && !names.includes(name) && !e.summary.toUpperCase().includes(name.toUpperCase())) names.push(name);
+  });
+  return names.join(' → ');
+}
+
 function daysAgo(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -109,20 +134,24 @@ export function ContabilidadView({ appMode, accounts, dataVersion, onDataChange 
     return rows.reverse();
   }, [ledger, selectedAccount]);
 
-  const auditEntries: AuditEntry[] = useMemo(() => {
+  const accById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+
+  const auditEntries: (AuditEntry & { cuentas: string })[] = useMemo(() => {
     const q = auditFilter.trim().toLowerCase();
     return AuditService.getEntries(appMode)
+      .map((e) => ({ ...e, cuentas: auditAccountNames(e, accById) }))
       .filter(
         (e) =>
           !q ||
           e.summary.toLowerCase().includes(q) ||
+          e.cuentas.toLowerCase().includes(q) ||
           (e.user_email || '').toLowerCase().includes(q) ||
           (e.reason || '').toLowerCase().includes(q) ||
           e.entity.toLowerCase().includes(q)
       )
       .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appMode, auditFilter, dataVersion, accounts]);
+  }, [appMode, auditFilter, dataVersion, accById]);
 
   const handleRecognize = (accountId: string, name: string, diff: number, currency: string) => {
     const reason = window.prompt(
@@ -530,7 +559,10 @@ export function ContabilidadView({ appMode, accounts, dataVersion, onDataChange 
                     >
                       {ACTION_LABELS[e.action] || e.action}
                     </td>
-                    <td className="py-1.5 px-2 text-slate-700">{e.summary}</td>
+                    <td className="py-1.5 px-2 text-slate-700">
+                      {e.summary}
+                      {e.cuentas && <span className="font-semibold text-slate-900"> · {e.cuentas}</span>}
+                    </td>
                     <td className="py-1.5 px-2 text-slate-500">{e.reason || ''}</td>
                   </tr>
                 ))}
