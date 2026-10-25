@@ -13,6 +13,7 @@ import {
 } from '@/types';
 import { localDateOf } from './dates';
 import { commissionOutOfAccount } from './commission';
+import { isAparte } from './aparte';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Libro contable de partida doble.
@@ -109,6 +110,7 @@ export const PLAN_FIJO: LedgerAccountDef[] = [
   { key: 'CXC', codigo: '1.2.01', nombre: 'Cuentas por cobrar clientes', tipo: 'activo' },
   { key: 'CXP', codigo: '2.1.01', nombre: 'Cuentas por pagar proveedores y aliados', tipo: 'pasivo' },
   { key: 'REM_PAGAR', codigo: '2.1.02', nombre: 'Remesas por pagar', tipo: 'pasivo' },
+  { key: 'APARTE', codigo: '2.1.03', nombre: 'Dinero aparte (otros servicios)', tipo: 'pasivo' },
   { key: 'APERTURA', codigo: '3.1.01', nombre: 'Saldos iniciales (capital)', tipo: 'patrimonio' },
   { key: 'ING_DETAL', codigo: '4.1.01', nombre: 'Ganancia ventas detal', tipo: 'ingreso' },
   { key: 'ING_MAYOR', codigo: '4.1.02', nombre: 'Ganancia ventas mayor', tipo: 'ingreso' },
@@ -344,9 +346,13 @@ export function buildLedger(src: LedgerSources): Ledger {
       const acc = real(exp.account_id);
       const moneda = acc ? acc.moneda : exp.currency || 'USD';
       const contra = acc ? acc.key : 'SIN_CUENTA';
+      const aparte = isAparte(exp);
       if (exp.type === 'ingreso') {
         push(lines, contra, moneda, exp.amount);
-        push(lines, 'ING_OTROS', moneda, -exp.amount);
+        push(lines, aparte ? 'APARTE' : 'ING_OTROS', moneda, -exp.amount);
+      } else if (aparte) {
+        push(lines, 'APARTE', moneda, exp.amount);
+        push(lines, contra, moneda, -exp.amount);
       } else {
         push(lines, expenseAccount(exp), moneda, exp.amount);
         push(lines, contra, moneda, -exp.amount);

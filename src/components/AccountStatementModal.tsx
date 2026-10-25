@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { localDateStr, localDateOf, localTimeOf } from '@/lib/dates';
 import { commissionOutOfAccount } from '@/lib/commission';
+import { isAparte } from '@/lib/aparte';
 
 export interface AccountStatementModalProps {
   isOpen: boolean;
@@ -312,7 +313,13 @@ export function AccountStatementModal({
           } ${isIngreso ? '1' : '2'}`,
           type: isIngreso ? 'INGRESO' : 'EGRESO',
           categoryKey: isIngreso ? 'INCOME' : 'EXPENSE',
-          categoryLabel: isIngreso ? 'Ingreso Varios' : 'Gasto Operativo',
+          categoryLabel: isAparte(exp)
+            ? isIngreso
+              ? 'Entrada aparte'
+              : 'Salida aparte'
+            : isIngreso
+            ? 'Ingreso Varios'
+            : 'Gasto Operativo',
           description: exp.description || exp.concept || (isIngreso ? 'Ingreso Extra' : 'Gasto'),
           thirdParty: exp.concept ? `Concepto: ${exp.concept}` : 'Operación Interna',
           reference: 'S/R',

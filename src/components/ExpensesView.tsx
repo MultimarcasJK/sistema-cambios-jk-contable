@@ -8,8 +8,9 @@ import { RatesService } from '@/lib/rates-service';
 import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from '@/components/ManageCurrenciesModal';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInputNumber } from '@/lib/formatters';
-import { Receipt, CheckCircle, Search, ArrowUpRight, Coins, Trash2 } from 'lucide-react';
+import { Receipt, CheckCircle, Search, ArrowUpRight, Coins, Trash2, Briefcase } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
+import { APARTE_CONCEPT, isAparte, aparteBalances } from '@/lib/aparte';
 
 interface ExpensesProps {
   accounts: Account[];
@@ -37,6 +38,8 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
     account_id: '',
     rate_to_usd: '1',
   });
+  // Dinero aparte: solo suma o resta en la cuenta, no cuenta como ganancia ni gasto
+  const [aparte, setAparte] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDate, setFilterDate] = useState('');
@@ -98,6 +101,10 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
       alert('Por favor ingrese la descripción y un monto válido.');
       return;
     }
+    if (aparte && !formData.account_id) {
+      alert('Elige la cuenta donde entró o de donde salió el dinero aparte.');
+      return;
+    }
 
     StorageService.addExpense({
       date: formData.date,
@@ -105,7 +112,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
       description: formData.description.trim().toUpperCase(),
       amount: amt,
       currency: formData.currency,
-      concept: formData.concept,
+      concept: aparte ? APARTE_CONCEPT : formData.concept,
       account_id: formData.account_id || undefined,
       amount_usd: calculatedUsd,
     });
@@ -116,8 +123,8 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
       description: '',
       amount: '',
       currency: 'USD',
-      concept: formData.type === 'ingreso' ? 'INGRESO EXTRA' : 'GASTOS',
-      account_id: '',
+      concept: formData.concept,
+      account_id: aparte ? formData.account_id : '',
       rate_to_usd: '1',
     });
 
@@ -136,12 +143,33 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
   }, [expenses, searchTerm, filterDate, filterCurrency]);
 
   const totalEgresosUsd = filteredExpenses
-    .filter((e) => e.type !== 'ingreso')
+    .filter((e) => e.type !== 'ingreso' && !isAparte(e))
     .reduce((acc, e) => acc + (e.amount_usd || 0), 0);
 
   const totalIngresosUsd = filteredExpenses
-    .filter((e) => e.type === 'ingreso')
+    .filter((e) => e.type === 'ingreso' && !isAparte(e))
     .reduce((acc, e) => acc + (e.amount_usd || 0), 0);
+
+  // Cuánto dinero aparte sigue en las cuentas, por moneda (de todo el historial, sin filtros)
+  const apartePorMoneda = useMemo(
+    () => Array.from(aparteBalances(expenses).entries()).filter(([, v]) => Math.abs(v) > 0.004),
+    [expenses]
+  );
+
+  const setMode = (mode: 'egreso' | 'ingreso' | 'aparte') => {
+    if (mode === 'aparte') {
+      setAparte(true);
+      setFormData({ ...formData, type: 'ingreso' });
+    } else {
+      setAparte(false);
+      setFormData({ ...formData, type: mode, concept: mode === 'ingreso' ? 'INGRESO EXTRA' : 'GASTOS' });
+    }
+  };
+  const tone = aparte
+    ? { text: 'text-indigo-600', bg: 'bg-indigo-600 hover:bg-indigo-700', soft: 'bg-indigo-50 text-indigo-600' }
+    : formData.type === 'ingreso'
+    ? { text: 'text-emerald-600', bg: 'bg-emerald-600 hover:bg-emerald-700', soft: 'bg-emerald-50 text-emerald-600' }
+    : { text: 'text-rose-600', bg: 'bg-rose-600 hover:bg-rose-700', soft: 'bg-rose-50 text-rose-600' };
 
   return (
     <div className="space-y-6">
@@ -149,11 +177,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 mb-4 gap-3">
           <div className="flex items-center space-x-2">
-            <div
-              className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold ${
-                formData.type === 'ingreso' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
-              }`}
-            >
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold ${tone.soft}`}>
               <Receipt className="w-4 h-4" />
             </div>
             <div>
@@ -179,11 +203,9 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
             <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold">
               <button
                 type="button"
-                onClick={() =>
-                  setFormData({ ...formData, type: 'egreso', concept: 'GASTOS' })
-                }
+                onClick={() => setMode('egreso')}
                 className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                  formData.type === 'egreso'
+                  !aparte && formData.type === 'egreso'
                     ? 'bg-rose-600 text-white shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
@@ -192,11 +214,9 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  setFormData({ ...formData, type: 'ingreso', concept: 'INGRESO EXTRA' })
-                }
+                onClick={() => setMode('ingreso')}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                  formData.type === 'ingreso'
+                  !aparte && formData.type === 'ingreso'
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
@@ -204,9 +224,49 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
                 <ArrowUpRight className="w-3.5 h-3.5" />
                 <span>🟢 Ingreso Extra</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setMode('aparte')}
+                title="Pagos de otros servicios que caen en tus cuentas: solo suman o restan al saldo"
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                  aparte ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Briefcase className="w-3.5 h-3.5" />
+                <span>Dinero aparte</span>
+              </button>
             </div>
           </div>
         </div>
+
+        {aparte && (
+          <div className="mb-4 p-3 rounded-xl border border-indigo-200 bg-indigo-50/60 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex bg-white p-1 rounded-xl text-xs font-semibold border border-indigo-100 self-start">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, type: 'ingreso' })}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                  formData.type === 'ingreso' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600'
+                }`}
+              >
+                ⬇ Entrada aparte
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, type: 'egreso' })}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                  formData.type === 'egreso' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600'
+                }`}
+              >
+                ⬆ Salida aparte
+              </button>
+            </div>
+            <p className="text-[11px] text-indigo-900">
+              Pagos de otros servicios que caen en tus cuentas. Solo suman o restan al saldo de la cuenta:{' '}
+              <b>no cuentan como ganancia ni como gasto</b> en el cierre ni en el panel.
+            </p>
+          </div>
+        )}
 
         <form
           onSubmit={handleSubmit}
@@ -236,7 +296,9 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
               <input
                 type="text"
                 placeholder={
-                  formData.type === 'ingreso'
+                  aparte
+                    ? 'ej. PAGO SERVICIO DISEÑO JUAN'
+                    : formData.type === 'ingreso'
                     ? 'ej. COMISIÓN GANADA, APORTE CAPITAL, REEMBOLSO'
                     : 'ej. COMISIÓN IVAN, ALQUILER, SERVICIOS'
                 }
@@ -283,13 +345,14 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
                 {formData.type === 'ingreso' ? 'Cuenta Receptora (Suma saldo)' : 'Cuenta Pagadora (Resta saldo)'}
+                {aparte && ' *'}
               </label>
               <select
                 value={formData.account_id}
                 onChange={(e) => setFormData({ ...formData, account_id: e.target.value })}
                 className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white cursor-pointer"
               >
-                <option value="">Ninguna / Caja Externa</option>
+                <option value="">{aparte ? 'Elige la cuenta…' : 'Ninguna / Caja Externa'}</option>
                 {accounts.filter((a) => a.currency === formData.currency).length > 0 && (
                   <optgroup label={`Cuentas en ${formData.currency} (Recomendadas)`}>
                     {accounts
@@ -339,9 +402,10 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
               <label className="block text-xs font-semibold text-slate-600 mb-1">Concepto</label>
               <input
                 type="text"
-                value={formData.concept}
+                value={aparte ? APARTE_CONCEPT : formData.concept}
                 onChange={(e) => setFormData({ ...formData, concept: e.target.value })}
-                className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 uppercase"
+                disabled={aparte}
+                className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 uppercase disabled:bg-slate-100 disabled:text-slate-500"
               />
             </div>
           </div>
@@ -349,25 +413,25 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-4">
             <div>
               <span className="text-xs text-slate-500 block">Equivalente en Dólares ($ USD)</span>
-              <span
-                className={`text-xl font-black font-mono ${
-                  formData.type === 'ingreso' ? 'text-emerald-600' : 'text-rose-600'
-                }`}
-              >
+              <span className={`text-xl font-black font-mono ${tone.text}`}>
                 {formData.type === 'ingreso' ? '+' : '-'}${calculatedUsd.toFixed(2)} USD
               </span>
             </div>
 
             <button
               type="submit"
-              className={`font-bold text-xs px-6 py-2.5 rounded-xl shadow-sm transition flex items-center space-x-2 text-white cursor-pointer ${
-                formData.type === 'ingreso'
-                  ? 'bg-emerald-600 hover:bg-emerald-700'
-                  : 'bg-rose-600 hover:bg-rose-700'
-              }`}
+              className={`font-bold text-xs px-6 py-2.5 rounded-xl shadow-sm transition flex items-center space-x-2 text-white cursor-pointer ${tone.bg}`}
             >
               <CheckCircle className="w-4 h-4" />
-              <span>{formData.type === 'ingreso' ? 'Guardar Ingreso Extra' : 'Guardar Gasto'}</span>
+              <span>
+                {aparte
+                  ? formData.type === 'ingreso'
+                    ? 'Guardar Entrada aparte'
+                    : 'Guardar Salida aparte'
+                  : formData.type === 'ingreso'
+                  ? 'Guardar Ingreso Extra'
+                  : 'Guardar Gasto'}
+              </span>
             </button>
           </div>
         </form>
@@ -382,6 +446,17 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
               Gastos: <span className="font-bold text-rose-600 font-mono">-${totalEgresosUsd.toFixed(2)}</span> •{' '}
               Ingresos: <span className="font-bold text-emerald-600 font-mono">+${totalIngresosUsd.toFixed(2)}</span>
             </p>
+            {apartePorMoneda.length > 0 && (
+              <p className="text-xs text-indigo-700 mt-0.5">
+                Dinero aparte en tus cuentas:{' '}
+                {apartePorMoneda.map(([cur, v], i) => (
+                  <span key={cur} className="font-bold font-mono">
+                    {i > 0 && ' • '}
+                    {formatRegionalAmount(v, cur)} {cur}
+                  </span>
+                ))}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center space-x-2">
@@ -450,16 +525,21 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
                 filteredExpenses.map((exp) => {
                   const acc = accounts.find((a) => a.id === exp.account_id);
                   const isIngreso = exp.type === 'ingreso';
+                  const esAparte = isAparte(exp);
                   return (
                     <tr key={exp.id} className="hover:bg-slate-50 transition group">
                       <td className="py-2.5 px-3 text-slate-500 font-sans">{exp.date}</td>
                       <td className="py-2.5 px-3 font-sans">
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            isIngreso ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                            esAparte
+                              ? 'bg-indigo-100 text-indigo-800'
+                              : isIngreso
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
                           }`}
                         >
-                          {isIngreso ? 'INGRESO' : 'EGRESO'}
+                          {esAparte ? (isIngreso ? 'ENTRADA APARTE' : 'SALIDA APARTE') : isIngreso ? 'INGRESO' : 'EGRESO'}
                         </span>
                       </td>
                       <td className="py-2.5 px-3 font-semibold font-sans text-slate-800">
