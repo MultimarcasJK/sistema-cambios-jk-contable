@@ -11,6 +11,7 @@ import {
   Supplier,
   Debtor,
 } from '@/types';
+import { isAparte } from '@/lib/aparte';
 import { CurrencyService } from '@/lib/currencies';
 import { newestFirst } from '@/lib/order';
 import { TabKey } from './Navigation';
@@ -116,11 +117,11 @@ export function DashboardView({
       .reduce((sum, t) => sum + (t.amount_ves || 0), 0);
 
     const extraIncomeToday = expenses
-      .filter((e) => e.date === todayStr && e.type === 'ingreso')
+      .filter((e) => e.date === todayStr && e.type === 'ingreso' && !isAparte(e))
       .reduce((sum, e) => sum + (e.amount_usd || 0), 0);
 
     const expensesToday = expenses
-      .filter((e) => e.date === todayStr && e.type !== 'ingreso')
+      .filter((e) => e.date === todayStr && e.type !== 'ingreso' && !isAparte(e))
       .reduce((sum, e) => sum + (e.amount_usd || 0), 0);
 
     const profitRemesasToday = gananciaRemesasEl(remesas, todayStr);

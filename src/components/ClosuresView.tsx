@@ -11,6 +11,7 @@ import {
   Currency,
   Remesa,
 } from '@/types';
+import { isAparte } from '@/lib/aparte';
 import { StorageService } from '@/lib/storage';
 import { newestFirst } from '@/lib/order';
 import {
@@ -86,11 +87,11 @@ export function ClosuresView({
       .reduce((sum, t) => sum + (t.profit_usd || 0), 0);
 
     const extraIncome = expenses
-      .filter((e) => e.date === selectedDate && e.type === 'ingreso')
+      .filter((e) => e.date === selectedDate && e.type === 'ingreso' && !isAparte(e))
       .reduce((sum, e) => sum + (e.amount_usd || 0), 0);
 
     const totalExpenses = expenses
-      .filter((e) => e.date === selectedDate && e.type !== 'ingreso')
+      .filter((e) => e.date === selectedDate && e.type !== 'ingreso' && !isAparte(e))
       .reduce((sum, e) => sum + (e.amount_usd || 0), 0);
 
     const profitRemesas = gananciaRemesasEl(remesas, selectedDate);
@@ -99,8 +100,8 @@ export function ClosuresView({
 
     const detalCount = detalTxs.filter((t) => t.date === selectedDate).length;
     const mayorCount = mayorTxs.filter((t) => t.date === selectedDate).length;
-    const extraCount = expenses.filter((e) => e.date === selectedDate && e.type === 'ingreso').length;
-    const expensesCount = expenses.filter((e) => e.date === selectedDate && e.type !== 'ingreso').length;
+    const extraCount = expenses.filter((e) => e.date === selectedDate && e.type === 'ingreso' && !isAparte(e)).length;
+    const expensesCount = expenses.filter((e) => e.date === selectedDate && e.type !== 'ingreso' && !isAparte(e)).length;
 
     return {
       profitDetal: Number(profitDetal.toFixed(2)),
