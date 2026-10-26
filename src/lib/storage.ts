@@ -84,6 +84,50 @@ function saveToStorage<T>(key: string, value: T): void {
   }
 }
 
+// Cuentas cambiadas aquí que Supabase todavía no confirmó. Mientras estén pendientes,
+// la sincronización no las pisa con la copia vieja de Supabase (si no, un saldo recién
+// guardado volvía al valor anterior) y se vuelven a enviar.
+const PENDING_ACCOUNTS_KEY = 'cambiosjk_pending_accounts_v1';
+
+function getPendingAccounts(): Record<string, number> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(PENDING_ACCOUNTS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+function setPendingAccounts(map: Record<string, number>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PENDING_ACCOUNTS_KEY, JSON.stringify(map));
+  } catch {
+    // sin espacio: se pierde solo la marca, el dato ya quedó guardado
+  }
+}
+
+function isAccountPending(mode: AppMode, id: string): boolean {
+  return getPendingAccounts()[mode + ':' + id] !== undefined;
+}
+
+function pushAccount(account: Account, mode: AppMode): Promise<void> {
+  const key = mode + ':' + account.id;
+  const stamp = Date.now();
+  setPendingAccounts({ ...getPendingAccounts(), [key]: stamp });
+  return SupabaseSyncService.upsertAccount(account, mode).then((ok) => {
+    if (!ok) return;
+    const map = getPendingAccounts();
+    // Si hubo otro cambio mientras tanto, queda pendiente hasta que ese también llegue
+    if (map[key] === stamp) {
+      delete map[key];
+      setPendingAccounts(map);
+    }
+  });
+}
+
 const DELETED_IDS_KEY = 'cambiosjk_deleted_ids_v1';
 
 function getDeletedIds(): Set<string> {
@@ -661,7 +705,7 @@ export const StorageService = {
             !isDeleted(a.id)
         );
         localPending.forEach((a) => {
-          SupabaseSyncService.upsertAccount(a, m).catch(() => {});
+          pushAccount(a, m).catch(() => {});
         });
 
         const localMap = new Map<string, Account>();
@@ -673,6 +717,10 @@ export const StorageService = {
         const mergedAccounts = [
           ...validRemote.map((remote) => {
             const loc = localMap.get(remote.id) || localMap.get(remote.name.trim().toUpperCase());
+            if (loc && loc.id === remote.id && isAccountPending(m, remote.id)) {
+              pushAccount(loc, m).catch(() => {});
+              return loc;
+            }
             return {
               ...remote,
               account_subtype: remote.account_subtype || loc?.account_subtype || '',
@@ -1075,7 +1123,7 @@ export const StorageService = {
       summary: `${existingIndex >= 0 ? 'Actualizada' : 'Creada'} cuenta ${account.name} (${account.currency}) con saldo ${account.current_balance}`,
       data: account,
     });
-    SupabaseSyncService.upsertAccount(account, m).catch((err) => {
+    pushAccount(account, m).catch((err) => {
       console.error(`[SupabaseSync] Error al subir cuenta ${account.name} a Supabase:`, err);
     });
     return account;
@@ -1120,7 +1168,7 @@ export const StorageService = {
       }
     }
     if (updatedAcc) {
-      SupabaseSyncService.upsertAccount(updatedAcc, m).catch(() => {});
+      pushAccount(updatedAcc, m).catch(() => {});
     }
   },
 
@@ -1178,7 +1226,7 @@ export const StorageService = {
     });
     this.saveAccounts(updated, m);
     if (updatedAcc) {
-      SupabaseSyncService.upsertAccount(updatedAcc, m).catch(() => {});
+      pushAccount(updatedAcc, m).catch(() => {});
     }
   },
 

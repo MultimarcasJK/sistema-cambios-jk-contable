@@ -66,8 +66,9 @@ export const SupabaseSyncService = {
     }
   },
 
-  async upsertAccount(account: Account, mode: AppMode): Promise<void> {
-    if (!isSupabaseConfigured || !supabase) return;
+  // true = Supabase confirmó el guardado
+  async upsertAccount(account: Account, mode: AppMode): Promise<boolean> {
+    if (!isSupabaseConfigured || !supabase) return false;
     const table = `${mode}_cuentas`;
     try {
       const payload: any = {
@@ -90,9 +91,12 @@ export const SupabaseSyncService = {
       const { error } = await supabase.from(table).upsert(payload);
       if (error) {
         console.error(`[SupabaseSync] Error al guardar cuenta ${account.name} en ${table}:`, error);
+        return false;
       }
+      return true;
     } catch (err) {
       console.error(`[SupabaseSync] Excepción al guardar cuenta en ${table}:`, err);
+      return false;
     }
   },
 
