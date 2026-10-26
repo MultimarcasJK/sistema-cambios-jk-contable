@@ -124,11 +124,15 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
   const handleSaveAccount = (updated: Account) => {
     const currentMode = appMode || StorageService.getAppMode();
     const before = accounts.find((a) => a.id === updated.id);
-    const balanceChanged =
-      before && Math.abs((before.current_balance || 0) - (updated.current_balance || 0)) > 0.00005;
+    // El saldo actual ya viene movido por el cambio del saldo inicial; solo es ajuste manual
+    // si además se escribió otro número en el disponible
+    const expected = before
+      ? (before.current_balance || 0) + (updated.initial_balance || 0) - (before.initial_balance || 0)
+      : 0;
+    const balanceChanged = before && Math.abs(expected - (updated.current_balance || 0)) > 0.00005;
     let reason: string | null = null;
     if (before && balanceChanged) {
-      reason = askAdjustReason(updated.name, before.current_balance, updated.current_balance);
+      reason = askAdjustReason(updated.name, Number(expected.toFixed(4)), updated.current_balance);
       if (reason === null) return;
     }
     // Los datos de la cuenta se guardan sin tocar el saldo; el saldo cambia solo mediante un ajuste.

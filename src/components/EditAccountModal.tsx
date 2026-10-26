@@ -303,7 +303,17 @@ export function EditAccountModal({
                   type="number"
                   step="any"
                   value={formData.initial_balance}
-                  onChange={(e) => setFormData({ ...formData, initial_balance: e.target.value })}
+                  onChange={(e) => {
+                    // El disponible se mueve al instante lo mismo que cambia el saldo inicial
+                    const prevIni = parseFloat(formData.initial_balance) || 0;
+                    const nextIni = parseFloat(e.target.value) || 0;
+                    const current = parseFloat(formData.current_balance) || 0;
+                    setFormData({
+                      ...formData,
+                      initial_balance: e.target.value,
+                      current_balance: String(Number((current + nextIni - prevIni).toFixed(4))),
+                    });
+                  }}
                   className="w-full text-xs font-mono font-bold border border-slate-300 rounded-xl pl-12 pr-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
