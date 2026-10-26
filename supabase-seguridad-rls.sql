@@ -119,6 +119,9 @@ BEGIN
       -- Bitácora (supabase-contabilidad.sql): solo leer y agregar, nunca editar ni borrar
       EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (%s)', 'jk_leer', tbl, cond);
       EXECUTE format('CREATE POLICY %I ON public.%I FOR INSERT TO authenticated WITH CHECK (%s)', 'jk_crear', tbl, cond);
+    ELSIF tbl LIKE '%\_historial\_clientes' THEN
+      -- Historial por cliente (supabase-historial-clientes.sql): lo llenan los triggers, la app solo lee
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (%s)', 'jk_leer', tbl, cond);
     ELSIF tbl LIKE '%\_ajustes\_saldo' THEN
       -- Ajustes de saldo: leer, agregar y borrar (reseteo maestro), sin editar
       EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (%s)', 'jk_leer', tbl, cond);
