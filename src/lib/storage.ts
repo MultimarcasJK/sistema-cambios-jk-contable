@@ -56,9 +56,11 @@ import {
   normalizeDebtorName,
   getManualDebt,
   withManualEntry,
+  findLostDebts,
+  LostDebtCandidate,
   pendingUpsertIds,
 } from './debtor-sync';
-import { localDateStr } from './dates';
+import { localDateStr, localDateOf } from './dates';
 
 let activeAppMode: AppMode = 'detal';
 
@@ -2955,6 +2957,35 @@ export const StorageService = {
     } catch {}
 
     return newDebtor;
+  },
+
+  // Deudores cuya deuda anotada a mano pudo borrar el recálculo (ver findLostDebts).
+  async findLostDebts(mode?: AppMode): Promise<LostDebtCandidate[]> {
+    const m = mode || this.getAppMode();
+    const detalTxs = (getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []) || []).filter(Boolean);
+    const mayorTxs = (getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []) || []).filter(Boolean);
+    const payments = (getFromStorage<DebtPayment[]>(this.getDebtPaymentsKey(m), []) || []).filter(Boolean);
+    const remesasFiadas = this.getRemesas(m)
+      .filter((r) => r && r.estado !== 'anulada' && (r.fiado_usd || 0) > 0)
+      .map((r) => ({ client_name: r.remitente_name, created_at: r.created_at, date: r.date }));
+    // Para cada cliente, el día de su primera operación (el más temprano entre fecha y registro)
+    const firstActivityDay = new Map<string, string>();
+    [...detalTxs, ...mayorTxs, ...payments, ...remesasFiadas].forEach((r) => {
+      const name = normalizeDebtorName(r?.client_name);
+      if (!name) return;
+      const days = [(r.date || '').slice(0, 10), localDateOf(r.created_at)].filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x));
+      days.forEach((day) => {
+        const prev = firstActivityDay.get(name);
+        if (!prev || day < prev) firstActivityDay.set(name, day);
+      });
+    });
+    const remoteDebtors = await SupabaseSyncService.fetchDebtors(m).catch(() => null);
+    return findLostDebts({
+      debtors: this.getDebtors(m),
+      closures: this.getClosures(m),
+      remoteDebtors,
+      firstActivityDay,
+    });
   },
 
   // Deuda anotada a mano desde Deudores. Queda guardada aparte ([MANUAL:x] en notas) para que

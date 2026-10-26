@@ -23,9 +23,10 @@ import {
   FileText,
   Trash2,
   Pencil,
+  History,
 } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
-import { stripManualTag } from '@/lib/debtor-sync';
+import { stripManualTag, LostDebtCandidate } from '@/lib/debtor-sync';
 import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
 
 interface DebtorsProps {
@@ -61,6 +62,33 @@ export function DebtorsView({
   const [voucherData, setVoucherData] = useState<VoucherData | null>(null);
   const [selectedClientForHistory, setSelectedClientForHistory] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'debtors' | 'payments'>('debtors');
+  // Revisión de deudas anotadas a mano que el recálculo borró (antes de la marca [MANUAL])
+  const [lostDebts, setLostDebts] = useState<LostDebtCandidate[] | null>(null);
+  const [lostAmounts, setLostAmounts] = useState<Record<string, string>>({});
+  const [checkingLost, setCheckingLost] = useState(false);
+
+  const checkLostDebts = async () => {
+    setCheckingLost(true);
+    try {
+      const found = await StorageService.findLostDebts(appMode);
+      setLostDebts(found);
+      setLostAmounts(Object.fromEntries(found.map((c) => [c.client_name, c.old_debt.toFixed(2)])));
+    } finally {
+      setCheckingLost(false);
+    }
+  };
+
+  const recoverLostDebt = (c: LostDebtCandidate) => {
+    const amount = parseFormattedNumber(lostAmounts[c.client_name] || '');
+    if (!amount || amount <= 0) {
+      alert('Escribe el monto que debía anotado a mano.');
+      return;
+    }
+    if (!confirm(`¿Volver a anotar ${amount.toFixed(2)} USD de deuda a ${c.client_name}? Quedará en ${(c.current_debt + amount).toFixed(2)} USD.`)) return;
+    StorageService.addManualDebt({ client_name: c.client_name, amount }, appMode);
+    setLostDebts((prev) => (prev || []).filter((x) => x.client_name !== c.client_name));
+    onDataChange();
+  };
 
   const availableCurrencies = useMemo(() => CurrencyService.getCurrencies(), []);
 
@@ -303,6 +331,7 @@ export function DebtorsView({
           </div>
         </div>
 
+        <div className="flex flex-col gap-2 self-start sm:self-auto">
         <button
           onClick={() => setIsAdding(!isAdding)}
           className="flex items-center space-x-2 bg-white text-blue-700 hover:bg-blue-50 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-sm self-start sm:self-auto"
@@ -310,7 +339,79 @@ export function DebtorsView({
           <Plus className="w-4 h-4" />
           <span>Agregar Cliente / Deuda</span>
         </button>
+        <button
+          onClick={checkLostDebts}
+          disabled={checkingLost}
+          className="flex items-center space-x-2 bg-blue-500/30 text-white hover:bg-blue-500/50 font-bold text-xs px-4 py-2 rounded-xl transition disabled:opacity-60"
+        >
+          <History className="w-4 h-4" />
+          <span>{checkingLost ? 'Revisando...' : 'Revisar deudas perdidas'}</span>
+        </button>
+        </div>
       </div>
+
+      {/* Deudas anotadas a mano que el recálculo borró */}
+      {lostDebts && (
+        <div className="bg-white p-5 rounded-2xl border border-amber-300 shadow-sm">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Deudas anotadas a mano que se perdieron</h3>
+              <p className="text-xs text-slate-500">
+                Clientes cuyo saldo en un cierre anterior a su primera venta o abono (o en Supabase) era mayor que el de hoy.
+                Revisa el monto antes de recuperarlo: se suma a lo que ya deben por sus operaciones.
+              </p>
+            </div>
+            <button onClick={() => setLostDebts(null)} className="text-xs font-semibold text-slate-500 hover:text-slate-800">Cerrar</button>
+          </div>
+          {lostDebts.length === 0 ? (
+            <p className="text-xs font-semibold text-emerald-700">No se encontró ninguna deuda perdida.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-slate-500 border-b">
+                    <th className="py-2 pr-3">Cliente</th>
+                    <th className="py-2 pr-3">Debe hoy</th>
+                    <th className="py-2 pr-3">Debía antes</th>
+                    <th className="py-2 pr-3">Dónde</th>
+                    <th className="py-2 pr-3">Monto a recuperar</th>
+                    <th className="py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lostDebts.map((c) => (
+                    <tr key={c.client_name} className="border-b last:border-0">
+                      <td className="py-2 pr-3 font-bold text-slate-900">{c.client_name}</td>
+                      <td className="py-2 pr-3 font-mono">${c.current_debt.toFixed(2)}</td>
+                      <td className="py-2 pr-3 font-mono font-bold text-rose-600">${c.old_debt.toFixed(2)}</td>
+                      <td className="py-2 pr-3 text-slate-600">
+                        {c.source === 'cierre' ? `Cierre del ${c.source_date}` : 'Supabase'}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={lostAmounts[c.client_name] || ''}
+                          onChange={(e) => setLostAmounts((prev) => ({ ...prev, [c.client_name]: e.target.value }))}
+                          className="w-28 font-mono border border-slate-300 rounded-lg px-2 py-1"
+                        />
+                      </td>
+                      <td className="py-2">
+                        <button
+                          onClick={() => recoverLostDebt(c)}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg"
+                        >
+                          Recuperar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Formulario Nuevo Deudor */}
       {isAdding && (
