@@ -29,6 +29,10 @@ import { localDateStr } from '@/lib/dates';
 import { stripManualTag, LostDebtCandidate } from '@/lib/debtor-sync';
 import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
 
+// Botón "Revisar deudas perdidas": oculto, ya se usó para recuperar las deudas que borró el
+// recálculo. Poner en true para volver a mostrarlo.
+const SHOW_LOST_DEBTS_BUTTON = false;
+
 interface DebtorsProps {
   debtors: Debtor[];
   accounts?: Account[];
@@ -339,6 +343,7 @@ export function DebtorsView({
           <Plus className="w-4 h-4" />
           <span>Agregar Cliente / Deuda</span>
         </button>
+        {SHOW_LOST_DEBTS_BUTTON && (
         <button
           onClick={checkLostDebts}
           disabled={checkingLost}
@@ -347,6 +352,7 @@ export function DebtorsView({
           <History className="w-4 h-4" />
           <span>{checkingLost ? 'Revisando...' : 'Revisar deudas perdidas'}</span>
         </button>
+        )}
         </div>
       </div>
 
