@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Account, AppMode } from '@/types';
 import { StorageService } from '@/lib/storage';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 // Nombres que se pueden elegir al corregir: clientes y deudores (y remitentes en remesas)
 export function knownClientNames(mode: AppMode | undefined, withRemitentes = false): string[] {
@@ -124,7 +125,7 @@ function EditRecordModal({ cfg, onDone }: { cfg: EditRecordConfig; onDone: (r: E
                 {f.label}
                 {cur && <span className="font-normal text-slate-400"> ({cur.currency})</span>}
               </label>
-              <select
+              <SearchableSelect
                 value={accs[f.key]}
                 onChange={(e) => setAccs((s) => ({ ...s, [f.key]: e.target.value }))}
                 className={input}
@@ -135,7 +136,7 @@ function EditRecordModal({ cfg, onDone }: { cfg: EditRecordConfig; onDone: (r: E
                     {accName(a)} · {a.currency}
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
             </div>
           );
         })}

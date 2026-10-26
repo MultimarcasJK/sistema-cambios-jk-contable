@@ -6,6 +6,7 @@ import { CurrencyService } from '@/lib/currencies';
 import { StorageService } from '@/lib/storage';
 import { ArrowDownLeft, X } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 interface AbonoModalProps {
   isOpen: boolean;
@@ -356,7 +357,7 @@ export function AbonoModal({
               <label className="block text-xs font-semibold text-slate-600 mb-1">
                 Cuenta donde ingresó el dinero (Suma a tu saldo)
               </label>
-              <select
+              <SearchableSelect
                 value={paymentAccountId}
                 onChange={(e) => setPaymentAccountId(e.target.value)}
                 className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white"
@@ -384,7 +385,7 @@ export function AbonoModal({
                       ))}
                   </optgroup>
                 )}
-              </select>
+              </SearchableSelect>
             </div>
           )}
 

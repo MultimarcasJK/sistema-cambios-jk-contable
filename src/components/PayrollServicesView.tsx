@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { SharePayrollVoucherModal } from './SharePayrollVoucherModal';
 import { localDateStr } from '@/lib/dates';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 interface PayrollServicesViewProps {
   accounts: Account[];
@@ -1510,7 +1511,7 @@ export function PayrollServicesView({
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                       Cuenta / Banco Emisor * (Moneda de Pago: {liquidationForm.payment_currency})
                     </label>
-                    <select
+                    <SearchableSelect
                       required
                       value={liquidationForm.account_id}
                       onChange={(e) => setLiquidationForm({ ...liquidationForm, account_id: e.target.value })}
@@ -1537,7 +1538,7 @@ export function PayrollServicesView({
                           ))}
                         </optgroup>
                       )}
-                    </select>
+                    </SearchableSelect>
                   </div>
 
                   {/* Número de Referencia */}
@@ -2083,7 +2084,7 @@ export function PayrollServicesView({
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
                       Cuenta Bancaria / Caja Emisora * (Moneda: {serviceForm.currency})
                     </label>
-                    <select
+                    <SearchableSelect
                       required
                       value={serviceForm.account_id}
                       onChange={(e) => setServiceForm({ ...serviceForm, account_id: e.target.value })}
@@ -2110,7 +2111,7 @@ export function PayrollServicesView({
                           ))}
                         </optgroup>
                       )}
-                    </select>
+                    </SearchableSelect>
                   </div>
 
                   {/* Resumen del Costo en USD */}

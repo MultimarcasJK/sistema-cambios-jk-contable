@@ -123,6 +123,12 @@ body {
   color: #ffffff !important;
   background-color: #1e293b !important;
 }
+/* Selectores de cuentas buscables con fondo oscuro: texto claro como los select de antes */
+[data-theme="detal"] input[data-combobox][class*="bg-slate-8"]:not([type="checkbox"]):not([type="radio"]),
+[data-theme="detal"] input[data-combobox][class*="bg-slate-9"]:not([type="checkbox"]):not([type="radio"]),
+[data-theme="detal"] .bg-slate-900 input[data-combobox]:not([type="checkbox"]):not([type="radio"]) {
+  color: #ffffff !important;
+}
 [data-theme="detal"] select[class*="bg-slate-"] option,
 [data-theme="detal"] select.bg-slate-800 option,
 [data-theme="detal"] select.bg-slate-900 option,

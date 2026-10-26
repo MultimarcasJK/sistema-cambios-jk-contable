@@ -8,6 +8,7 @@ import { ArrowLeftRight, CheckCircle, CopyX, Search, Trash2 } from 'lucide-react
 import { useAuth } from '@/lib/auth-context';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInputNumber } from '@/lib/formatters';
 import { localDateStr } from '@/lib/dates';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 interface TransfersProps {
   accounts: Account[];
@@ -233,7 +234,7 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
               <label className="block text-xs font-semibold text-slate-600 mb-1">
                 Cuenta Origen (Banco Doy) {fromAccount ? `[${fromAccount.currency}]` : ''} *
               </label>
-              <select
+              <SearchableSelect
                 value={formData.from_account_id}
                 onChange={(e) => setFormData({ ...formData, from_account_id: e.target.value })}
                 className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 bg-white"
@@ -249,14 +250,14 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                     ))}
                   </optgroup>
                 ))}
-              </select>
+              </SearchableSelect>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
                 Cuenta Destino (Banco Recibe) {toAccount ? `[${toAccount.currency}]` : ''} *
               </label>
-              <select
+              <SearchableSelect
                 value={formData.to_account_id}
                 onChange={(e) => setFormData({ ...formData, to_account_id: e.target.value })}
                 className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 bg-white"
@@ -272,7 +273,7 @@ export function TransfersView({ accounts, transfers, onDataChange }: TransfersPr
                     ))}
                   </optgroup>
                 ))}
-              </select>
+              </SearchableSelect>
             </div>
 
             <div>

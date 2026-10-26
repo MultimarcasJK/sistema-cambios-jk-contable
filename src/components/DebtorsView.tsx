@@ -28,6 +28,7 @@ import {
 import { localDateStr } from '@/lib/dates';
 import { stripManualTag, LostDebtCandidate } from '@/lib/debtor-sync';
 import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 // Botón "Revisar deudas perdidas": oculto, ya se usó para recuperar las deudas que borró el
 // recálculo. Poner en true para volver a mostrarlo.
@@ -922,7 +923,7 @@ export function DebtorsView({
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
                     Cuenta donde ingresó el dinero (Opcional)
                   </label>
-                  <select
+                  <SearchableSelect
                     value={paymentAccountId}
                     onChange={(e) => setPaymentAccountId(e.target.value)}
                     className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white"
@@ -952,7 +953,7 @@ export function DebtorsView({
                           ))}
                       </optgroup>
                     )}
-                  </select>
+                  </SearchableSelect>
                 </div>
               )}
 

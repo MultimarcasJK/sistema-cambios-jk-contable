@@ -11,6 +11,7 @@ import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInput
 import { Receipt, CheckCircle, Search, ArrowUpRight, Coins, Trash2, Briefcase } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
 import { APARTE_CONCEPT, isAparte, aparteBalances } from '@/lib/aparte';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 interface ExpensesProps {
   accounts: Account[];
@@ -347,7 +348,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
                 {formData.type === 'ingreso' ? 'Cuenta Receptora (Suma saldo)' : 'Cuenta Pagadora (Resta saldo)'}
                 {aparte && ' *'}
               </label>
-              <select
+              <SearchableSelect
                 value={formData.account_id}
                 onChange={(e) => setFormData({ ...formData, account_id: e.target.value })}
                 className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white cursor-pointer"
@@ -375,7 +376,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
                       ))}
                   </optgroup>
                 )}
-              </select>
+              </SearchableSelect>
             </div>
 
             {/* Tasa de cambio hacia USD */}

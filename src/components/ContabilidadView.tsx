@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth-context';
 import { buildLedger, entryIsBalanced, accountKey, ORIGIN_LABELS, LedgerEntry } from '@/lib/ledger';
 import { formatRegionalAmount } from '@/lib/formatters';
 import { localDateStr } from '@/lib/dates';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 interface ContabilidadProps {
   appMode: AppMode;
@@ -467,7 +468,7 @@ export function ContabilidadView({ appMode, accounts, dataVersion, onDataChange 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">Cuenta</label>
-            <select
+            <SearchableSelect
               value={selectedAccount}
               onChange={(e) => setSelectedAccount(e.target.value)}
               className="w-full sm:w-96 text-sm border border-slate-300 rounded-xl px-3 py-2"
@@ -478,7 +479,7 @@ export function ContabilidadView({ appMode, accounts, dataVersion, onDataChange 
                   {a.name} ({a.currency})
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           </div>
           {selectedAccount && mayorRows.length === 0 && (
             <p className="text-xs text-slate-500">Esta cuenta no tiene movimientos.</p>
