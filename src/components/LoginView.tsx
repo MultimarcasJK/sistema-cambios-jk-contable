@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertCircle, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 export function LoginView() {
   const { signIn } = useAuth();
@@ -31,12 +31,6 @@ export function LoginView() {
       }
       setIsLoading(false);
     }
-  };
-
-  const handleQuickFill = (fillEmail: string, fillPass: string) => {
-    setEmail(fillEmail);
-    setPassword(fillPass);
-    setErrorMessage(null);
   };
 
   return (
@@ -145,42 +139,6 @@ export function LoginView() {
               )}
             </button>
           </form>
-
-          {/* Accesos Rápidos de Prueba */}
-          <div className="mt-6 pt-5 border-t border-slate-800">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5 text-center">
-              Accesos Rápido Configurados:
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickFill('admin.cambiosjk@gmail.com', 'AdminJK2026*')}
-                className="p-2.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-xl text-left transition cursor-pointer group"
-              >
-                <div className="flex items-center space-x-1.5 text-blue-400 text-xs font-bold">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Administrador</span>
-                </div>
-                <div className="text-[10px] text-slate-400 mt-0.5 group-hover:text-slate-300">
-                  Acceso Total
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickFill('operador.cambiosjk@gmail.com', 'AdminJK2026*')}
-                className="p-2.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-xl text-left transition cursor-pointer group"
-              >
-                <div className="flex items-center space-x-1.5 text-emerald-400 text-xs font-bold">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Operador Taquilla</span>
-                </div>
-                <div className="text-[10px] text-slate-400 mt-0.5 group-hover:text-slate-300">
-                  Operativo (Sin ganancias)
-                </div>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
