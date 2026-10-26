@@ -23,6 +23,7 @@ import { COUNTRIES_LIST } from '@/lib/countries';
 import { useAuth } from '@/lib/auth-context';
 import { formatRegionalAmount, parseFormattedNumber } from '@/lib/formatters';
 import { localDateStr } from '@/lib/dates';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 interface RemesasProps {
   appMode: AppMode;
@@ -743,7 +744,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className={label}>Cuenta donde entró el dinero *</label>
-                <select
+                <SearchableSelect
                   value={form.cuenta_cobro_id}
                   onChange={(e) => setForm({ ...form, cuenta_cobro_id: e.target.value })}
                   className={input}
@@ -755,7 +756,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                       {a.name} ({a.currency})
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
               <div>
                 <label className={label}>Monto a enviar ({monedaOrigen}) *</label>
@@ -846,7 +847,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
               {form.metodo_pago === 'cuenta_propia' ? (
                 <div>
                   <label className={label}>Cuenta desde donde se paga</label>
-                  <select
+                  <SearchableSelect
                     value={form.cuenta_pago_id}
                     onChange={(e) => setForm({ ...form, cuenta_pago_id: e.target.value })}
                     className={input}
@@ -859,7 +860,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                           {a.name} ({a.currency})
                         </option>
                       ))}
-                  </select>
+                  </SearchableSelect>
                 </div>
               ) : (
                 <div>
@@ -1110,7 +1111,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                         {accion.metodo === 'cuenta_propia' ? (
                           <div>
                             <label className={label}>Cuenta que paga ({r.moneda_pago})</label>
-                            <select
+                            <SearchableSelect
                               value={accion.cuenta}
                               onChange={(e) => setAccion({ ...accion, cuenta: e.target.value })}
                               className={input}
@@ -1123,7 +1124,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                                     {a.name} · saldo {amt(a.current_balance, a.currency)}
                                   </option>
                                 ))}
-                            </select>
+                            </SearchableSelect>
                           </div>
                         ) : (
                           <div>

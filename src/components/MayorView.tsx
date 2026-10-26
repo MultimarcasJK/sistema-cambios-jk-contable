@@ -14,6 +14,7 @@ import { useAuth } from '@/lib/auth-context';
 import { localDateStr } from '@/lib/dates';
 import { commissionInAccountCurrency, commissionOutOfAccount } from '@/lib/commission';
 import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 interface MayorProps {
   accounts: Account[];
@@ -599,7 +600,7 @@ export function MayorView({
               <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">
                 Pagado Por (Cuenta Salida {selectedCurrency})
               </label>
-              <select
+              <SearchableSelect
                 value={formData.paid_account_id}
                 onChange={(e) => setFormData({ ...formData, paid_account_id: e.target.value })}
                 className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white"
@@ -627,14 +628,14 @@ export function MayorView({
                       ))}
                   </optgroup>
                 )}
-              </select>
+              </SearchableSelect>
             </div>
 
             <div>
               <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">
                 Recibido Por (Cuenta de Cobro)
               </label>
-              <select
+              <SearchableSelect
                 value={formData.received_account_id}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -658,7 +659,7 @@ export function MayorView({
                     </option>
                   ))}
                 </optgroup>
-              </select>
+              </SearchableSelect>
             </div>
 
             <div>
@@ -890,7 +891,7 @@ export function MayorView({
                 className="pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
-            <select
+            <SearchableSelect
               value={filterPaidAcc}
               onChange={(e) => setFilterPaidAcc(e.target.value)}
               title="Filtrar por cuenta de salida"
@@ -902,8 +903,8 @@ export function MayorView({
                   {a.name || a.bank_name} · {a.currency}
                 </option>
               ))}
-            </select>
-            <select
+            </SearchableSelect>
+            <SearchableSelect
               value={filterRecvAcc}
               onChange={(e) => setFilterRecvAcc(e.target.value)}
               title="Filtrar por cuenta donde se recibió"
@@ -916,7 +917,7 @@ export function MayorView({
                   {a.name || a.bank_name} · {a.currency}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
             <input
               type="date"
               value={filterDate}

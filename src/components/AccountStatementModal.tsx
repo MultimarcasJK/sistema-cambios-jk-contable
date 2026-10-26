@@ -33,6 +33,7 @@ import {
 import { localDateStr, localDateOf, localTimeOf } from '@/lib/dates';
 import { commissionOutOfAccount } from '@/lib/commission';
 import { isAparte } from '@/lib/aparte';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 export interface AccountStatementModalProps {
   isOpen: boolean;
@@ -744,7 +745,7 @@ export function AccountStatementModal({
 
                 {/* Selector rápido de otra cuenta */}
                 {allAccounts.length > 1 && onSelectAccount && (
-                  <select
+                  <SearchableSelect
                     value={currentAccount.id}
                     onChange={(e) => {
                       const found = allAccounts.find((a) => a.id === e.target.value);
@@ -763,7 +764,7 @@ export function AccountStatementModal({
                         Cambiar a: {a.name} ({a.currency} - {a.bank_name})
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 )}
               </div>
 

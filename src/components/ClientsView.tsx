@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { localDateStr, localDateOf } from '@/lib/dates';
 import { getManualEntries, stripManualTag } from '@/lib/debtor-sync';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 interface ClientsProps {
   clients: Client[];
@@ -1201,7 +1202,7 @@ export function ClientsView({
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
                     Cuenta donde ingresó el dinero (Opcional)
                   </label>
-                  <select
+                  <SearchableSelect
                     value={paymentAccountId}
                     onChange={(e) => setPaymentAccountId(e.target.value)}
                     className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white"
@@ -1229,7 +1230,7 @@ export function ClientsView({
                           ))}
                       </optgroup>
                     )}
-                  </select>
+                  </SearchableSelect>
                 </div>
               )}
 
