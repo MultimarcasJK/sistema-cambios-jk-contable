@@ -1124,6 +1124,24 @@ export const StorageService = {
     }
   },
 
+  // Guarda lo editado en la ficha de la cuenta sin tomar el saldo actual escrito (ese va por ajuste).
+  // Si cambió el saldo inicial, el saldo actual sube o baja la misma diferencia para seguir
+  // siendo saldo inicial + operaciones.
+  saveAccountEdit(updated: Account, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const before = this.getAccounts(m).find((a) => a.id === updated.id);
+    if (!before) {
+      this.updateAccount(updated.id, updated, m);
+      return;
+    }
+    const deltaIni = (Number(updated.initial_balance) || 0) - (Number(before.initial_balance) || 0);
+    this.updateAccount(
+      updated.id,
+      { ...updated, current_balance: Number(((Number(before.current_balance) || 0) + deltaIni).toFixed(4)) },
+      m
+    );
+  },
+
   async deleteAccount(accountId: string, mode?: AppMode): Promise<void> {
     markAsDeleted(accountId);
     const m = mode || this.getAppMode();
