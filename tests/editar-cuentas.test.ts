@@ -91,3 +91,26 @@ describe('editar cuenta de un abono', () => {
     expect(saved.client_name).toBe('JUAN');
   });
 });
+
+describe('editar saldo inicial de una cuenta', () => {
+  it('el saldo actual sube lo mismo que el saldo inicial', () => {
+    const a = StorageService.getAccounts(MODE).find((x) => x.id === 'USD2')!;
+    StorageService.saveAccountEdit({ ...a, initial_balance: 13209.25, current_balance: 0 }, MODE);
+    const saved = StorageService.getAccounts(MODE).find((x) => x.id === 'USD2')!;
+    expect(saved.initial_balance).toBe(13209.25);
+    expect(saved.current_balance).toBe(13209.25);
+  });
+
+  it('respeta las operaciones que ya tenía la cuenta', () => {
+    const a = StorageService.getAccounts(MODE).find((x) => x.id === 'VES1')!;
+    StorageService.updateAccount('VES1', { current_balance: 90000 }, MODE);
+    StorageService.saveAccountEdit({ ...a, initial_balance: 100500, current_balance: 0 }, MODE);
+    expect(bal('VES1')).toBe(90500);
+  });
+
+  it('si no cambia el saldo inicial, el saldo actual no se toca', () => {
+    const a = StorageService.getAccounts(MODE).find((x) => x.id === 'USD1')!;
+    StorageService.saveAccountEdit({ ...a, name: 'NUEVO', current_balance: 5 }, MODE);
+    expect(bal('USD1')).toBe(1000);
+  });
+});

@@ -131,16 +131,9 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
       reason = askAdjustReason(updated.name, before.current_balance, updated.current_balance);
       if (reason === null) return;
     }
-    // Los datos de la cuenta se guardan sin tocar el saldo; el saldo cambia solo mediante un ajuste
-    StorageService.updateAccount(
-      updated.id,
-      {
-        ...updated,
-        current_balance: before ? before.current_balance : updated.current_balance,
-        scope: updated.scope || currentMode,
-      },
-      currentMode
-    );
+    // Los datos de la cuenta se guardan sin tocar el saldo; el saldo cambia solo mediante un ajuste.
+    // Si cambia el saldo inicial, el saldo actual se mueve lo mismo (saldo inicial + operaciones).
+    StorageService.saveAccountEdit({ ...updated, scope: updated.scope || currentMode }, currentMode);
     if (before && balanceChanged && reason) {
       try {
         StorageService.adjustAccountBalance(updated.id, updated.current_balance, reason, currentMode);
