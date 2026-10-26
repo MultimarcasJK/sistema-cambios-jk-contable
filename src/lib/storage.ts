@@ -2679,6 +2679,21 @@ export const StorageService = {
     });
 
     let hasChanges = false;
+
+    // Deuda puesta a mano sin la marca [MANUAL] (anotada antes de que existiera, o por otra vía):
+    // mientras el cliente no tenga ventas ni abonos, todo su saldo es de mano. Se marca ahora
+    // para que la primera venta o abono la sume en vez de reemplazarla (así se perdió la de CAROLINA).
+    const adoptedIds: string[] = [];
+    debtors.forEach((d, i) => {
+      if (!d || !d.current_debt || getManualDebt(d.notes) !== 0) return;
+      const isAuto = Boolean(d.id?.startsWith('deb-auto-') || (d.notes && d.notes.toLowerCase().includes('sincronizado de operaciones')));
+      if (isAuto || clientStats.has(normalizeDebtorName(d.client_name))) return;
+      // Sin tocar updated_at: el saldo no cambia y no debe ganarle a un borrado hecho en otro equipo
+      debtors[i] = { ...d, notes: withManualEntry(d.notes, d.current_debt, d.updated_at || new Date().toISOString()) };
+      adoptedIds.push(d.id);
+      hasChanges = true;
+    });
+
     clientStats.forEach((st, name) => {
       const clientAbonos = payments
         .filter((p) => p && (p.client_name || '').trim().toUpperCase() === name)
@@ -2766,6 +2781,13 @@ export const StorageService = {
 
     if (hasChanges || !rawDebtors || rawDebtors.length === 0) {
       saveToStorage(this.getDebtorsKey(m), debtors);
+    }
+
+    if (adoptedIds.length > 0) {
+      debtors
+        .filter((d) => adoptedIds.includes(d.id))
+        .forEach((d) => queueDebtorRemote({ op: 'upsert', mode: m, id: d.id, debtor: d }));
+      flushDebtorOutbox().catch(() => {});
     }
 
     // Sincronizar automáticamente hacia el módulo de Clientes

@@ -198,6 +198,8 @@ describe('sincronización con Supabase', () => {
     await StorageService.syncFromSupabase(MODE);
     tick(20000);
     expect(names()).toContain('LUIS');
+    await new Promise((r) => setTimeout(r, 0)); // deja terminar la subida pendiente
+
 
     remote.debtors.delete('deb-otro');
     await StorageService.syncFromSupabase(MODE);
@@ -237,6 +239,39 @@ describe('deuda anotada a mano', () => {
     tick();
     expect(debtOf('NEUDY')).toBe(110);
     expect(debtOf('NEUDY')).toBe(110);
+  });
+
+  it('una deuda vieja sin marca no se pierde con la primera venta (caso CAROLINA)', async () => {
+    // Deudor anotado a mano antes de que existiera la marca [MANUAL]
+    localStorage.setItem(
+      StorageService.getDebtorsKey(MODE),
+      JSON.stringify([{ id: 'deb-1700000000000', client_name: 'CAROLINA', current_debt: 1050, notes: 'Debe de antes', updated_at: '2026-10-01T00:00:00.000Z' }])
+    );
+    tick();
+    expect(debtOf('CAROLINA')).toBe(1050);
+    addCreditSale('CAROLINA', 23.38);
+    tick();
+    expect(debtOf('CAROLINA')).toBe(1073.38);
+    expect(debtOf('CAROLINA')).toBe(1073.38);
+    await new Promise((r) => setTimeout(r, 0));
+    // La marca viaja a Supabase para que otros equipos tampoco la pierdan
+    const row = Array.from(remote.debtors.values()).find((d) => d.client_name === 'CAROLINA');
+    expect(row?.notes).toContain('[MANUAL:');
+  });
+
+  it('una deuda vieja sin marca se descuenta con abonos en vez de quedar negativa', () => {
+    localStorage.setItem(
+      StorageService.getDebtorsKey(MODE),
+      JSON.stringify([{ id: 'deb-1700000000001', client_name: 'ROSA', current_debt: 500, updated_at: '2026-10-01T00:00:00.000Z' }])
+    );
+    tick();
+    expect(debtOf('ROSA')).toBe(500);
+    StorageService.addDebtPayment(
+      { debtor_id: 'deb-1700000000001', client_name: 'ROSA', date: '2026-10-01', amount: 200 } as any,
+      MODE
+    );
+    tick();
+    expect(debtOf('ROSA')).toBe(300);
   });
 });
 
