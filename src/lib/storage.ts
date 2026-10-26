@@ -56,9 +56,11 @@ import {
   normalizeDebtorName,
   getManualDebt,
   withManualEntry,
+  findLostDebts,
+  LostDebtCandidate,
   pendingUpsertIds,
 } from './debtor-sync';
-import { localDateStr } from './dates';
+import { localDateStr, localDateOf } from './dates';
 
 let activeAppMode: AppMode = 'detal';
 
@@ -2679,6 +2681,21 @@ export const StorageService = {
     });
 
     let hasChanges = false;
+
+    // Deuda puesta a mano sin la marca [MANUAL] (anotada antes de que existiera, o por otra vía):
+    // mientras el cliente no tenga ventas ni abonos, todo su saldo es de mano. Se marca ahora
+    // para que la primera venta o abono la sume en vez de reemplazarla (así se perdió la de CAROLINA).
+    const adoptedIds: string[] = [];
+    debtors.forEach((d, i) => {
+      if (!d || !d.current_debt || getManualDebt(d.notes) !== 0) return;
+      const isAuto = Boolean(d.id?.startsWith('deb-auto-') || (d.notes && d.notes.toLowerCase().includes('sincronizado de operaciones')));
+      if (isAuto || clientStats.has(normalizeDebtorName(d.client_name))) return;
+      // Sin tocar updated_at: el saldo no cambia y no debe ganarle a un borrado hecho en otro equipo
+      debtors[i] = { ...d, notes: withManualEntry(d.notes, d.current_debt, d.updated_at || new Date().toISOString()) };
+      adoptedIds.push(d.id);
+      hasChanges = true;
+    });
+
     clientStats.forEach((st, name) => {
       const clientAbonos = payments
         .filter((p) => p && (p.client_name || '').trim().toUpperCase() === name)
@@ -2766,6 +2783,13 @@ export const StorageService = {
 
     if (hasChanges || !rawDebtors || rawDebtors.length === 0) {
       saveToStorage(this.getDebtorsKey(m), debtors);
+    }
+
+    if (adoptedIds.length > 0) {
+      debtors
+        .filter((d) => adoptedIds.includes(d.id))
+        .forEach((d) => queueDebtorRemote({ op: 'upsert', mode: m, id: d.id, debtor: d }));
+      flushDebtorOutbox().catch(() => {});
     }
 
     // Sincronizar automáticamente hacia el módulo de Clientes
@@ -2933,6 +2957,35 @@ export const StorageService = {
     } catch {}
 
     return newDebtor;
+  },
+
+  // Deudores cuya deuda anotada a mano pudo borrar el recálculo (ver findLostDebts).
+  async findLostDebts(mode?: AppMode): Promise<LostDebtCandidate[]> {
+    const m = mode || this.getAppMode();
+    const detalTxs = (getFromStorage<TransactionDetal[]>(this.getTransactionsDetalKey(m), []) || []).filter(Boolean);
+    const mayorTxs = (getFromStorage<TransactionMayor[]>(this.getTransactionsMayorKey(m), []) || []).filter(Boolean);
+    const payments = (getFromStorage<DebtPayment[]>(this.getDebtPaymentsKey(m), []) || []).filter(Boolean);
+    const remesasFiadas = this.getRemesas(m)
+      .filter((r) => r && r.estado !== 'anulada' && (r.fiado_usd || 0) > 0)
+      .map((r) => ({ client_name: r.remitente_name, created_at: r.created_at, date: r.date }));
+    // Para cada cliente, el día de su primera operación (el más temprano entre fecha y registro)
+    const firstActivityDay = new Map<string, string>();
+    [...detalTxs, ...mayorTxs, ...payments, ...remesasFiadas].forEach((r) => {
+      const name = normalizeDebtorName(r?.client_name);
+      if (!name) return;
+      const days = [(r.date || '').slice(0, 10), localDateOf(r.created_at)].filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x));
+      days.forEach((day) => {
+        const prev = firstActivityDay.get(name);
+        if (!prev || day < prev) firstActivityDay.set(name, day);
+      });
+    });
+    const remoteDebtors = await SupabaseSyncService.fetchDebtors(m).catch(() => null);
+    return findLostDebts({
+      debtors: this.getDebtors(m),
+      closures: this.getClosures(m),
+      remoteDebtors,
+      firstActivityDay,
+    });
   },
 
   // Deuda anotada a mano desde Deudores. Queda guardada aparte ([MANUAL:x] en notas) para que

@@ -198,6 +198,8 @@ describe('sincronización con Supabase', () => {
     await StorageService.syncFromSupabase(MODE);
     tick(20000);
     expect(names()).toContain('LUIS');
+    await new Promise((r) => setTimeout(r, 0)); // deja terminar la subida pendiente
+
 
     remote.debtors.delete('deb-otro');
     await StorageService.syncFromSupabase(MODE);
@@ -238,6 +240,39 @@ describe('deuda anotada a mano', () => {
     expect(debtOf('NEUDY')).toBe(110);
     expect(debtOf('NEUDY')).toBe(110);
   });
+
+  it('una deuda vieja sin marca no se pierde con la primera venta (caso CAROLINA)', async () => {
+    // Deudor anotado a mano antes de que existiera la marca [MANUAL]
+    localStorage.setItem(
+      StorageService.getDebtorsKey(MODE),
+      JSON.stringify([{ id: 'deb-1700000000000', client_name: 'CAROLINA', current_debt: 1050, notes: 'Debe de antes', updated_at: '2026-10-01T00:00:00.000Z' }])
+    );
+    tick();
+    expect(debtOf('CAROLINA')).toBe(1050);
+    addCreditSale('CAROLINA', 23.38);
+    tick();
+    expect(debtOf('CAROLINA')).toBe(1073.38);
+    expect(debtOf('CAROLINA')).toBe(1073.38);
+    await new Promise((r) => setTimeout(r, 0));
+    // La marca viaja a Supabase para que otros equipos tampoco la pierdan
+    const row = Array.from(remote.debtors.values()).find((d) => d.client_name === 'CAROLINA');
+    expect(row?.notes).toContain('[MANUAL:');
+  });
+
+  it('una deuda vieja sin marca se descuenta con abonos en vez de quedar negativa', () => {
+    localStorage.setItem(
+      StorageService.getDebtorsKey(MODE),
+      JSON.stringify([{ id: 'deb-1700000000001', client_name: 'ROSA', current_debt: 500, updated_at: '2026-10-01T00:00:00.000Z' }])
+    );
+    tick();
+    expect(debtOf('ROSA')).toBe(500);
+    StorageService.addDebtPayment(
+      { debtor_id: 'deb-1700000000001', client_name: 'ROSA', date: '2026-10-01', amount: 200 } as any,
+      MODE
+    );
+    tick();
+    expect(debtOf('ROSA')).toBe(300);
+  });
 });
 
 describe('historial de la deuda anotada a mano', () => {
@@ -275,5 +310,64 @@ describe('teléfonos que repiten el nombre', () => {
     StorageService.addDebtor({ client_name: 'Pedro', current_debt: 5, phone: 'pedro ' }, MODE);
     tick();
     expect(StorageService.getDebtors(MODE).find((d) => d.client_name === 'PEDRO')?.phone).toBeUndefined();
+  });
+});
+
+describe('revisar deudas perdidas', () => {
+  it('encuentra la deuda de mano en el último cierre antes de la primera venta', async () => {
+    const { findLostDebts } = await import('@/lib/debtor-sync');
+    const found = findLostDebts({
+      debtors: [
+        { id: 'deb-1', client_name: 'CAROLINA', current_debt: 23.38, notes: 'Debe de antes' },
+        { id: 'deb-auto-detal-PEDRO', client_name: 'PEDRO', current_debt: 10, notes: 'Sincronizado de operaciones por cobrar' },
+        { id: 'deb-2', client_name: 'NEUDY', current_debt: 130, notes: '[MANUAL:100]' },
+        { id: 'deb-3', client_name: 'ANA', current_debt: 50 },
+      ] as any,
+      closures: [
+        { date: '2026-10-23', debtors_snapshot: [{ client_name: 'CAROLINA', current_debt: 1073.38 }] },
+        { date: '2026-10-22', debtors_snapshot: [{ client_name: 'CAROLINA', current_debt: 1050 }, { client_name: 'PEDRO', current_debt: 900 }] },
+        { date: '2026-10-20', debtors_snapshot: [{ client_name: 'CAROLINA', current_debt: 999 }] },
+      ],
+      remoteDebtors: [{ id: 'deb-3', client_name: 'ANA', current_debt: 50 }] as any,
+      firstActivityDay: new Map([
+        ['CAROLINA', '2026-10-23'],
+        ['PEDRO', '2026-10-01'],
+        ['NEUDY', '2026-10-01'],
+        ['ANA', '2026-10-01'],
+      ]),
+    });
+    expect(found).toEqual([
+      { client_name: 'CAROLINA', current_debt: 23.38, old_debt: 1050, source: 'cierre', source_date: '2026-10-22' },
+    ]);
+  });
+
+  it('sin cierres usa el saldo que quedó en Supabase', async () => {
+    const { findLostDebts } = await import('@/lib/debtor-sync');
+    const found = findLostDebts({
+      debtors: [{ id: 'deb-1', client_name: 'CAROLINA', current_debt: 23.38 }] as any,
+      closures: [],
+      remoteDebtors: [{ id: 'deb-1', client_name: 'CAROLINA', current_debt: 1050, notes: '' }] as any,
+      firstActivityDay: new Map([['CAROLINA', '2026-10-23']]),
+    });
+    expect(found).toEqual([{ client_name: 'CAROLINA', current_debt: 23.38, old_debt: 1050, source: 'supabase' }]);
+  });
+
+  it('la revisión completa encuentra a CAROLINA y se recupera sumando a sus ventas', async () => {
+    localStorage.setItem(
+      StorageService.getDebtorsKey(MODE),
+      JSON.stringify([{ id: 'deb-1700000000000', client_name: 'CAROLINA', current_debt: 23.38, updated_at: '2026-10-23T00:00:00.000Z' }])
+    );
+    localStorage.setItem(
+      StorageService.getClosuresKey(MODE),
+      JSON.stringify([{ id: 'c1', date: '2000-01-01', closed_at: '2000-01-01T23:00:00.000Z', debtors_snapshot: [{ debtor_id: 'deb-1700000000000', client_name: 'CAROLINA', current_debt: 1050 }] }])
+    );
+    addCreditSale('CAROLINA', 23.38);
+    tick();
+    const found = await StorageService.findLostDebts(MODE);
+    expect(found.map((c) => [c.client_name, c.old_debt])).toEqual([['CAROLINA', 1050]]);
+    StorageService.addManualDebt({ client_name: 'CAROLINA', amount: 1050 }, MODE);
+    tick();
+    expect(StorageService.getDebtors(MODE).find((d) => d.client_name === 'CAROLINA')?.current_debt).toBe(1073.38);
+    expect(await StorageService.findLostDebts(MODE)).toEqual([]);
   });
 });

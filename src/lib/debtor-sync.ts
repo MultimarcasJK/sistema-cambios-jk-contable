@@ -208,3 +208,57 @@ export function withManualEntry(notes: string | undefined | null, amount: number
   const tag = '[MANUAL:' + entries.map((e) => (e.at ? e.at + '=' : '') + e.amount).join(';') + ']';
   return (base ? base + ' ' : '') + tag;
 }
+
+// Deuda anotada a mano que el recálculo pudo haber borrado (antes de la marca [MANUAL]): la
+// primera venta o abono del cliente reemplazaba su saldo. Se busca el saldo que tenía en el
+// último cierre ANTERIOR a su primera operación (entonces todo era deuda de mano) y, si no hay
+// cierre, el saldo que sigue guardado en Supabase.
+export interface LostDebtCandidate {
+  client_name: string;
+  current_debt: number;
+  old_debt: number;
+  source: 'cierre' | 'supabase';
+  source_date?: string; // fecha del cierre
+}
+
+export function findLostDebts(input: {
+  debtors: Debtor[];
+  closures: Array<{ date: string; debtors_snapshot?: Array<{ client_name: string; current_debt: number }> }>;
+  remoteDebtors: Debtor[] | null;
+  firstActivityDay: Map<string, string>; // nombre -> fecha local YYYY-MM-DD de la primera operación
+}): LostDebtCandidate[] {
+  const { debtors, closures, remoteDebtors, firstActivityDay } = input;
+  const sortedClosures = [...closures].filter((c) => c && c.date).sort((a, b) => b.date.localeCompare(a.date));
+  const result: LostDebtCandidate[] = [];
+  debtors.forEach((d) => {
+    if (!d || getManualDebt(d.notes) !== 0) return;
+    // Los creados por ventas o abonos nunca tuvieron deuda de mano
+    const notes = (d.notes || '').toLowerCase();
+    if (d.id?.startsWith('deb-auto-') || /sincronizado de operaciones|generado autom|creado por abono|abono a favor/.test(notes)) return;
+    const name = normalizeDebtorName(d.client_name);
+    const firstDay = firstActivityDay.get(name);
+    if (!firstDay) return; // sin operaciones el recálculo nunca tocó su saldo
+    const current = Number((d.current_debt || 0).toFixed(2));
+
+    for (const c of sortedClosures) {
+      if (c.date >= firstDay) continue;
+      const snap = (c.debtors_snapshot || []).find((s) => normalizeDebtorName(s.client_name) === name);
+      if (!snap) continue;
+      const old = Number((snap.current_debt || 0).toFixed(2));
+      if (old > 0.01) {
+        result.push({ client_name: name, current_debt: current, old_debt: old, source: 'cierre', source_date: c.date });
+        return;
+      }
+      break; // en el último cierre antes de operar no debía nada a mano
+    }
+
+    const row = (remoteDebtors || []).find((r) => r && normalizeDebtorName(r.client_name) === name);
+    if (row && getManualDebt(row.notes) === 0) {
+      const old = Number((Number(row.current_debt) || 0).toFixed(2));
+      if (old - current > 0.01) {
+        result.push({ client_name: name, current_debt: current, old_debt: old, source: 'supabase' });
+      }
+    }
+  });
+  return result.sort((a, b) => a.client_name.localeCompare(b.client_name, 'es', { sensitivity: 'base' }));
+}
