@@ -207,7 +207,7 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
         let amountText = '$0.00 USD';
         if (isDebtor) {
           statusColor = '#dc2626';
-          statusText = 'PENDIENTE POR COBRAR';
+          statusText = 'PENDIENTE POR PAGAR';
           amountText = `$${data.currentDebt.toFixed(2)} USD`;
         } else if (hasCredit) {
           statusColor = '#2563eb';
