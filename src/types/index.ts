@@ -240,6 +240,46 @@ export interface DailyClosure {
   total_debtors_usd?: number;
 }
 
+// Reporte del día de la operadora (Cierre → "Reporte del día")
+export interface DailyReportCuadreLinea {
+  account_id: string;
+  name: string;
+  currency: Currency;
+  libro: number; // saldo que dice el sistema
+  real: number; // saldo que contó la operadora
+  diferencia: number; // real - libro (negativo = falta)
+}
+
+export interface DailyReport {
+  id: string;
+  date: string;
+  mode: AppMode;
+  operadora: string;
+  created_at: string;
+  ventas: {
+    cripto: { count: number; usdt: number; facturado_usd: number };
+    regionales: { currency: string; count: number; monto: number }[];
+    remesas_pagadas: number;
+  };
+  ganancia: {
+    cripto: number;
+    regionales: number;
+    remesas: number;
+    ingresos_extra: number;
+    gastos: number;
+    neta: number;
+  };
+  gastos_count: number;
+  ingresos_count: number;
+  abonos: { count: number; total_usd: number };
+  deudas_nuevas: { count: number; total_usd: number };
+  saldos: { account_id: string; name: string; bank_name: string; currency: Currency; balance: number }[];
+  totales_moneda: Record<string, number>;
+  cuadre: DailyReportCuadreLinea[];
+  cuadra: boolean | null;
+  notes?: string;
+}
+
 export interface Debtor {
   id: string;
   client_name: string;

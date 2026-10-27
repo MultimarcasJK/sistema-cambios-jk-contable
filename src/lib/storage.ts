@@ -6,6 +6,7 @@ import {
   Expense,
   Currency,
   DailyClosure,
+  DailyReport,
   AccountSnapshot,
   DebtorSnapshot,
   Debtor,
@@ -2681,6 +2682,25 @@ export const StorageService = {
     await SupabaseSyncService.deleteClosure(id, m).catch(() => {});
   },
 
+  // Reportes del día de la operadora (un reporte por cada vez que se comparte; el último va primero)
+  getDailyReportsKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_reportes_diarios_v1';
+  },
+
+  getDailyReports(mode?: AppMode): DailyReport[] {
+    return getFromStorage<DailyReport[]>(this.getDailyReportsKey(mode), []);
+  },
+
+  // Guarda en este equipo y en Supabase. true = Supabase confirmó el guardado.
+  async saveDailyReport(report: DailyReport, mode?: AppMode): Promise<boolean> {
+    const m = mode || report.mode || this.getAppMode();
+    const rest = this.getDailyReports(m).filter((r) => r && r.id !== report.id);
+    // Solo los últimos 200 en el navegador; el historial completo queda en Supabase
+    saveToStorage(this.getDailyReportsKey(m), [report, ...rest].slice(0, 200));
+    return SupabaseSyncService.upsertDailyReport(report, m).catch(() => false);
+  },
+
   // Debtors & Accounts Receivable - 100% aislados e independientes por modo
   syncDebtors(mode?: AppMode): Debtor[] {
     const m = mode || this.getAppMode();
@@ -3305,6 +3325,8 @@ export const StorageService = {
     saveToStorage(this.getExpensesKey('mayor'), []);
     saveToStorage(this.getClosuresKey('detal'), []);
     saveToStorage(this.getClosuresKey('mayor'), []);
+    saveToStorage(this.getDailyReportsKey('detal'), []);
+    saveToStorage(this.getDailyReportsKey('mayor'), []);
     saveToStorage(this.getSupplierPurchasesKey('detal'), []);
     saveToStorage(this.getSupplierPurchasesKey('mayor'), []);
     saveToStorage(this.getSupplierPaymentsKey('detal'), []);
@@ -3516,6 +3538,7 @@ export const StorageService = {
       saveToStorage(this.getTransfersKey(m), []);
       saveToStorage(this.getExpensesKey(m), []);
       saveToStorage(this.getClosuresKey(m), []);
+      saveToStorage(this.getDailyReportsKey(m), []);
       saveToStorage(this.getSupplierPurchasesKey(m), []);
       saveToStorage(this.getSupplierPaymentsKey(m), []);
       saveToStorage(this.getEmployeesKey(m), []);
@@ -3560,6 +3583,7 @@ export const StorageService = {
       saveToStorage(this.getTransfersKey(m), []);
       saveToStorage(this.getExpensesKey(m), []);
       saveToStorage(this.getClosuresKey(m), []);
+      saveToStorage(this.getDailyReportsKey(m), []);
       saveToStorage(this.getSupplierPurchasesKey(m), []);
       saveToStorage(this.getSupplierPaymentsKey(m), []);
       saveToStorage(this.getPayrollPaymentsKey(m), []);
