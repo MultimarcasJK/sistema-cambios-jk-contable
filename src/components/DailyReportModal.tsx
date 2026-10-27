@@ -13,7 +13,7 @@ import {
 } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { getActor } from '@/lib/actor';
-import { buildDailyReport, cuentasUsadasEl, lineaCuadra, textoDiferencia } from '@/lib/daily-report';
+import { buildDailyReport, cuentasUsadasEl, GrupoPais, lineaCuadra, saldosPorPais, textoDiferencia } from '@/lib/daily-report';
 import { buildLedger } from '@/lib/ledger';
 import { formatInputNumber, parseFormattedNumber } from '@/lib/formatters';
 import { localDateStr } from '@/lib/dates';
@@ -165,8 +165,8 @@ export function generarImagen(report: DailyReport): Promise<HTMLCanvasElement> {
       texto(report.operadora.toUpperCase(), 84, y + 80, { size: 28, bold: true, max: 420 });
       texto('FECHA', 560, y + 40, { size: 19, color: LABEL });
       texto(fechaLarga(report.date), 560, y + 80, { size: 28, bold: true });
-      texto('HORA', 790, y + 40, { size: 19, color: LABEL });
-      texto(horaDe(report.created_at), 790, y + 80, { size: 28, bold: true });
+      texto('HORA', 740, y + 40, { size: 19, color: LABEL });
+      texto(horaDe(report.created_at), 740, y + 80, { size: 28, bold: true });
       y += 110 + 28;
 
       // Resultado del cuadre de caja
@@ -244,41 +244,64 @@ export function generarImagen(report: DailyReport): Promise<HTMLCanvasElement> {
         clientes.push([`Deudas nuevas (${report.deudas_nuevas.count})`, usd(report.deudas_nuevas.total_usd), AMBAR]);
       bloque('CLIENTES', clientes);
 
-      // Saldo final de cada cuenta (y su cuadre si se contó)
+      // Saldo final de cada cuenta, agrupado por país con su total (y el cuadre si se contó)
       const cuadrePorCuenta = new Map(report.cuadre.map((l) => [l.account_id, l]));
-      const filasCuenta = report.saldos.reduce((h, s) => h + (cuadrePorCuenta.has(s.account_id) ? 80 : 50), 0);
-      const monedas = Object.entries(report.totales_moneda);
+      const grupos = saldosPorPais(report.saldos);
+      const altoFila = (id: string) => (cuadrePorCuenta.has(id) ? 80 : 50);
+      const altoGrupo = (g: GrupoPais) =>
+        50 + g.cuentas.reduce((h, s) => h + altoFila(s.account_id), 0) + Object.keys(g.totales).length * 44 + 18;
+      // Total general solo de las monedas repartidas en más de un país (si no, repite el total del país)
+      const monedas = Object.entries(report.totales_moneda).filter(
+        ([cur]) => grupos.filter((g) => g.totales[cur] !== undefined).length > 1
+      );
       if (report.saldos.length > 0) {
-        tarjeta(y, 66 + filasCuenta + 20 + monedas.length * 44 + 16);
+        const altoGrupos = grupos.reduce((h, g) => h + altoGrupo(g), 0);
+        tarjeta(y, 66 + altoGrupos + (monedas.length > 0 ? 20 + monedas.length * 44 : 0) + 16);
         yy = titulo(y, 'SALDO FINAL DE LAS CUENTAS USADAS');
-        report.saldos.forEach((s) => {
-          texto(s.name, 84, yy + 34, { size: 23, color: '#ffffff', max: 470 });
-          texto(`${fmt(s.balance)} ${s.currency}`, 916, yy + 34, {
-            size: 24,
-            bold: true,
-            color: s.balance < 0 ? ROJO : '#ffffff',
-            align: 'right',
-            max: 380,
-          });
-          const l = cuadrePorCuenta.get(s.account_id);
-          if (l) {
-            const ok = lineaCuadra(l);
-            texto(`Contado: ${fmt(l.real)} ${l.currency}`, 84, yy + 64, { size: 20, color: LABEL });
-            texto(ok ? '✓ Cuadra' : textoDiferencia(l), 916, yy + 64, {
-              size: 21,
+        grupos.forEach((g) => {
+          // Encabezado del país
+          caja(70, yy + 12, 860, 36, 10);
+          ctx.fillStyle = '#1b3560';
+          ctx.fill();
+          texto(g.nombre.toUpperCase(), 88, yy + 38, { size: 21, bold: true, color: LABEL });
+          yy += 50;
+          g.cuentas.forEach((s) => {
+            texto(s.name, 84, yy + 34, { size: 23, color: '#ffffff', max: 470 });
+            texto(`${fmt(s.balance)} ${s.currency}`, 916, yy + 34, {
+              size: 24,
               bold: true,
-              color: ok ? VERDE : l.diferencia < 0 ? ROJO : AMBAR,
+              color: s.balance < 0 ? ROJO : '#ffffff',
               align: 'right',
+              max: 380,
             });
-            yy += 80;
-          } else {
-            yy += 50;
-          }
+            const l = cuadrePorCuenta.get(s.account_id);
+            if (l) {
+              const ok = lineaCuadra(l);
+              texto(`Contado: ${fmt(l.real)} ${l.currency}`, 84, yy + 64, { size: 20, color: LABEL });
+              texto(ok ? '✓ Cuadra' : textoDiferencia(l), 916, yy + 64, {
+                size: 21,
+                bold: true,
+                color: ok ? VERDE : l.diferencia < 0 ? ROJO : AMBAR,
+                align: 'right',
+              });
+            }
+            yy += altoFila(s.account_id);
+          });
+          // Total del país (una línea por moneda)
+          Object.entries(g.totales).forEach(([cur, total]) => {
+            linea(560, yy + 4, 916, yy + 4, CARD_BORDER, 1);
+            texto(`TOTAL ${g.nombre.toUpperCase()}`, 84, yy + 32, { size: 21, bold: true, color: TEAL, max: 470 });
+            texto(`${fmt(total)} ${cur}`, 916, yy + 32, { size: 24, bold: true, color: TEAL, align: 'right' });
+            yy += 44;
+          });
+          yy += 18;
         });
-        linea(84, yy + 10, 916, yy + 10, CARD_BORDER, 2);
-        yy += 20;
+        if (monedas.length > 0) {
+          linea(84, yy + 10, 916, yy + 10, CARD_BORDER, 2);
+          yy += 20;
+        }
         monedas.forEach(([cur, total]) => {
-          texto(`TOTAL ${cur}`, 84, yy + 32, { size: 22, bold: true, color: TEAL });
+          texto(`TOTAL GENERAL ${cur}`, 84, yy + 32, { size: 22, bold: true, color: '#ffffff' });
           texto(`${fmt(total)} ${cur}`, 916, yy + 32, { size: 24, bold: true, align: 'right' });
           yy += 44;
         });

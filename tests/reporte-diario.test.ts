@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDailyReport, cuadreDeCaja, cuentasUsadasEl, deudaDeVenta, textoDiferencia } from '@/lib/daily-report';
+import { buildDailyReport, cuadreDeCaja, cuentasUsadasEl, deudaDeVenta, saldosPorPais, textoDiferencia } from '@/lib/daily-report';
 import { Account } from '@/types';
 
 const DAY = '2026-10-26';
@@ -113,5 +113,20 @@ describe('cuentas usadas en el día', () => {
     expect(r.saldos.map((s) => s.account_id)).toEqual(['caja', 'zelle']);
     expect(r.totales_moneda).toEqual({ USD: 107 });
     expect(r.cuadra).toBe(true);
+  });
+});
+
+describe('saldos por país', () => {
+  it('agrupa por país en el orden de la lista y suma cada uno', () => {
+    const grupos = saldosPorPais([
+      { account_id: 'a', name: 'BANESCO', bank_name: '', currency: 'VES', balance: 100, pais: 'VENEZUELA' },
+      { account_id: 'b', name: 'PICHINCHA', bank_name: '', currency: 'USD', balance: 10, pais: 'ECUADOR' },
+      { account_id: 'c', name: 'BDV', bank_name: '', currency: 'VES', balance: 50.5, pais: 'VENEZUELA' },
+      { account_id: 'd', name: 'EFECTIVO', bank_name: '', currency: 'USD', balance: 5, pais: 'ECUADOR' },
+    ] as any);
+    expect(grupos.map((g) => [g.nombre, g.cuentas.length, g.totales])).toEqual([
+      ['Ecuador', 2, { USD: 15 }],
+      ['Venezuela', 2, { VES: 150.5 }],
+    ]);
   });
 });
