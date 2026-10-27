@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { Lock, Mail, ArrowRight, AlertCircle, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { loginEmail } from '@/lib/login-user';
 
 export function LoginView() {
   const { signIn } = useAuth();
@@ -15,17 +16,17 @@ export function LoginView() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setErrorMessage('Por favor ingresa correo y contraseña');
+      setErrorMessage('Por favor ingresa usuario y contraseña');
       return;
     }
 
     setIsLoading(true);
     setErrorMessage(null);
 
-    const { error } = await signIn(email, password);
+    const { error } = await signIn(loginEmail(email), password);
     if (error) {
       if (error.message.includes('Invalid login credentials')) {
-        setErrorMessage('Correo o contraseña incorrectos. Verifica tus datos.');
+        setErrorMessage('Usuario o contraseña incorrectos. Verifica tus datos.');
       } else {
         setErrorMessage(error.message || 'Error al iniciar sesión');
       }
@@ -80,15 +81,18 @@ export function LoginView() {
             {/* Campo de Correo */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Correo Electrónico
+                Usuario o correo
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
-                  type="email"
+                  type="text"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@cambiosjk.com"
+                  placeholder="usuario (ej. maria) o correo"
                   required
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-900/90 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                 />
