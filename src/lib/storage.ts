@@ -171,25 +171,22 @@ function isDeleted(id: string): boolean {
   return getDeletedIds().has(id);
 }
 
-// Clientes borrados a mano, por nombre. Sin esto el cliente volvía a aparecer: la
-// sincronización de Deudores crea un cliente por cada deudor que no lo tenga, y otra copia
-// con otro id podía llegar de Supabase. Solo se vuelve a crear si se registra a mano.
-function deletedClientNamesKey(mode: AppMode): string {
-  return 'cambiosjk_' + mode + '_clientes_borrados_v1';
+// Clientes borrados a mano. Al borrar se deja en Supabase una fila "marca" con el mismo nombre
+// (id cli-borrado-NOMBRE). Así ningún equipo lo vuelve a crear desde Deudores ni deja pasar otra
+// copia con otro id, sin tocar la tabla. La marca nunca se muestra; si el cliente se registra
+// de nuevo a mano, la marca se quita.
+const CLIENT_TOMB_PREFIX = 'cli-borrado-';
+
+function normClientName(name: string | undefined | null): string {
+  return (name || '').trim().toUpperCase();
 }
 
-function getDeletedClientNames(mode: AppMode): Set<string> {
-  return new Set(getFromStorage<string[]>(deletedClientNamesKey(mode), []));
+function clientTombId(name: string): string {
+  return CLIENT_TOMB_PREFIX + normClientName(name).replace(/[^A-Z0-9]/g, '_');
 }
 
-function setClientNameDeleted(mode: AppMode, name: string | undefined, deleted: boolean): void {
-  const norm = (name || '').trim().toUpperCase();
-  if (!norm) return;
-  const set = getDeletedClientNames(mode);
-  if (deleted === set.has(norm)) return;
-  if (deleted) set.add(norm);
-  else set.delete(norm);
-  saveToStorage(deletedClientNamesKey(mode), Array.from(set).slice(-500));
+function isClientTomb(c: Pick<Client, 'id'> | null | undefined): boolean {
+  return !!c && (c.id || '').startsWith(CLIENT_TOMB_PREFIX);
 }
 
 // Filas que este dispositivo ya vio en Supabase. Si una de ellas desaparece de Supabase es
@@ -758,9 +755,17 @@ export const StorageService = {
         saveToStorage(this.getAccountsKey(m), mergedAccounts);
       }
       if (remoteClients !== null) {
-        const deletedNames = getDeletedClientNames(m);
+        // Marcas de borrado: las de Supabase más las recién hechas aquí que aún no llegan
+        const remoteTombs = remoteClients.filter((c) => isClientTomb(c) && !isDeleted(c.id));
+        const remoteTombIds = new Set(remoteTombs.map((c) => c.id));
+        const localTombs = this.getClientTombs(m).filter((c) => !remoteTombIds.has(c.id) && isRecentLocal(c));
+        localTombs.forEach((c) => SupabaseSyncService.upsertClient(c, m).catch(() => {}));
+        const tombs = [...remoteTombs, ...localTombs];
+        const tombNames = new Set(tombs.map((c) => normClientName(c.name)));
+
         const validRemote = remoteClients.filter((c) => {
-          if (isDeleted(c.id) || (c && deletedNames.has((c.name || '').trim().toUpperCase()))) {
+          if (!c || isClientTomb(c)) return false;
+          if (isDeleted(c.id) || tombNames.has(normClientName(c.name))) {
             SupabaseSyncService.deleteClient(c.id, m).catch(() => {});
             return false;
           }
@@ -773,7 +778,6 @@ export const StorageService = {
           return cleaned;
         });
 
-        const local = this.getClients(m);
         const uniqueMap = new Map<string, Client>();
         validRemote.forEach((c) => {
           if (!c || !c.name) return;
@@ -793,9 +797,12 @@ export const StorageService = {
           }
         });
 
-        const sorted = Array.from(uniqueMap.values()).sort((a, b) =>
-          a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
-        );
+        const sorted = [
+          ...Array.from(uniqueMap.values()).sort((a, b) =>
+            a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
+          ),
+          ...tombs,
+        ];
         saveToStorage(this.getClientsKey(m), sorted);
       }
       if (remoteSuppliers !== null) {
@@ -1827,7 +1834,7 @@ export const StorageService = {
     return remesa;
   },
 
-  // Clients
+  // Clients (sin las marcas de borrado)
   getClients(mode?: AppMode): Client[] {
     const m = mode || this.getAppMode();
     const key = this.getClientsKey(m);
@@ -1835,9 +1842,9 @@ export const StorageService = {
       const item = localStorage.getItem(key);
       if (item !== null) {
         try {
-          const list: Client[] = (JSON.parse(item) || []).map((c: Client) =>
-            c && isPhoneJustName(c.phone, c.name) ? { ...c, phone: '' } : c
-          );
+          const list: Client[] = (JSON.parse(item) || [])
+            .filter((c: Client) => c && !isClientTomb(c))
+            .map((c: Client) => (isPhoneJustName(c.phone, c.name) ? { ...c, phone: '' } : c));
           return list.sort((a, b) =>
             (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' })
           );
@@ -1850,19 +1857,32 @@ export const StorageService = {
     return [];
   },
 
-  saveClients(clients: Client[], mode?: AppMode): void {
+  // Marcas de los clientes borrados a mano
+  getClientTombs(mode?: AppMode): Client[] {
     const m = mode || this.getAppMode();
-    const sorted = [...clients].sort((a, b) =>
+    return getFromStorage<Client[]>(this.getClientsKey(m), []).filter((c) => c && isClientTomb(c));
+  },
+
+  // Guarda la lista visible; las marcas de borrado se conservan
+  saveClients(clients: Client[], mode?: AppMode, tombs?: Client[]): void {
+    const m = mode || this.getAppMode();
+    const sorted = [...clients.filter((c) => c && !isClientTomb(c))].sort((a, b) =>
       (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' })
     );
-    saveToStorage(this.getClientsKey(m), sorted);
+    saveToStorage(this.getClientsKey(m), [...sorted, ...(tombs ?? this.getClientTombs(m))]);
   },
 
   addClient(client: Omit<Client, 'id' | 'created_at'>, mode?: AppMode): Client {
     const m = mode || this.getAppMode();
     const all = this.getClients(m);
     const upperName = (client.name || '').trim().toUpperCase();
-    setClientNameDeleted(m, upperName, false);
+    // Registrarlo a mano de nuevo quita la marca de borrado
+    const tomb = this.getClientTombs(m).find((t) => normClientName(t.name) === upperName);
+    if (tomb) {
+      markAsDeleted(tomb.id);
+      this.saveClients(all, m, this.getClientTombs(m).filter((t) => t.id !== tomb.id));
+      SupabaseSyncService.deleteClient(tomb.id, m).catch(() => {});
+    }
     const existing = all.find((c) => (c.name || '').trim().toUpperCase() === upperName);
     if (existing) {
       unmarkDeleted(existing.id);
@@ -1902,9 +1922,20 @@ export const StorageService = {
     markAsDeleted(clientId);
     const m = mode || this.getAppMode();
     const all = this.getClients(m);
-    setClientNameDeleted(m, all.find((c) => c.id === clientId)?.name, true);
-    const updated = all.filter((c) => c.id !== clientId);
-    this.saveClients(updated, m);
+    const client = all.find((c) => c.id === clientId);
+    const tombs = this.getClientTombs(m);
+    let tomb: Client | null = null;
+    if (client && normClientName(client.name)) {
+      const id = clientTombId(client.name);
+      unmarkDeleted(id);
+      tomb = { id, name: normClientName(client.name), phone: '', current_debt: 0, created_at: new Date().toISOString() };
+    }
+    this.saveClients(
+      all.filter((c) => c.id !== clientId),
+      m,
+      tomb ? [...tombs.filter((t) => t.id !== tomb!.id), tomb] : tombs
+    );
+    if (tomb) await SupabaseSyncService.upsertClient(tomb, m).catch(() => {});
     await SupabaseSyncService.deleteClient(clientId, m).catch(() => {});
   },
 
@@ -2908,7 +2939,7 @@ export const StorageService = {
       // Los clientes borrados a mano no se vuelven a crear desde Deudores
       const clientNameSet = new Set([
         ...currentClients.map((c) => (c.name || '').trim().toUpperCase()),
-        ...Array.from(getDeletedClientNames(m)),
+        ...this.getClientTombs(m).map((t) => normClientName(t.name)),
       ]);
       let clientsChanged = false;
       debtors.forEach((d) => {
