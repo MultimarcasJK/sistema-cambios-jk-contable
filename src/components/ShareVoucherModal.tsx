@@ -376,14 +376,24 @@ export function ShareVoucherModal({ data, onClose }: ShareVoucherModalProps) {
       const file = new File([blob], `Estado_Cuenta_${data.clientName}.png`, { type: 'image/png' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Estado de Cuenta - ${data.clientName}`,
-          text: getFormattedTextMessage(),
-        });
+        // Solo la imagen: sin título ni texto, para que WhatsApp no mande un mensaje aparte
+        await navigator.share({ files: [file] });
       } else {
-        handleDownloadImage();
-        handleOpenWhatsAppText();
+        // Sin compartir nativo: se copia la imagen (o se descarga) y se abre el chat vacío para pegarla
+        let copied = false;
+        if (typeof window !== 'undefined' && window.ClipboardItem && navigator.clipboard?.write) {
+          try {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            copied = true;
+            setCopiedImage(true);
+            setTimeout(() => setCopiedImage(false), 3000);
+          } catch {
+            copied = false;
+          }
+        }
+        if (!copied) handleDownloadImage();
+        const cleanPhone = data.phone ? data.phone.replace(/[^0-9]/g, '') : '';
+        window.open(cleanPhone ? `https://wa.me/${cleanPhone}` : 'https://wa.me/', '_blank');
       }
     } catch (err) {
       console.log('Error al compartir:', err);
