@@ -5,6 +5,7 @@ import { Pencil, Trash2, Plus, Check, X } from 'lucide-react';
 import { AppMode, Beneficiario } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { COUNTRIES_LIST } from '@/lib/countries';
+import { SearchableSelect } from './SearchableSelect';
 
 const PAISES = COUNTRIES_LIST.filter((c) => c.id !== 'CRIPTO');
 
@@ -94,13 +95,13 @@ export function BeneficiariosCliente({ clientName, identification, phone, appMod
 
   const formulario = (
     <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-2.5 grid grid-cols-2 sm:grid-cols-3 gap-2">
-      <select value={draft.country} onChange={(e) => setDraft({ ...draft, country: e.target.value })} className={input}>
+      <SearchableSelect value={draft.country} onChange={(e) => setDraft({ ...draft, country: e.target.value })} className={input}>
         {PAISES.map((p) => (
           <option key={p.id} value={p.id}>
             {p.flag} {p.name}
           </option>
         ))}
-      </select>
+      </SearchableSelect>
       <input
         value={draft.name}
         onChange={(e) => setDraft({ ...draft, name: e.target.value })}

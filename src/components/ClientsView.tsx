@@ -1097,7 +1097,7 @@ export function ClientsView({
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
                   Moneda con la que paga el cliente *
                 </label>
-                <select
+                <SearchableSelect
                   value={paymentCurrency}
                   onChange={(e) => {
                     const newCurr = e.target.value as Currency;
@@ -1111,7 +1111,7 @@ export function ClientsView({
                       {c.code} - {c.name} ({c.symbol})
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
 
               {paymentCurrency !== 'USD' && paymentCurrency !== 'USDT' ? (

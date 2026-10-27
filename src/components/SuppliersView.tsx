@@ -442,7 +442,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
               </button>
             ))}
 
-            <select
+            <SearchableSelect
               value={commonCurrencies.includes(selectedCurrency) ? '' : selectedCurrency}
               onChange={(e) => {
                 if (e.target.value) handleCurrencyChange(e.target.value);
@@ -457,7 +457,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                     {c.code} - {c.name}
                   </option>
                 ))}
-            </select>
+            </SearchableSelect>
           </div>
         </div>
 
@@ -484,7 +484,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Proveedor *</label>
-              <select
+              <SearchableSelect
                 value={purchaseForm.supplier_id}
                 onChange={(e) => setPurchaseForm({ ...purchaseForm, supplier_id: e.target.value })}
                 className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 bg-white"
@@ -496,7 +496,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                     {s.name} (Deuda: ${s.current_debt_usd.toFixed(2)} USD)
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
             </div>
 
             <div>
@@ -940,7 +940,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                   <label className="block text-xs font-semibold text-slate-600 mb-1">
                     Moneda / Tipo Principal
                   </label>
-                  <select
+                  <SearchableSelect
                     value={supplierFormData.type}
                     onChange={(e) => setSupplierFormData({ ...supplierFormData, type: e.target.value })}
                     className="w-full text-xs font-bold border border-slate-300 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -952,7 +952,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                     ))}
                     <option value="CRIPTO">CRIPTO GENERAL</option>
                     <option value="FIAT">FIAT GENERAL</option>
-                  </select>
+                  </SearchableSelect>
                 </div>
 
                 <div>
