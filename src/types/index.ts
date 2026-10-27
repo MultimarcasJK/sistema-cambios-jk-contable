@@ -273,7 +273,7 @@ export interface DailyReport {
   ingresos_count: number;
   abonos: { count: number; total_usd: number };
   deudas_nuevas: { count: number; total_usd: number };
-  saldos: { account_id: string; name: string; bank_name: string; currency: Currency; balance: number }[];
+  saldos: { account_id: string; name: string; bank_name: string; currency: Currency; balance: number; pais?: string }[];
   totales_moneda: Record<string, number>;
   cuadre: DailyReportCuadreLinea[];
   cuadra: boolean | null;

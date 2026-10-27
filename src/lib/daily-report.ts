@@ -12,6 +12,7 @@ import {
 import { isAparte } from './aparte';
 import { gananciaRemesasEl, remesasPagadasEl } from './remesa-profit';
 import { LedgerEntry } from './ledger';
+import { COUNTRIES_LIST, getAccountCountry } from './countries';
 
 // Reporte del día de la operadora: mismo formato para DETAL y MAYOR.
 // Lógica pura (sin localStorage ni Supabase) para poder probarla.
@@ -69,6 +70,31 @@ export function cuentasUsadasEl(asientos: LedgerEntry[], date: string, mode: App
     });
   });
   return ids;
+}
+
+export interface GrupoPais {
+  pais: string; // id del país (VENEZUELA, COLOMBIA…)
+  nombre: string; // como se muestra
+  cuentas: DailyReport['saldos'];
+  totales: Record<string, number>; // suma por moneda dentro del país
+}
+
+// Saldos agrupados por país, en el orden de la lista de países, con el total de cada uno
+export function saldosPorPais(saldos: DailyReport['saldos']): GrupoPais[] {
+  const grupos = new Map<string, GrupoPais>();
+  saldos.forEach((s) => {
+    const pais = s.pais || 'OTROS';
+    const info = COUNTRIES_LIST.find((c) => c.id === pais);
+    const g = grupos.get(pais) || { pais, nombre: info ? info.name : pais, cuentas: [], totales: {} };
+    g.cuentas.push(s);
+    g.totales[s.currency] = r2((g.totales[s.currency] || 0) + s.balance);
+    grupos.set(pais, g);
+  });
+  const orden = (id: string) => {
+    const i = COUNTRIES_LIST.findIndex((c) => c.id === id);
+    return i === -1 ? COUNTRIES_LIST.length : i;
+  };
+  return Array.from(grupos.values()).sort((a, b) => orden(a.pais) - orden(b.pais));
 }
 
 export interface DailyReportInput {
@@ -174,6 +200,7 @@ export function buildDailyReport(input: DailyReportInput): DailyReport {
       bank_name: a.bank_name,
       currency: a.currency,
       balance: r2(Number(a.current_balance || 0)),
+      pais: getAccountCountry(a),
     })),
     totales_moneda: totales,
     cuadre,
