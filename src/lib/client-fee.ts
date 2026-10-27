@@ -88,3 +88,29 @@ export function unpackCommissionAccount(notes: string | undefined): { notes: str
   if (!m) return { notes: raw };
   return { notes: raw.replace(COMCTA_TAG_RE, ' ').trim(), commission_account: Number(m[1]) || 0 };
 }
+
+// Compras a proveedores: la tabla no guarda la tasa de costo, así que viaja como marca dentro de "notes".
+const TASA_TAG_RE = /\s*\[TASA:(-?\d+(?:\.\d+)?(?:e-?\d+)?)\]\s*/;
+
+export function packPurchaseRate(notes: string | undefined, rate?: number): string {
+  const clean = (notes || '').replace(TASA_TAG_RE, ' ').trim();
+  if (!rate || !(rate > 0)) return clean;
+  const tag = `[TASA:${Number(rate)}]`;
+  return clean ? `${clean} ${tag}` : tag;
+}
+
+export function unpackPurchaseRate(notes: string | undefined): { notes: string; buy_price?: number } {
+  const raw = notes || '';
+  const m = raw.match(TASA_TAG_RE);
+  if (!m) return { notes: raw };
+  return { notes: raw.replace(TASA_TAG_RE, ' ').trim(), buy_price: Number(m[1]) || undefined };
+}
+
+// Compras guardadas antes de que se guardara la tasa: se recupera de cantidad y costo,
+// con la misma fórmula del formulario (USD 1:1, EUR multiplica, el resto divide).
+export function rateFromPurchase(currency: string, quantity: number, costUsd: number): number {
+  if (currency === 'USD') return 1;
+  if (!(quantity > 0) || !(costUsd > 0)) return 0;
+  const rate = currency === 'EUR' ? costUsd / quantity : quantity / costUsd;
+  return Number(rate.toFixed(4));
+}
