@@ -8,6 +8,9 @@ import {
   unpackClosureMeta,
   packCommissionAccount,
   unpackCommissionAccount,
+  packPurchaseRate,
+  unpackPurchaseRate,
+  rateFromPurchase,
 } from './client-fee';
 
 // Varias tablas no guardan la hora de creación; se recupera del id (prefijo-<milisegundos>)
@@ -663,7 +666,16 @@ export const SupabaseSyncService = {
     try {
       const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
       if (error) return null;
-      return ((data || []) as any[]).map((row) => ({ ...row, created_at: createdAtOf(row) })) as SupplierPurchase[];
+      return ((data || []) as any[]).map((row) => {
+        const meta = unpackPurchaseRate(row.notes);
+        const quantity = Number(row.quantity) || 0;
+        const costUsd = Number(row.cost_usd) || 0;
+        const buyPrice =
+          meta.buy_price ||
+          Number(row.buy_price ?? row.rate) ||
+          rateFromPurchase(String(row.currency || ''), quantity, costUsd);
+        return { ...row, notes: meta.notes, buy_price: buyPrice, created_at: createdAtOf(row) };
+      }) as SupplierPurchase[];
     } catch {
       return null;
     }
@@ -683,7 +695,7 @@ export const SupabaseSyncService = {
         cost_usd: purchase.cost_usd,
         credited_amount: purchase.credited_amount || 0,
         account_id: purchase.account_id || '',
-        notes: purchase.notes || '',
+        notes: packPurchaseRate(purchase.notes, purchase.buy_price),
       });
     } catch (err) {
       /* warn */
