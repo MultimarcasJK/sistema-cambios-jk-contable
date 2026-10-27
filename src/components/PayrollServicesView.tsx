@@ -45,6 +45,7 @@ import {
 import { SharePayrollVoucherModal } from './SharePayrollVoucherModal';
 import { localDateStr } from '@/lib/dates';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { adelantoPeriod, isAdelanto, pendingAdelantos, pendingAdelantosTotal } from '@/lib/adelantos';
 
 interface PayrollServicesViewProps {
   accounts: Account[];
@@ -103,6 +104,8 @@ export function PayrollServicesView({
     reference: '',
     notes: '',
   });
+  // Adelanto: pago parcial del sueldo que se acumula y se descuenta solo en el próximo pago completo
+  const [isAdvance, setIsAdvance] = useState(false);
 
   const availableCurrencies = useMemo(() => {
     return CurrencyService.getCurrencies();
@@ -112,7 +115,7 @@ export function PayrollServicesView({
     return employees.find((e) => e.id === liquidationForm.employee_id) || null;
   }, [employees, liquidationForm.employee_id]);
 
-  const handleSelectEmployee = (empId: string) => {
+  const handleSelectEmployee = (empId: string, advance: boolean = isAdvance) => {
     const emp = employees.find((e) => e.id === empId);
     if (!emp) {
       setLiquidationForm((prev) => ({
@@ -150,15 +153,28 @@ export function PayrollServicesView({
     setLiquidationForm((prev) => ({
       ...prev,
       employee_id: emp.id,
-      base_amount: String(emp.base_salary || ''),
+      base_amount: advance ? '' : String(emp.base_salary || ''),
       bonuses: '',
-      deductions: '',
+      deductions: advance ? '' : formatInputNumber(String(pendingAdelantosTotal(payrollPayments, emp.id) || '')),
       period: suggestedPeriod,
       agreed_currency: emp.salary_currency,
       payment_currency: emp.salary_currency,
       exchange_rate: defaultRate,
     }));
   };
+
+  const switchAdvanceMode = (advance: boolean) => {
+    setIsAdvance(advance);
+    if (liquidationForm.employee_id) handleSelectEmployee(liquidationForm.employee_id, advance);
+  };
+
+  const employeePendingAdelantos = useMemo(
+    () => (selectedEmployee ? pendingAdelantos(payrollPayments, selectedEmployee.id) : []),
+    [payrollPayments, selectedEmployee]
+  );
+  const employeePendingTotal = Number(
+    employeePendingAdelantos.reduce((s, p) => s + (p.net_amount || 0), 0).toFixed(2)
+  );
 
   const handlePaymentCurrencyChange = (newCurr: Currency) => {
     let defaultRate = '1';
@@ -262,6 +278,11 @@ export function PayrollServicesView({
     }
 
     const rateNum = parseFloat(liquidationForm.exchange_rate) || 1;
+    const advanceNote =
+      !isAdvance && employeePendingAdelantos.length > 0 && calculationSummary.deductions > 0
+        ? `Adelantos descontados: ${liquidationForm.agreed_currency} ${employeePendingTotal.toFixed(2)}`
+        : '';
+    const notes = [liquidationForm.notes.trim(), advanceNote].filter(Boolean).join(' · ');
 
     try {
       setIsSubmittingLiquidation(true);
@@ -270,7 +291,7 @@ export function PayrollServicesView({
           date: liquidationForm.date,
           employee_id: selectedEmployee.id,
           employee_name: selectedEmployee.name,
-          period: liquidationForm.period.trim(),
+          period: isAdvance ? adelantoPeriod(liquidationForm.period) : liquidationForm.period.trim(),
           base_amount: calculationSummary.base,
           bonuses: calculationSummary.bonuses,
           deductions: calculationSummary.deductions,
@@ -281,18 +302,19 @@ export function PayrollServicesView({
           amount_usd: calculationSummary.amountUsd,
           account_id: liquidationForm.account_id,
           reference: liquidationForm.reference.trim() || undefined,
-          notes: liquidationForm.notes.trim() || undefined,
+          notes: notes || undefined,
         },
         appMode
       );
 
       alert(
-        `¡Liquidación de sueldo registrada con éxito!\n\n` +
+        (isAdvance ? `¡Adelanto registrado con éxito!\n\n` : `¡Liquidación de sueldo registrada con éxito!\n\n`) +
         `• Empleado: ${selectedEmployee.name}\n` +
         `• Período: ${newPayment.period}\n` +
         `• Desembolso: ${newPayment.currency} ${newPayment.amount_currency.toLocaleString('es-ES', { minimumFractionDigits: 2 })}\n` +
         `• Equivalente Contable: $${newPayment.amount_usd.toFixed(2)} USD\n\n` +
-        `El saldo de la cuenta fue debitado y el egreso quedó registrado en el Cierre Diario.`
+        `El saldo de la cuenta fue debitado y el egreso quedó registrado en el Cierre Diario.` +
+        (isAdvance ? `\n\nSe descontará solo en el próximo pago de sueldo de este empleado.` : '')
       );
 
       // Limpiar formulario y reiniciar selección
@@ -1127,6 +1149,36 @@ export function PayrollServicesView({
 
             {/* Formulario Principal de Liquidación con Desembolso Contable */}
             <form onSubmit={handleSubmitLiquidation} className="pt-5 space-y-6">
+              {/* Tipo de registro: pago completo del sueldo o adelanto */}
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { advance: false, label: 'Pago de Sueldo' },
+                  { advance: true, label: 'Adelanto' },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => switchAdvanceMode(opt.advance)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      isAdvance === opt.advance
+                        ? opt.advance
+                          ? 'bg-amber-500 text-white shadow-md'
+                          : 'bg-blue-600 text-white shadow-md'
+                        : isDark
+                        ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <span className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  {isAdvance
+                    ? 'El adelanto sale de la cuenta hoy y se descuenta solo en el próximo pago de sueldo.'
+                    : 'Los adelantos pendientes del empleado se ponen solos en Deducciones.'}
+                </span>
+              </div>
+
               {/* Sección 1: Selección de Colaborador */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-1 space-y-1.5">
@@ -1208,6 +1260,29 @@ export function PayrollServicesView({
                 </div>
               </div>
 
+              {selectedEmployee && employeePendingAdelantos.length > 0 && (
+                <div
+                  className={`p-3 rounded-xl border text-xs space-y-1 ${
+                    isDark ? 'bg-amber-950/30 border-amber-800/60 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}
+                >
+                  <div className="font-bold">
+                    Adelantos pendientes de {selectedEmployee.name}: {liquidationForm.agreed_currency}{' '}
+                    {employeePendingTotal.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="font-mono text-[11px]">
+                    {employeePendingAdelantos
+                      .map((a) => `${a.date}: ${(a.net_amount || 0).toFixed(2)}`)
+                      .join(' · ')}
+                  </div>
+                  {!isAdvance && (
+                    <div className="text-[11px]">
+                      Ya están puestos en Deducciones. Al registrar este pago quedan saldados.
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Sección 2: Período y Fecha de Liquidación */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
                 <div>
@@ -1288,7 +1363,7 @@ export function PayrollServicesView({
                   }`}
                 >
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
-                    1. Sueldo Base a Liquidar ({liquidationForm.agreed_currency})
+                    {isAdvance ? 'Monto del Adelanto' : '1. Sueldo Base a Liquidar'} ({liquidationForm.agreed_currency})
                   </label>
                   <input
                     type="text"
@@ -1306,9 +1381,11 @@ export function PayrollServicesView({
                     }`}
                   />
                   <span className={`text-[10px] mt-1 block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    Monto base por el período
+                    {isAdvance ? 'Lo que le entregas hoy' : 'Monto base por el período'}
                   </span>
                 </div>
+
+                {!isAdvance && (<>
 
                 {/* Bonificaciones (+) */}
                 <div
@@ -1377,6 +1454,7 @@ export function PayrollServicesView({
                     Anticipos de sueldo, faltas, préstamos
                   </span>
                 </div>
+                </>)}
               </div>
 
               {/* Sección 4: Moneda de Desembolso y Tasa de Cambio */}
@@ -1635,7 +1713,7 @@ export function PayrollServicesView({
                     <span>
                       {isSubmittingLiquidation
                         ? 'Procesando Desembolso...'
-                        : `Liquidar y Desembolsar Sueldo (${liquidationForm.payment_currency} ${calculationSummary.toPayCurrency.toLocaleString('es-ES', { minimumFractionDigits: 2 })})`}
+                        : `${isAdvance ? 'Registrar Adelanto' : 'Liquidar y Desembolsar Sueldo'} (${liquidationForm.payment_currency} ${calculationSummary.toPayCurrency.toLocaleString('es-ES', { minimumFractionDigits: 2 })})`}
                     </span>
                   </button>
                 </div>
@@ -1795,7 +1873,13 @@ export function PayrollServicesView({
 
                           {/* Período */}
                           <td className="py-2.5 px-3">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                isAdelanto(p)
+                                  ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                                  : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
+                              }`}
+                            >
                               {p.period}
                             </span>
                           </td>
