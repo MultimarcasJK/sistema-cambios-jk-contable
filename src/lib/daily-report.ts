@@ -11,6 +11,7 @@ import {
 } from '@/types';
 import { isAparte } from './aparte';
 import { gananciaRemesasEl, remesasPagadasEl } from './remesa-profit';
+import { LedgerEntry } from './ledger';
 
 // Reporte del día de la operadora: mismo formato para DETAL y MAYOR.
 // Lógica pura (sin localStorage ni Supabase) para poder probarla.
@@ -57,6 +58,19 @@ export function textoDiferencia(l: Pick<DailyReportCuadreLinea, 'diferencia' | '
   return `${l.diferencia < 0 ? 'Falta' : 'Sobra'} ${monto} ${l.currency}`;
 }
 
+// Cuentas que tuvieron algún movimiento ese día (ventas, traspasos, gastos, abonos, remesas…),
+// sacadas del libro contable. La apertura (saldo inicial) no cuenta como movimiento.
+export function cuentasUsadasEl(asientos: LedgerEntry[], date: string, mode: AppMode): Set<string> {
+  const ids = new Set<string>();
+  asientos.forEach((e) => {
+    if (e.fecha !== date || e.unidad !== mode || e.origen === 'apertura') return;
+    e.lineas.forEach((l) => {
+      if (l.cuenta.startsWith('CTA:')) ids.add(l.cuenta.slice(4));
+    });
+  });
+  return ids;
+}
+
 export interface DailyReportInput {
   id?: string;
   date: string;
@@ -70,6 +84,8 @@ export interface DailyReportInput {
   debtPayments: DebtPayment[];
   accounts: Account[];
   reales?: Record<string, number | undefined>;
+  // Si viene, el reporte solo lleva estas cuentas (más las que la operadora contó)
+  usedAccountIds?: Set<string>;
   notes?: string;
 }
 
@@ -103,13 +119,17 @@ export function buildDailyReport(input: DailyReportInput): DailyReport {
     (r) => r && r.date === date && r.estado !== 'anulada' && (r.fiado_usd || 0) > 0
   );
 
-  const cuentas = input.accounts.filter((a) => a && a.is_active !== false);
+  const reales = input.reales || {};
+  const contada = (id: string) => reales[id] !== undefined && reales[id] !== null && !Number.isNaN(reales[id]);
+  const cuentas = input.accounts.filter(
+    (a) => a && a.is_active !== false && (!input.usedAccountIds || input.usedAccountIds.has(a.id) || contada(a.id))
+  );
   const totales: Record<string, number> = {};
   cuentas.forEach((a) => {
     totales[a.currency] = r2((totales[a.currency] || 0) + Number(a.current_balance || 0));
   });
 
-  const cuadre = cuadreDeCaja(cuentas, input.reales || {});
+  const cuadre = cuadreDeCaja(cuentas, reales);
 
   return {
     id: input.id || `rep-${Date.now()}`,

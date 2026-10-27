@@ -13,7 +13,8 @@ import {
 } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { getActor } from '@/lib/actor';
-import { buildDailyReport, lineaCuadra, textoDiferencia } from '@/lib/daily-report';
+import { buildDailyReport, cuentasUsadasEl, lineaCuadra, textoDiferencia } from '@/lib/daily-report';
+import { buildLedger } from '@/lib/ledger';
 import { formatInputNumber, parseFormattedNumber } from '@/lib/formatters';
 import { localDateStr } from '@/lib/dates';
 
@@ -193,29 +194,39 @@ export function generarImagen(report: DailyReport): Promise<HTMLCanvasElement> {
       );
       y += 96 + 28;
 
-      // Ventas
-      const ventasRows = 1 + report.ventas.regionales.length + (report.ventas.remesas_pagadas > 0 ? 1 : 0);
-      tarjeta(y, 66 + ventasRows * 50 + 16);
-      let yy = titulo(y, 'VENTAS');
-      const c = report.ventas.cripto;
-      yy = fila(yy, `CRIPTO/DOLAR · ${c.count} ops`, `${fmt(c.usdt)} USDT · ${usd(c.facturado_usd)}`);
-      report.ventas.regionales.forEach((r) => {
-        yy = fila(yy, `${r.currency} · ${r.count} ops`, `${fmt(r.monto)} ${r.currency}`);
-      });
-      if (report.ventas.remesas_pagadas > 0) {
-        yy = fila(yy, 'Remesas pagadas', String(report.ventas.remesas_pagadas));
-      }
-      y = yy + 16 + 28;
+      // Tarjeta con solo las filas que tuvieron movimiento hoy (si no hay ninguna, no se dibuja)
+      type Fila = [string, string, string?];
+      const bloque = (nombre: string, filas: Fila[]) => {
+        if (filas.length === 0) return;
+        tarjeta(y, 66 + filas.length * 50 + 16);
+        let yy = titulo(y, nombre);
+        filas.forEach(([e, v, color]) => {
+          yy = fila(yy, e, v, color);
+        });
+        y = yy + 16 + 28;
+      };
 
-      // Ganancia
+      // Ventas
+      const c = report.ventas.cripto;
+      const ventas: Fila[] = [];
+      if (c.count > 0) ventas.push([`CRIPTO/DOLAR · ${c.count} ops`, `${fmt(c.usdt)} USDT · ${usd(c.facturado_usd)}`]);
+      report.ventas.regionales.forEach((r) => ventas.push([`${r.currency} · ${r.count} ops`, `${fmt(r.monto)} ${r.currency}`]));
+      if (report.ventas.remesas_pagadas > 0) ventas.push(['Remesas pagadas', String(report.ventas.remesas_pagadas)]);
+      bloque('VENTAS', ventas);
+
+      // Ganancia (la neta siempre va)
       const g = report.ganancia;
-      tarjeta(y, 66 + 5 * 50 + 90);
-      yy = titulo(y, 'GANANCIA');
-      yy = fila(yy, 'CRIPTO/DOLAR', `+${usd(g.cripto)}`, VERDE);
-      yy = fila(yy, 'MONEDAS REGIONALES', `+${usd(g.regionales)}`, VERDE);
-      yy = fila(yy, 'Remesas', `+${usd(g.remesas)}`, VERDE);
-      yy = fila(yy, `Ingresos extra (${report.ingresos_count})`, `+${usd(g.ingresos_extra)}`, VERDE);
-      yy = fila(yy, `Gastos (${report.gastos_count})`, `-${usd(g.gastos)}`, ROJO);
+      const ganancia: Fila[] = [];
+      if (c.count > 0) ganancia.push(['CRIPTO/DOLAR', `+${usd(g.cripto)}`, VERDE]);
+      if (report.ventas.regionales.length > 0) ganancia.push(['MONEDAS REGIONALES', `+${usd(g.regionales)}`, VERDE]);
+      if (report.ventas.remesas_pagadas > 0) ganancia.push(['Remesas', `+${usd(g.remesas)}`, VERDE]);
+      if (report.ingresos_count > 0) ganancia.push([`Ingresos extra (${report.ingresos_count})`, `+${usd(g.ingresos_extra)}`, VERDE]);
+      if (report.gastos_count > 0) ganancia.push([`Gastos (${report.gastos_count})`, `-${usd(g.gastos)}`, ROJO]);
+      tarjeta(y, 66 + ganancia.length * 50 + 90);
+      let yy = titulo(y, 'GANANCIA');
+      ganancia.forEach(([e, v, color]) => {
+        yy = fila(yy, e, v, color);
+      });
       linea(84, yy + 10, 916, yy + 10, CARD_BORDER, 2);
       texto('GANANCIA NETA', 84, yy + 60, { size: 28, bold: true });
       texto(`${g.neta >= 0 ? '+' : ''}${usd(g.neta)} USD`, 916, yy + 60, {
@@ -226,51 +237,53 @@ export function generarImagen(report: DailyReport): Promise<HTMLCanvasElement> {
       });
       y = yy + 90 + 28;
 
-      // Cartera
-      tarjeta(y, 66 + 2 * 50 + 16);
-      yy = titulo(y, 'CLIENTES');
-      yy = fila(yy, `Abonos recibidos (${report.abonos.count})`, usd(report.abonos.total_usd), VERDE);
-      yy = fila(yy, `Deudas nuevas (${report.deudas_nuevas.count})`, usd(report.deudas_nuevas.total_usd), AMBAR);
-      y = yy + 16 + 28;
+      // Clientes
+      const clientes: Fila[] = [];
+      if (report.abonos.count > 0) clientes.push([`Abonos recibidos (${report.abonos.count})`, usd(report.abonos.total_usd), VERDE]);
+      if (report.deudas_nuevas.count > 0)
+        clientes.push([`Deudas nuevas (${report.deudas_nuevas.count})`, usd(report.deudas_nuevas.total_usd), AMBAR]);
+      bloque('CLIENTES', clientes);
 
       // Saldo final de cada cuenta (y su cuadre si se contó)
       const cuadrePorCuenta = new Map(report.cuadre.map((l) => [l.account_id, l]));
       const filasCuenta = report.saldos.reduce((h, s) => h + (cuadrePorCuenta.has(s.account_id) ? 80 : 50), 0);
       const monedas = Object.entries(report.totales_moneda);
-      tarjeta(y, 66 + filasCuenta + 20 + monedas.length * 44 + 16);
-      yy = titulo(y, 'SALDO FINAL POR CUENTA');
-      report.saldos.forEach((s) => {
-        texto(s.name, 84, yy + 34, { size: 23, color: '#ffffff', max: 470 });
-        texto(`${fmt(s.balance)} ${s.currency}`, 916, yy + 34, {
-          size: 24,
-          bold: true,
-          color: s.balance < 0 ? ROJO : '#ffffff',
-          align: 'right',
-          max: 380,
-        });
-        const l = cuadrePorCuenta.get(s.account_id);
-        if (l) {
-          const ok = lineaCuadra(l);
-          texto(`Contado: ${fmt(l.real)} ${l.currency}`, 84, yy + 64, { size: 20, color: LABEL });
-          texto(ok ? '✓ Cuadra' : textoDiferencia(l), 916, yy + 64, {
-            size: 21,
+      if (report.saldos.length > 0) {
+        tarjeta(y, 66 + filasCuenta + 20 + monedas.length * 44 + 16);
+        yy = titulo(y, 'SALDO FINAL DE LAS CUENTAS USADAS');
+        report.saldos.forEach((s) => {
+          texto(s.name, 84, yy + 34, { size: 23, color: '#ffffff', max: 470 });
+          texto(`${fmt(s.balance)} ${s.currency}`, 916, yy + 34, {
+            size: 24,
             bold: true,
-            color: ok ? VERDE : l.diferencia < 0 ? ROJO : AMBAR,
+            color: s.balance < 0 ? ROJO : '#ffffff',
             align: 'right',
+            max: 380,
           });
-          yy += 80;
-        } else {
-          yy += 50;
-        }
-      });
-      linea(84, yy + 10, 916, yy + 10, CARD_BORDER, 2);
-      yy += 20;
-      monedas.forEach(([cur, total]) => {
-        texto(`TOTAL ${cur}`, 84, yy + 32, { size: 22, bold: true, color: TEAL });
-        texto(`${fmt(total)} ${cur}`, 916, yy + 32, { size: 24, bold: true, align: 'right' });
-        yy += 44;
-      });
-      y = yy + 16 + 28;
+          const l = cuadrePorCuenta.get(s.account_id);
+          if (l) {
+            const ok = lineaCuadra(l);
+            texto(`Contado: ${fmt(l.real)} ${l.currency}`, 84, yy + 64, { size: 20, color: LABEL });
+            texto(ok ? '✓ Cuadra' : textoDiferencia(l), 916, yy + 64, {
+              size: 21,
+              bold: true,
+              color: ok ? VERDE : l.diferencia < 0 ? ROJO : AMBAR,
+              align: 'right',
+            });
+            yy += 80;
+          } else {
+            yy += 50;
+          }
+        });
+        linea(84, yy + 10, 916, yy + 10, CARD_BORDER, 2);
+        yy += 20;
+        monedas.forEach(([cur, total]) => {
+          texto(`TOTAL ${cur}`, 84, yy + 32, { size: 22, bold: true, color: TEAL });
+          texto(`${fmt(total)} ${cur}`, 916, yy + 32, { size: 24, bold: true, align: 'right' });
+          yy += 44;
+        });
+        y = yy + 16 + 28;
+      }
 
       if (report.notes) {
         ctx.font = `21px ${FONT}`;
@@ -321,6 +334,18 @@ export function DailyReportModal({
 
   const activeAccounts = useMemo(() => accounts.filter((a) => a && a.is_active !== false), [accounts]);
   const debtPayments = useMemo(() => StorageService.getDebtPayments(appMode), [appMode]);
+  // Cuentas con movimientos ese día, según el libro contable
+  const usedIds = useMemo(
+    () => cuentasUsadasEl(buildLedger(StorageService.getLedgerSources()).asientos, date, appMode),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [date, appMode, accounts, detalTxs, mayorTxs, expenses, remesas]
+  );
+  const [verTodas, setVerTodas] = useState(false);
+  // En el cuadre: las usadas hoy, más las que ya tienen saldo escrito
+  const cuentasCuadre = useMemo(
+    () => (verTodas ? activeAccounts : activeAccounts.filter((a) => usedIds.has(a.id) || (reales[a.id] || '').trim() !== '')),
+    [verTodas, activeAccounts, usedIds, reales]
+  );
 
   const buildReport = (createdAt?: string): DailyReport => {
     const parsed: Record<string, number | undefined> = {};
@@ -340,6 +365,7 @@ export function DailyReportModal({
       debtPayments,
       accounts: activeAccounts,
       reales: parsed,
+      usedAccountIds: usedIds,
       notes: notes.trim(),
     });
   };
@@ -468,6 +494,19 @@ export function DailyReportModal({
           <p className="text-[11px] text-slate-400 mb-2">
             Escribe cuánto hay realmente en cada cuenta. Las que dejes vacías no entran en el cuadre.
           </p>
+          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
+            <span>
+              {verTodas
+                ? `Todas las cuentas (${activeAccounts.length})`
+                : `Cuentas usadas este día (${cuentasCuadre.length} de ${activeAccounts.length})`}
+            </span>
+            <button
+              onClick={() => setVerTodas(!verTodas)}
+              className="text-sky-400 hover:text-sky-300 font-semibold cursor-pointer"
+            >
+              {verTodas ? 'Ver solo las usadas' : 'Ver todas las cuentas'}
+            </button>
+          </div>
           <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-800">
             <table className="w-full text-xs">
               <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] sticky top-0">
@@ -479,14 +518,14 @@ export function DailyReportModal({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {activeAccounts.length === 0 ? (
+                {cuentasCuadre.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="py-6 text-center text-slate-500">
-                      No hay cuentas activas.
+                      Ninguna cuenta tuvo movimientos este día.
                     </td>
                   </tr>
                 ) : (
-                  activeAccounts.map((a) => {
+                  cuentasCuadre.map((a) => {
                     const l = cuadrePorCuenta.get(a.id);
                     return (
                       <tr key={a.id}>
