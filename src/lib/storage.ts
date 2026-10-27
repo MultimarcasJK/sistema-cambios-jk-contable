@@ -171,6 +171,27 @@ function isDeleted(id: string): boolean {
   return getDeletedIds().has(id);
 }
 
+// Clientes borrados a mano, por nombre. Sin esto el cliente volvía a aparecer: la
+// sincronización de Deudores crea un cliente por cada deudor que no lo tenga, y otra copia
+// con otro id podía llegar de Supabase. Solo se vuelve a crear si se registra a mano.
+function deletedClientNamesKey(mode: AppMode): string {
+  return 'cambiosjk_' + mode + '_clientes_borrados_v1';
+}
+
+function getDeletedClientNames(mode: AppMode): Set<string> {
+  return new Set(getFromStorage<string[]>(deletedClientNamesKey(mode), []));
+}
+
+function setClientNameDeleted(mode: AppMode, name: string | undefined, deleted: boolean): void {
+  const norm = (name || '').trim().toUpperCase();
+  if (!norm) return;
+  const set = getDeletedClientNames(mode);
+  if (deleted === set.has(norm)) return;
+  if (deleted) set.add(norm);
+  else set.delete(norm);
+  saveToStorage(deletedClientNamesKey(mode), Array.from(set).slice(-500));
+}
+
 // Filas que este dispositivo ya vio en Supabase. Si una de ellas desaparece de Supabase es
 // porque otro dispositivo la borró: se quita aquí también en vez de volver a subirla
 // (antes se "resucitaba" lo que otra computadora había borrado).
@@ -737,8 +758,9 @@ export const StorageService = {
         saveToStorage(this.getAccountsKey(m), mergedAccounts);
       }
       if (remoteClients !== null) {
+        const deletedNames = getDeletedClientNames(m);
         const validRemote = remoteClients.filter((c) => {
-          if (isDeleted(c.id)) {
+          if (isDeleted(c.id) || (c && deletedNames.has((c.name || '').trim().toUpperCase()))) {
             SupabaseSyncService.deleteClient(c.id, m).catch(() => {});
             return false;
           }
@@ -1840,6 +1862,7 @@ export const StorageService = {
     const m = mode || this.getAppMode();
     const all = this.getClients(m);
     const upperName = (client.name || '').trim().toUpperCase();
+    setClientNameDeleted(m, upperName, false);
     const existing = all.find((c) => (c.name || '').trim().toUpperCase() === upperName);
     if (existing) {
       unmarkDeleted(existing.id);
@@ -1879,6 +1902,7 @@ export const StorageService = {
     markAsDeleted(clientId);
     const m = mode || this.getAppMode();
     const all = this.getClients(m);
+    setClientNameDeleted(m, all.find((c) => c.id === clientId)?.name, true);
     const updated = all.filter((c) => c.id !== clientId);
     this.saveClients(updated, m);
     await SupabaseSyncService.deleteClient(clientId, m).catch(() => {});
@@ -2881,7 +2905,11 @@ export const StorageService = {
     // Sincronizar automáticamente hacia el módulo de Clientes
     try {
       const currentClients = this.getClients(m);
-      const clientNameSet = new Set(currentClients.map((c) => (c.name || '').trim().toUpperCase()));
+      // Los clientes borrados a mano no se vuelven a crear desde Deudores
+      const clientNameSet = new Set([
+        ...currentClients.map((c) => (c.name || '').trim().toUpperCase()),
+        ...Array.from(getDeletedClientNames(m)),
+      ]);
       let clientsChanged = false;
       debtors.forEach((d) => {
         const norm = (d.client_name || '').trim().toUpperCase();
