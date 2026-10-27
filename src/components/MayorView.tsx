@@ -418,7 +418,7 @@ export function MayorView({
                 <div className={`flex items-center space-x-1.5 font-bold ${isDark ? 'text-white' : 'text-black'}`}>
                   <Globe className={`w-4 h-4 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
                   <span>Moneda:</span>
-                  <select
+                  <SearchableSelect
                     value={selectedCurrency}
                     onChange={(e) => {
                       const newCurr = e.target.value;
@@ -443,7 +443,7 @@ export function MayorView({
                         {c.code} - {c.name} ({c.symbol})
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
 
                   <button
                     type="button"

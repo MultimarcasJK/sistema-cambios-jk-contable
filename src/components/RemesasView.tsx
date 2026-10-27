@@ -612,17 +612,17 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className={label}>País de pago *</label>
-                <select value={form.pais_pago} onChange={(e) => handlePais(e.target.value)} className={input}>
+                <SearchableSelect value={form.pais_pago} onChange={(e) => handlePais(e.target.value)} className={input}>
                   {PAISES.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.flag} {p.name}
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
               <div>
                 <label className={label}>Moneda que recibe</label>
-                <select
+                <SearchableSelect
                   value={form.moneda_pago}
                   onChange={(e) => setForm({ ...form, moneda_pago: e.target.value })}
                   className={input}
@@ -632,12 +632,12 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                       {c}
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
               <div>
                 <label className={label}>Beneficiario guardado</label>
                 <div className="flex gap-2">
-                  <select
+                  <SearchableSelect
                     value={form.beneficiario_id}
                     onChange={(e) => handleBeneficiario(e.target.value)}
                     className={input}
@@ -651,7 +651,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                         {b.name} {b.bank ? `· ${b.bank}` : ''}
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                   {form.beneficiario_id && (
                     <>
                       <button
@@ -865,7 +865,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
               ) : (
                 <div>
                   <label className={label}>Aliado / proveedor que paga</label>
-                  <select
+                  <SearchableSelect
                     value={form.aliado_id}
                     onChange={(e) => setForm({ ...form, aliado_id: e.target.value })}
                     className={input}
@@ -876,7 +876,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                         {s.name}
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 </div>
               )}
               <div>
@@ -953,7 +953,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                     : 'Todas'}
             </button>
           ))}
-          <select
+          <SearchableSelect
             value={filtroPais}
             onChange={(e) => setFiltroPais(e.target.value)}
             className="text-xs border border-slate-300 rounded-xl px-2 py-1.5"
@@ -964,7 +964,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                 {p.flag} {p.name}
               </option>
             ))}
-          </select>
+          </SearchableSelect>
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
@@ -1129,7 +1129,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                         ) : (
                           <div>
                             <label className={label}>Aliado (se le debe {amt(r.costo_usd, 'USD')} USD)</label>
-                            <select
+                            <SearchableSelect
                               value={accion.aliado}
                               onChange={(e) => setAccion({ ...accion, aliado: e.target.value })}
                               className={input}
@@ -1140,7 +1140,7 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                                   {s.name}
                                 </option>
                               ))}
-                            </select>
+                            </SearchableSelect>
                           </div>
                         )}
                         <div>

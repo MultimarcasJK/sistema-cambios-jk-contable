@@ -35,6 +35,7 @@ import {
 import { localDateStr } from '@/lib/dates';
 import { gananciaRemesasEl, remesasPagadasEl } from '@/lib/remesa-profit';
 import { DailyReportModal } from './DailyReportModal';
+import { SearchableSelect } from './SearchableSelect';
 
 interface ClosuresProps {
   detalTxs: TransactionDetal[];
@@ -743,7 +744,7 @@ export function ClosuresView({
               {/* Selector de Corte */}
               <div className="flex items-center space-x-2">
                 <span className="text-xs font-semibold text-slate-600">Ver Corte:</span>
-                <select
+                <SearchableSelect
                   value={selectedAccountsClosureId}
                   onChange={(e) => setSelectedAccountsClosureId(e.target.value)}
                   className="text-xs font-bold border border-slate-300 rounded-lg px-3 py-1.5 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -759,7 +760,7 @@ export function ClosuresView({
                       )
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
             </div>
 
@@ -947,7 +948,7 @@ export function ClosuresView({
               {/* Selector de Corte */}
               <div className="flex items-center space-x-2">
                 <span className="text-xs font-semibold text-slate-600">Ver Corte:</span>
-                <select
+                <SearchableSelect
                   value={selectedDebtorsClosureId}
                   onChange={(e) => setSelectedDebtorsClosureId(e.target.value)}
                   className="text-xs font-bold border border-slate-300 rounded-lg px-3 py-1.5 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500"
@@ -958,7 +959,7 @@ export function ClosuresView({
                       📁 Corte: {c.date} (${(c.total_debtors_usd || 0).toFixed(2)} USD)
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
             </div>
 

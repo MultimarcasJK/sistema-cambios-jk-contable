@@ -243,7 +243,7 @@ export function AbonoModal({
             <label className="block text-xs font-semibold text-slate-600 mb-1">
               Moneda con la que paga el cliente *
             </label>
-            <select
+            <SearchableSelect
               value={paymentCurrency}
               onChange={(e) => {
                 const newCurr = e.target.value as Currency;
@@ -257,7 +257,7 @@ export function AbonoModal({
                   {c.code} - {c.name} ({c.symbol})
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           </div>
 
           {/* Montos y Tasa */}

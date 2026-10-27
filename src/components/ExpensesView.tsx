@@ -316,7 +316,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
                 <label className="block text-xs font-semibold text-slate-600">Moneda *</label>
                 <span className="text-[10px] text-slate-400">({systemCurrencies.length} disponibles)</span>
               </div>
-              <select
+              <SearchableSelect
                 value={formData.currency}
                 onChange={(e) => handleCurrencyChange(e.target.value as Currency)}
                 className="w-full text-xs font-bold border border-slate-300 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
@@ -326,7 +326,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
                     {c.code} - {c.name} ({c.symbol})
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
             </div>
 
             <div>
@@ -477,7 +477,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
               onChange={(e) => setFilterDate(e.target.value)}
               className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
-            <select
+            <SearchableSelect
               value={filterCurrency}
               onChange={(e) => setFilterCurrency(e.target.value)}
               className="px-2 py-1.5 text-xs font-semibold border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -488,7 +488,7 @@ export function ExpensesView({ accounts, expenses, onDataChange }: ExpensesProps
                   {c.code} - {c.name}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
 
             {filterDate && (
               <button

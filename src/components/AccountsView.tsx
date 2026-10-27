@@ -11,6 +11,7 @@ import { AccountStatementModal } from './AccountStatementModal';
 import { EditAccountModal } from './EditAccountModal';
 import { Wallet, Plus, Edit2, Trash2, CheckCircle, RefreshCw, Landmark, Coins, ArrowLeft, ChevronRight, Globe, FileText, GripVertical, Search } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { SearchableSelect } from './SearchableSelect';
 
 interface AccountsProps {
   accounts: Account[];
@@ -392,7 +393,7 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
               >
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">País *</label>
-                  <select
+                  <SearchableSelect
                     value={newAccount.country}
                     onChange={(e) => {
                       const cId = e.target.value;
@@ -411,7 +412,7 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                         {c.flag} {c.name.toUpperCase()}
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Nombre Cuenta *</label>
@@ -447,7 +448,7 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Moneda de la Cuenta</label>
-                  <select
+                  <SearchableSelect
                     value={newAccount.currency}
                     onChange={(e) => setNewAccount({ ...newAccount, currency: e.target.value as Currency })}
                     className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white font-bold"
@@ -457,7 +458,7 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                         {c.code} - {c.name} ({c.symbol})
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Tipo</label>
@@ -737,7 +738,7 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Moneda de la Cuenta</label>
-                  <select
+                  <SearchableSelect
                     value={newAccount.currency}
                     onChange={(e) => setNewAccount({ ...newAccount, currency: e.target.value as Currency })}
                     className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white font-bold"
@@ -747,7 +748,7 @@ export function AccountsView({ accounts, onDataChange, appMode }: AccountsProps)
                         {c.code} - {c.name} ({c.symbol})
                       </option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Tipo</label>

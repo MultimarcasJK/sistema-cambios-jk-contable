@@ -18,6 +18,7 @@ import {
   FileText,
   Building,
 } from 'lucide-react';
+import { SearchableSelect } from './SearchableSelect';
 
 export interface EditAccountModalProps {
   isOpen: boolean;
@@ -220,7 +221,7 @@ export function EditAccountModal({
                 <Globe className="w-3.5 h-3.5 text-blue-600" />
                 <span>País de la Cuenta</span>
               </label>
-              <select
+              <SearchableSelect
                 value={formData.country}
                 onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                 className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white font-medium focus:border-blue-500 focus:outline-none"
@@ -230,7 +231,7 @@ export function EditAccountModal({
                     {country.name} ({country.defaultCurrency})
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
               <span className="text-[10px] text-slate-400 mt-0.5 block">Ubicación y pestaña donde aparecerá la cuenta</span>
             </div>
 
@@ -240,7 +241,7 @@ export function EditAccountModal({
                 <Coins className="w-3.5 h-3.5 text-blue-600" />
                 <span>Moneda de la Cuenta</span>
               </label>
-              <select
+              <SearchableSelect
                 value={formData.currency}
                 onChange={(e) => setFormData({ ...formData, currency: e.target.value as Currency })}
                 className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white font-bold text-slate-800 focus:border-blue-500 focus:outline-none"
@@ -250,7 +251,7 @@ export function EditAccountModal({
                     {c.code} - {c.name} ({c.symbol})
                   </option>
                 ))}
-              </select>
+              </SearchableSelect>
               <span className="text-[10px] text-slate-400 mt-0.5 block">Moneda de los movimientos y saldos</span>
             </div>
 
