@@ -32,6 +32,7 @@ import {
   BalanceTransfer,
   Expense,
   DailyClosure,
+  DailyReport,
   Debtor,
   DebtPayment,
   Employee,
@@ -586,6 +587,31 @@ export const SupabaseSyncService = {
       await supabase.from(table).delete().eq('id', id);
     } catch (err) {
       /* warn */
+    }
+  },
+
+  // Reportes del día (detal_reportes_diarios / mayor_reportes_diarios); el reporte completo va en "data"
+  async upsertDailyReport(report: DailyReport, mode: AppMode): Promise<boolean> {
+    if (!isSupabaseConfigured || !supabase) return false;
+    const table = `${mode}_reportes_diarios`;
+    try {
+      const { error } = await supabase.from(table).upsert({
+        id: report.id,
+        date: report.date,
+        created_at: report.created_at,
+        operadora: report.operadora,
+        cuadra: report.cuadra,
+        ganancia_neta: report.ganancia.neta,
+        data: report,
+      });
+      if (error) {
+        console.error(`[SupabaseSync] Error al guardar reporte del día en ${table}:`, error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error(`[SupabaseSync] Excepción al guardar reporte del día en ${table}:`, err);
+      return false;
     }
   },
 

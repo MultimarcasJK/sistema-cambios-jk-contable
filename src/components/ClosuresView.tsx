@@ -30,9 +30,11 @@ import {
   History,
   Eye,
   Filter,
+  FileText,
 } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
 import { gananciaRemesasEl, remesasPagadasEl } from '@/lib/remesa-profit';
+import { DailyReportModal } from './DailyReportModal';
 
 interface ClosuresProps {
   detalTxs: TransactionDetal[];
@@ -66,6 +68,7 @@ export function ClosuresView({
   // Estados para pestaña de Ganancias
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [closureNotes, setClosureNotes] = useState('');
+  const [showReport, setShowReport] = useState(false);
 
   // Estados para pestaña de Corte de Cuentas
   const [selectedAccountsClosureId, setSelectedAccountsClosureId] = useState<string>('REALTIME');
@@ -309,6 +312,19 @@ export function ClosuresView({
 
   return (
     <div className="space-y-5">
+      {showReport && (
+        <DailyReportModal
+          date={selectedDate}
+          appMode={appMode || 'detal'}
+          detalTxs={detalTxs}
+          mayorTxs={mayorTxs}
+          expenses={expenses}
+          remesas={remesas}
+          accounts={accounts}
+          onClose={() => setShowReport(false)}
+        />
+      )}
+
       {/* Selector de Sub-pestañas Compactas */}
       <div className={`flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl border shadow-sm ${
         isDark ? 'bg-slate-900/90 border-slate-700/80' : 'bg-white border-slate-200'
@@ -554,13 +570,21 @@ export function ClosuresView({
                 />
               </div>
 
-              <div className="flex items-center space-x-3">
+              <div className="flex flex-wrap items-center gap-3">
                 {existingClosure && (
                   <span className="text-xs text-emerald-600 font-semibold flex items-center space-x-1">
                     <CheckCircle className="w-3.5 h-3.5" />
                     <span>Cierre guardado previamente</span>
                   </span>
                 )}
+
+                <button
+                  onClick={() => setShowReport(true)}
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-sm transition flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Reporte del día</span>
+                </button>
 
                 <button
                   onClick={handleSaveClosure}
