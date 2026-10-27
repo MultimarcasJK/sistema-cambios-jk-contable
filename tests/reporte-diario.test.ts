@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDailyReport, cuadreDeCaja, deudaDeVenta, textoDiferencia } from '@/lib/daily-report';
+import { buildDailyReport, cuadreDeCaja, cuentasUsadasEl, deudaDeVenta, textoDiferencia } from '@/lib/daily-report';
 import { Account } from '@/types';
 
 const DAY = '2026-10-26';
@@ -83,5 +83,35 @@ describe('reporte del día', () => {
     expect(deudaDeVenta({ total_to_pay: 50, amount_received: 0, payment_status: 'PENDIENTE' })).toBe(50);
     expect(deudaDeVenta({ total_to_pay: 50, amount_received: 30, payment_status: 'PARCIAL' })).toBe(20);
     expect(deudaDeVenta({ total_to_pay: 50, amount_received: 50, payment_status: 'PAGADO' })).toBe(0);
+  });
+});
+
+describe('cuentas usadas en el día', () => {
+  const asiento = (fecha: string, unidad: 'detal' | 'mayor', cuentas: string[], origen = 'venta_detal') =>
+    ({ id: 'x', fecha, orden: '', unidad, origen, origenId: 'x', descripcion: '', lineas: cuentas.map((c) => ({ cuenta: c, moneda: 'USD', debe: 1, haber: 0 })) }) as any;
+
+  it('toma solo cuentas reales con movimientos ese día y en ese modo', () => {
+    const ids = cuentasUsadasEl(
+      [
+        asiento(DAY, 'detal', ['CTA:caja', 'CXC', 'ING_VENTAS']),
+        asiento(DAY, 'mayor', ['CTA:otra']),
+        asiento('2026-10-25', 'detal', ['CTA:vieja']),
+        asiento(DAY, 'detal', ['CTA:bdv'], 'apertura'),
+      ],
+      DAY,
+      'detal'
+    );
+    expect([...ids]).toEqual(['caja']);
+  });
+
+  it('el reporte lleva las usadas más las que se contaron', () => {
+    const accounts = [cuenta('caja', 'USD', 100), cuenta('bdv', 'VES', 5000), cuenta('zelle', 'USD', 7)];
+    const r = buildDailyReport({
+      date: DAY, mode: 'detal', operadora: 'X', detalTxs: [], mayorTxs: [], expenses: [], remesas: [], debtPayments: [],
+      accounts, usedAccountIds: new Set(['caja']), reales: { zelle: 7 },
+    });
+    expect(r.saldos.map((s) => s.account_id)).toEqual(['caja', 'zelle']);
+    expect(r.totales_moneda).toEqual({ USD: 107 });
+    expect(r.cuadra).toBe(true);
   });
 });
