@@ -25,6 +25,7 @@ import {
   RemesaMetodoPago,
   Remitente,
   Beneficiario,
+  GastoFijo,
 } from '@/types';
 import {
   INITIAL_ACCOUNTS,
@@ -43,6 +44,7 @@ import { commissionOutOfAccount } from './commission';
 import { AuditService } from './audit';
 import { recordTime } from './order';
 import { isActorAdmin, getActor } from './actor';
+import { unirGastosFijos } from './gastos-fijos';
 import type { LedgerSources } from './ledger';
 import {
   DebtorOutboxEntry,
@@ -431,6 +433,10 @@ export const StorageService = {
     const m = mode || this.getAppMode();
     return 'cambiosjk_' + m + '_remitentes_v1';
   },
+  getGastosFijosKey(mode?: AppMode): string {
+    const m = mode || this.getAppMode();
+    return 'cambiosjk_' + m + '_gastos_fijos_v1';
+  },
   getRemesaPrefsKey(mode?: AppMode): string {
     const m = mode || this.getAppMode();
     return 'cambiosjk_' + m + '_remesas_pref_pais_v1';
@@ -614,12 +620,20 @@ export const StorageService = {
     try {
       // Enviar primero lo pendiente para no descargar filas que ya se borraron aquí
       await flushDebtorOutbox().catch(() => {});
-      const [remoteAdjustments, remoteAudit, remoteRemesas, remoteRemitentes] = await Promise.all([
+      const [remoteAdjustments, remoteAudit, remoteRemesas, remoteRemitentes, remoteGastosFijos] = await Promise.all([
         SupabaseSyncService.fetchAdjustments(m),
         SupabaseSyncService.fetchAuditEntries(m),
         SupabaseSyncService.fetchRemesas(m),
         SupabaseSyncService.fetchRemitentes(m),
+        SupabaseSyncService.fetchGastosFijos(m),
       ]);
+      if (remoteGastosFijos !== null) {
+        const { merged, subir } = unirGastosFijos(this.getAllGastosFijos(m), remoteGastosFijos);
+        subir.forEach((f) => {
+          SupabaseSyncService.upsertGastoFijo(f, m).catch(() => {});
+        });
+        saveToStorage(this.getGastosFijosKey(m), merged);
+      }
       if (remoteRemesas !== null) {
         // Gana la copia que avanzó más en su historial de estados
         const local = this.getRemesas(m);
@@ -3506,6 +3520,62 @@ export const StorageService = {
     }
     saveToStorage(this.getPayrollPaymentsKey(m), all.filter((p) => p.id !== id));
     await SupabaseSyncService.deletePayrollPayment(id, m).catch(() => {});
+  },
+
+  // Gastos fijos mensuales (alquiler de cuentas, costos bancarios…)
+  getAllGastosFijos(mode?: AppMode): GastoFijo[] {
+    const m = mode || this.getAppMode();
+    return getFromStorage<GastoFijo[]>(this.getGastosFijosKey(m), []);
+  },
+
+  getGastosFijos(mode?: AppMode): GastoFijo[] {
+    return this.getAllGastosFijos(mode).filter((f) => f && !f.deleted);
+  },
+
+  saveGastoFijo(
+    data: Omit<GastoFijo, 'id' | 'created_at' | 'updated_at'> & { id?: string },
+    mode?: AppMode
+  ): GastoFijo {
+    const m = mode || this.getAppMode();
+    const all = this.getAllGastosFijos(m);
+    const now = new Date().toISOString();
+    const prev = data.id ? all.find((f) => f.id === data.id) : undefined;
+    const fijo: GastoFijo = {
+      ...prev,
+      ...data,
+      id: prev?.id || 'fijo-' + Date.now(),
+      created_at: prev?.created_at || now,
+      updated_at: now,
+    };
+    saveToStorage(this.getGastosFijosKey(m), [fijo, ...all.filter((f) => f.id !== fijo.id)]);
+    SupabaseSyncService.upsertGastoFijo(fijo, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: prev ? 'editar' : 'crear',
+      entity: 'gasto_fijo',
+      entityId: fijo.id,
+      summary: `Gasto fijo ${fijo.name} ${prev ? 'actualizado' : 'creado'}: ${fijo.currency} ${fijo.amount} el día ${fijo.day_of_month}`,
+    });
+    return fijo;
+  },
+
+  // Se marca como borrado (y no se quita) para que el borrado llegue a los demás equipos.
+  // Los pagos ya hechos se quedan en el historial.
+  deleteGastoFijo(id: string, mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const all = this.getAllGastosFijos(m);
+    const cur = all.find((f) => f.id === id);
+    if (!cur) return;
+    const borrado: GastoFijo = { ...cur, deleted: true, is_active: false, updated_at: new Date().toISOString() };
+    saveToStorage(this.getGastosFijosKey(m), all.map((f) => (f.id === id ? borrado : f)));
+    SupabaseSyncService.upsertGastoFijo(borrado, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'eliminar',
+      entity: 'gasto_fijo',
+      entityId: id,
+      summary: `Gasto fijo ${cur.name} eliminado (los pagos anteriores se conservan)`,
+    });
   },
 
   // Service Expenses (Servicios Públicos, Alquiler, Internet, etc.)

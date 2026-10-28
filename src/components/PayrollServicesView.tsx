@@ -9,6 +9,7 @@ import {
   Account,
   Currency,
   AppMode,
+  GastoFijo,
 } from '@/types';
 import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
@@ -45,6 +46,8 @@ import {
 import { SharePayrollVoucherModal } from './SharePayrollVoucherModal';
 import { localDateStr } from '@/lib/dates';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { GastosFijosPanel } from './GastosFijosPanel';
+import { packGastoFijo, unpackGastoFijo } from '@/lib/client-fee';
 import { adelantoPeriod, isAdelanto, pendingAdelantos, pendingAdelantosTotal } from '@/lib/adelantos';
 
 interface PayrollServicesViewProps {
@@ -398,6 +401,8 @@ export function PayrollServicesView({
     { key: 'PAPELERIA_SUMINISTROS', label: 'Papelería y Suministros', badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' },
     { key: 'TRANSPORTE_VIATICOS', label: 'Transporte y Viáticos', badgeClass: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300' },
     { key: 'COMISIONES_OPERADORES', label: 'Comisiones a Operadores', badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300' },
+    { key: 'ALQUILER_CUENTAS', label: 'Alquiler de cuentas', badgeClass: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300' },
+    { key: 'COSTOS_BANCARIOS', label: 'Comisiones y costos bancarios', badgeClass: 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300' },
     { key: 'OTROS', label: 'Otros Gastos Operativos', badgeClass: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300' },
   ];
 
@@ -414,6 +419,9 @@ export function PayrollServicesView({
   });
 
   const [isSubmittingService, setIsSubmittingService] = useState(false);
+  // Gasto fijo que se está pagando con el formulario (el pago queda marcado con [FIJO:id])
+  const [pagandoFijo, setPagandoFijo] = useState<GastoFijo | null>(null);
+  const serviceFormRef = React.useRef<HTMLDivElement>(null);
   const [serviceSearch, setServiceSearch] = useState('');
   const [serviceCategoryFilter, setServiceCategoryFilter] = useState<string>('ALL');
   const [serviceMonthFilter, setServiceMonthFilter] = useState('');
@@ -427,7 +435,7 @@ export function PayrollServicesView({
     return rate > 0 ? Number((amt / rate).toFixed(2)) : amt;
   }, [serviceForm.amount, serviceForm.currency, serviceForm.exchange_rate]);
 
-  const handleServiceCurrencyChange = (newCurr: Currency) => {
+  const defaultServiceRate = (newCurr: Currency) => {
     let defaultRate = '1';
     if (newCurr === 'VES') defaultRate = '788';
     else if (newCurr === 'COP') defaultRate = '4150';
@@ -435,14 +443,48 @@ export function PayrollServicesView({
     else if (newCurr === 'EUR') defaultRate = '1.08';
     else if (newCurr === 'CLP') defaultRate = '950';
     else if (newCurr === 'BRL') defaultRate = '5.40';
-    defaultRate = RatesService.liveCostRate(newCurr, appMode) ?? defaultRate;
+    return RatesService.liveCostRate(newCurr, appMode) ?? defaultRate;
+  };
 
+  const handleServiceCurrencyChange = (newCurr: Currency) => {
     setServiceForm((prev) => ({
       ...prev,
       currency: newCurr,
-      exchange_rate: defaultRate,
+      exchange_rate: defaultServiceRate(newCurr),
       account_id: '',
     }));
+  };
+
+  // "Pagar" en un gasto fijo: llena el formulario con su monto, moneda y cuenta
+  const handlePagarFijo = (fijo: GastoFijo, fecha: string) => {
+    setPagandoFijo(fijo);
+    setServiceForm({
+      date: fecha,
+      category: fijo.category,
+      description: fijo.name,
+      invoice_number: '',
+      amount: formatInputNumber(String(fijo.amount)),
+      currency: fijo.currency,
+      exchange_rate: defaultServiceRate(fijo.currency),
+      account_id: fijo.account_id && accounts.some((a) => a.id === fijo.account_id && a.is_active) ? fijo.account_id : '',
+      notes: '',
+    });
+    setTimeout(() => serviceFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
+
+  const cancelarPagoFijo = () => {
+    setPagandoFijo(null);
+    setServiceForm({
+      date: todayStr,
+      category: 'SERVICIOS_PUBLICOS',
+      description: '',
+      invoice_number: '',
+      amount: '',
+      currency: 'USD',
+      exchange_rate: '1',
+      account_id: '',
+      notes: '',
+    });
   };
 
   const matchingServiceAccounts = useMemo(() => {
@@ -488,7 +530,7 @@ export function PayrollServicesView({
           exchange_rate: rate,
           amount_usd: calculatedServiceUsd,
           account_id: serviceForm.account_id,
-          notes: serviceForm.notes.trim() || undefined,
+          notes: packGastoFijo(serviceForm.notes.trim(), pagandoFijo?.id) || undefined,
         },
         appMode
       );
@@ -502,17 +544,7 @@ export function PayrollServicesView({
         `El saldo de la cuenta fue debitado y el egreso quedó asentado en el Cierre Diario.`
       );
 
-      setServiceForm({
-        date: todayStr,
-        category: 'SERVICIOS_PUBLICOS',
-        description: '',
-        invoice_number: '',
-        amount: '',
-        currency: 'USD',
-        exchange_rate: '1',
-        account_id: '',
-        notes: '',
-      });
+      cancelarPagoFijo();
 
       onDataChange();
     } catch (err: any) {
@@ -542,7 +574,7 @@ export function PayrollServicesView({
         serviceSearch === '' ||
         s.description.toLowerCase().includes(serviceSearch.toLowerCase()) ||
         (s.invoice_number && s.invoice_number.toLowerCase().includes(serviceSearch.toLowerCase())) ||
-        (s.notes && s.notes.toLowerCase().includes(serviceSearch.toLowerCase()));
+        (s.notes && unpackGastoFijo(s.notes).notes.toLowerCase().includes(serviceSearch.toLowerCase()));
 
       const matchCat = serviceCategoryFilter === 'ALL' || s.category === serviceCategoryFilter;
       const matchMonth = serviceMonthFilter === '' || s.date.startsWith(serviceMonthFilter);
@@ -1951,8 +1983,19 @@ export function PayrollServicesView({
       {/* ========================================================= */}
       {subTab === 'services' && (
         <div className="space-y-6">
+          {/* Gastos fijos del mes y resumen mensual */}
+          <GastosFijosPanel
+            accounts={accounts}
+            serviceExpenses={serviceExpenses}
+            categories={SERVICE_CATEGORIES}
+            appMode={appMode}
+            isDark={isDark}
+            onPagar={handlePagarFijo}
+          />
+
           {/* Tarjeta de Encabezado y Formulario de Nuevo Servicio */}
           <div
+            ref={serviceFormRef}
             className={`p-5 rounded-2xl border shadow-sm ${
               isDark ? 'bg-slate-900/90 border-slate-700/80 text-white' : 'bg-white border-slate-200 text-slate-900'
             }`}
@@ -2032,6 +2075,16 @@ export function PayrollServicesView({
 
             {/* Formulario de Registro de Nuevo Servicio */}
             <form onSubmit={handleSubmitService} className="pt-2 space-y-4">
+              {pagandoFijo && (
+                <div className="flex items-center justify-between gap-2 p-3 rounded-xl border text-xs font-semibold bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300">
+                  <span>
+                    Pagando el gasto fijo <b>{pagandoFijo.name}</b>. Revisa la cuenta y la tasa, y dale a registrar.
+                  </span>
+                  <button type="button" onClick={cancelarPagoFijo} className="underline cursor-pointer whitespace-nowrap">
+                    Cancelar
+                  </button>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                 {/* Fecha */}
                 <div>
@@ -2443,8 +2496,11 @@ export function PayrollServicesView({
                             {accountUsed ? `${accountUsed.name} (${accountUsed.bank_name})` : 'Caja/Banco'}
                           </td>
 
-                          <td className="py-2.5 px-3 text-[11px] text-slate-400 max-w-xs truncate" title={s.notes}>
-                            {s.notes || '-'}
+                          <td className="py-2.5 px-3 text-[11px] text-slate-400 max-w-xs truncate" title={unpackGastoFijo(s.notes).notes}>
+                            {unpackGastoFijo(s.notes).gasto_fijo_id && (
+                              <span className="mr-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">FIJO</span>
+                            )}
+                            {unpackGastoFijo(s.notes).notes || '-'}
                           </td>
 
                           <td className="py-2.5 px-3 text-right">

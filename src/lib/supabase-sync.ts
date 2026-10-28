@@ -36,6 +36,7 @@ import {
   Expense,
   DailyClosure,
   DailyReport,
+  GastoFijo,
   Debtor,
   DebtPayment,
   Employee,
@@ -1180,6 +1181,32 @@ export const SupabaseSyncService = {
       });
     } catch {
       /* warn */
+    }
+  },
+  // Gastos fijos mensuales: la plantilla completa va en "data" (jsonb)
+  async fetchGastosFijos(mode: AppMode): Promise<GastoFijo[] | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    try {
+      const { data, error } = await supabase.from(`${mode}_gastos_fijos`).select('data');
+      if (error) return null;
+      return ((data || []) as any[]).map((row) => row.data).filter(Boolean) as GastoFijo[];
+    } catch {
+      return null;
+    }
+  },
+
+  async upsertGastoFijo(fijo: GastoFijo, mode: AppMode): Promise<boolean> {
+    if (!isSupabaseConfigured || !supabase) return false;
+    try {
+      const { error } = await supabase.from(`${mode}_gastos_fijos`).upsert({
+        id: fijo.id,
+        name: fijo.name,
+        data: fijo,
+        updated_at: fijo.updated_at || new Date().toISOString(),
+      });
+      return !error;
+    } catch {
+      return false;
     }
   },
 };

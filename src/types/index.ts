@@ -347,6 +347,8 @@ export type ServiceCategory =
   | 'PAPELERIA_SUMINISTROS'
   | 'TRANSPORTE_VIATICOS'
   | 'COMISIONES_OPERADORES'
+  | 'ALQUILER_CUENTAS'
+  | 'COSTOS_BANCARIOS'
   | 'OTROS';
 
 export interface ServiceExpense {
@@ -363,6 +365,23 @@ export interface ServiceExpense {
   expense_id?: string;
   notes?: string;
   created_at: string;
+}
+
+// Gasto fijo mensual (alquiler de cuentas, costos bancarios…): la plantilla
+// que se paga cada mes. Cada pago queda como un ServiceExpense con [FIJO:id] en notes.
+export interface GastoFijo {
+  id: string;
+  name: string;
+  category: ServiceCategory;
+  amount: number;
+  currency: Currency;
+  account_id?: string;
+  day_of_month: number; // 1-31: día del mes en que se paga
+  is_active: boolean;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  deleted?: boolean; // borrado (se guarda así para que se borre en todos los equipos)
 }
 
 
