@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Supplier, SupplierPurchase, SupplierPayment, Account } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { recordTime } from '@/lib/order';
-import { formatRateDisplay } from '@/lib/formatters';
+import { formatRateExact } from '@/lib/formatters';
 import { SupplierVoucherData } from './ShareSupplierVoucherModal';
 import {
   Building2,
@@ -145,7 +145,7 @@ export function SupplierHistoryModal({
               </span>
               {p.quantity.toLocaleString('en-US', { maximumFractionDigits: 4 })}
             </div>
-            <div className="text-[11px] text-slate-500 font-mono mt-0.5">Tasa Costo: {formatRateDisplay(p.buy_price)}</div>
+            <div className="text-[11px] text-slate-500 font-mono mt-0.5">Tasa Costo: {formatRateExact(p.buy_price)}</div>
           </div>
         ),
         totalCostFormatted: `$${p.cost_usd.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD`,

@@ -10,7 +10,7 @@ import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from './ManageCurrenciesModal';
 import { SupplierHistoryModal } from './SupplierHistoryModal';
 import { ShareSupplierVoucherModal, SupplierVoucherData } from './ShareSupplierVoucherModal';
-import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatRateDisplay, formatInputNumber } from '@/lib/formatters';
+import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatRateDisplay, formatRateExact, formatInputNumber } from '@/lib/formatters';
 import {
   Truck,
   Plus,
@@ -688,7 +688,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                         </span>
                         {formatRegionalAmount(p.quantity)}
                       </td>
-                      <td className="p-3 text-right text-slate-600 font-mono">{formatRateDisplay(p.buy_price)}</td>
+                      <td className="p-3 text-right text-slate-600 font-mono">{formatRateExact(p.buy_price)}</td>
                       <td className="p-3 text-right font-bold text-indigo-600 whitespace-nowrap">
                         ${formatCurrency(p.cost_usd)}
                       </td>
