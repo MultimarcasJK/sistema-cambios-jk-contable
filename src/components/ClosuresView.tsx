@@ -32,7 +32,7 @@ import {
   Filter,
   FileText,
 } from 'lucide-react';
-import { localDateStr } from '@/lib/dates';
+import { localDateStr, localTimeOf } from '@/lib/dates';
 import { gananciaRemesasEl, remesasPagadasEl } from '@/lib/remesa-profit';
 import { DailyReportModal } from './DailyReportModal';
 import { SearchableSelect } from './SearchableSelect';
@@ -126,6 +126,16 @@ export function ClosuresView({
 
   // Guardar Cierre Oficial del Día (captura Ganancias + Snapshot Cuentas + Snapshot Deudores)
   const handleSaveClosure = () => {
+    // Si el día ya se cerró, avisar antes de reemplazar ese cierre
+    if (existingClosure) {
+      const hora = localTimeOf(existingClosure.closed_at);
+      const ok = window.confirm(
+        `El día ${selectedDate} ya se cerró${hora ? ` a las ${hora}` : ''}.\n\n` +
+          'Si continúas, ese cierre se reemplaza por uno nuevo con los saldos de este momento.\n\n' +
+          '¿Quieres reemplazarlo?'
+      );
+      if (!ok) return;
+    }
     StorageService.addClosure(
       {
         date: selectedDate,
@@ -792,15 +802,6 @@ export function ClosuresView({
                 </div>
               </div>
 
-              {displayedAccountsData.isRealtime && (
-                <button
-                  onClick={handleSaveClosure}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center space-x-1.5 shadow-sm"
-                >
-                  <Camera className="w-3.5 h-3.5" />
-                  <span>Tomar Corte / Foto Oficial Ahora</span>
-                </button>
-              )}
             </div>
 
             {/* Resumen de Totales por Moneda en este Corte */}
