@@ -2706,6 +2706,13 @@ export const StorageService = {
       total_debtors_usd: Number(total_debtors_usd.toFixed(2)),
     };
     unmarkDeleted(newClosure.id);
+    // Volver a cerrar el mismo día reemplaza el cierre anterior también en Supabase (si no, vuelve duplicado)
+    all
+      .filter((c) => c.date === closure.date)
+      .forEach((old) => {
+        markAsDeleted(old.id);
+        SupabaseSyncService.deleteClosure(old.id, m).catch(() => {});
+      });
     const filtered = all.filter((c) => c.date !== closure.date);
     filtered.unshift(newClosure);
     saveToStorage(this.getClosuresKey(m), filtered);
