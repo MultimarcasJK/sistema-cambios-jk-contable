@@ -114,3 +114,20 @@ export function rateFromPurchase(currency: string, quantity: number, costUsd: nu
   const rate = currency === 'EUR' ? costUsd / quantity : quantity / costUsd;
   return Number(rate.toFixed(4));
 }
+
+// Pago de un gasto fijo mensual: el gasto de servicio lleva [FIJO:id] para saber de qué gasto fijo es
+const FIJO_TAG_RE = /\s*\[FIJO:([^\]\s]+)\]\s*/;
+
+export function packGastoFijo(notes: string | undefined, gastoFijoId?: string): string {
+  const clean = (notes || '').replace(FIJO_TAG_RE, ' ').trim();
+  if (!gastoFijoId) return clean;
+  const tag = `[FIJO:${gastoFijoId}]`;
+  return clean ? `${clean} ${tag}` : tag;
+}
+
+export function unpackGastoFijo(notes: string | undefined): { notes: string; gasto_fijo_id?: string } {
+  const raw = notes || '';
+  const m = raw.match(FIJO_TAG_RE);
+  if (!m) return { notes: raw };
+  return { notes: raw.replace(FIJO_TAG_RE, ' ').trim(), gasto_fijo_id: m[1] };
+}
