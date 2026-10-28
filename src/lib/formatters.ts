@@ -50,6 +50,13 @@ export function formatRateDisplay(rate: number | string | undefined | null): str
   });
 }
 
+// Tasa tal cual se anotó: sin redondear ni rellenar con ceros (0.995 → 0.995, 788 → 788)
+export function formatRateExact(rate: number | string | undefined | null): string {
+  const num = typeof rate === 'string' ? parseFloat(rate) : rate;
+  if (!num || isNaN(num)) return '0';
+  return num.toLocaleString('en-US', { maximumFractionDigits: 10 });
+}
+
 // Formatea el valor mientras el usuario lo escribe en un input
 export function formatInputNumber(value: string): string {
   if (!value) return '';
