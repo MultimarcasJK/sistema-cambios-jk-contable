@@ -66,3 +66,21 @@ describe('cierres que vuelven de Supabase', () => {
     expect(got.total_expenses).toBe(0);
   });
 });
+
+describe('cerrar dos veces el mismo día', () => {
+  it('el segundo cierre reemplaza al primero y el viejo no vuelve desde Supabase', async () => {
+    const base = { date: '2026-10-27', profit_detal: 0, profit_mayor: 0, extra_income: 0, total_expenses: 0, total_net_profit: 0 };
+    const first = StorageService.addClosure(base, [], [], MODE);
+    await new Promise((r) => setTimeout(r, 5));
+    const second = StorageService.addClosure(base, [], [], MODE);
+    expect(second.id).not.toBe(first.id);
+    // Supabase todavía trae los dos (como si el borrado no hubiera llegado)
+    remote.closures = [
+      { id: first.id, date: first.date, closed_at: first.closed_at, total_net_profit: 0 },
+      { id: second.id, date: second.date, closed_at: second.closed_at, total_net_profit: 0 },
+    ];
+    await StorageService.syncFromSupabase(MODE);
+    const delDia = StorageService.getClosures(MODE).filter((c) => c.date === '2026-10-27');
+    expect(delDia.map((c) => c.id)).toEqual([second.id]);
+  });
+});
