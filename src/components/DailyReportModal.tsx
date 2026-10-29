@@ -483,7 +483,7 @@ export function DailyReportModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 z-50 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-2xl w-full p-5 shadow-2xl relative my-auto">
+      <div className="tema-oscuro bg-slate-900 border border-slate-700 text-white rounded-3xl max-w-2xl w-full p-5 shadow-2xl relative my-auto">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition cursor-pointer"
