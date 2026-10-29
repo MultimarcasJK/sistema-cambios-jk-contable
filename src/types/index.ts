@@ -410,6 +410,7 @@ export type AuditAction =
   | 'ajuste_saldo'
   | 'cierre'
   | 'reapertura'
+  | 'reporte'
   | 'bloqueado';
 
 export interface AuditEntry {

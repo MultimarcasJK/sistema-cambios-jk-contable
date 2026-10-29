@@ -42,6 +42,7 @@ import {
 import { SupabaseSyncService } from './supabase-sync';
 import { commissionOutOfAccount } from './commission';
 import { AuditService } from './audit';
+import { lineaCuadra } from './daily-report';
 import { recordTime } from './order';
 import { isActorAdmin, getActor } from './actor';
 import { unirGastosFijos } from './gastos-fijos';
@@ -2771,9 +2772,27 @@ export const StorageService = {
   // Guarda en este equipo y en Supabase. true = Supabase confirmó el guardado.
   async saveDailyReport(report: DailyReport, mode?: AppMode): Promise<boolean> {
     const m = mode || report.mode || this.getAppMode();
-    const rest = this.getDailyReports(m).filter((r) => r && r.id !== report.id);
+    const previos = this.getDailyReports(m);
+    const yaExistia = previos.some((r) => r && r.id === report.id);
+    const rest = previos.filter((r) => r && r.id !== report.id);
     // Solo los últimos 200 en el navegador; el historial completo queda en Supabase
     saveToStorage(this.getDailyReportsKey(m), [report, ...rest].slice(0, 200));
+    const contadas = report.cuadre.length;
+    const descuadradas = report.cuadre.filter((l) => !lineaCuadra(l)).length;
+    const cuadre =
+      contadas === 0
+        ? 'sin cuadre de caja'
+        : descuadradas === 0
+          ? `cuadre OK (${contadas} cuentas)`
+          : `${descuadradas} de ${contadas} cuentas con diferencia`;
+    AuditService.log({
+      mode: m,
+      action: 'reporte',
+      entity: 'reporte_diario',
+      entityId: report.id,
+      summary: `${yaExistia ? 'Reporte del día actualizado' : 'Reporte del día'} ${report.date}: neto ${report.ganancia.neta} USD, ${cuadre}.`,
+      data: { date: report.date, neta: report.ganancia.neta, cuadra: report.cuadra, cuadre: report.cuadre },
+    });
     return SupabaseSyncService.upsertDailyReport(report, m).catch(() => false);
   },
 

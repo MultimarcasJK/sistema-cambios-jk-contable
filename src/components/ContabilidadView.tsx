@@ -28,6 +28,7 @@ const ACTION_LABELS: Record<string, string> = {
   ajuste_saldo: 'Ajuste de saldo',
   cierre: 'Cierre de día',
   reapertura: 'Reapertura',
+  reporte: 'Reporte del día',
   bloqueado: 'Intento bloqueado',
 };
 
