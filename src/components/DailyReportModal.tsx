@@ -373,7 +373,7 @@ export function DailyReportModal({
   const buildReport = (createdAt?: string): DailyReport => {
     const parsed: Record<string, number | undefined> = {};
     Object.entries(reales).forEach(([id, v]) => {
-      if (v.trim() !== '') parsed[id] = parseFormattedNumber(v);
+      if (v.trim() !== '' && v.trim() !== '-') parsed[id] = parseFormattedNumber(v);
     });
     return buildDailyReport({
       id: reportId,
@@ -565,7 +565,7 @@ export function DailyReportModal({
                             inputMode="decimal"
                             placeholder="—"
                             value={reales[a.id] || ''}
-                            onChange={(e) => setReales({ ...reales, [a.id]: formatInputNumber(e.target.value) })}
+                            onChange={(e) => setReales({ ...reales, [a.id]: formatInputNumber(e.target.value, true) })}
                             className="w-28 text-right font-mono text-xs bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-sky-500"
                           />
                         </td>
