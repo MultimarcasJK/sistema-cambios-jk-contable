@@ -58,8 +58,10 @@ export function formatRateExact(rate: number | string | undefined | null): strin
 }
 
 // Formatea el valor mientras el usuario lo escribe en un input
-export function formatInputNumber(value: string): string {
+export function formatInputNumber(value: string, allowNegative = false): string {
   if (!value) return '';
+  // Signo menos solo al inicio, cuando se permiten negativos (ej. saldos en rojo)
+  const sign = allowNegative && value.trim().startsWith('-') ? '-' : '';
   // Remover todo excepto dígitos y un punto
   let clean = value.replace(/[^0-9.]/g, '');
   
@@ -77,7 +79,7 @@ export function formatInputNumber(value: string): string {
     : '';
 
   if (decimalPart !== undefined) {
-    return `${formattedInteger}.${decimalPart}`;
+    return `${sign}${formattedInteger}.${decimalPart}`;
   }
-  return formattedInteger;
+  return `${sign}${formattedInteger}`;
 }
