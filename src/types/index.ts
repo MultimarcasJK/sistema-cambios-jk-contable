@@ -128,6 +128,10 @@ export interface SupplierPayment {
   account_id?: string;
   reference?: string;
   notes?: string;
+  // Comisión que cobra el banco o la wallet al hacer el pago (USD). No baja la deuda del proveedor:
+  // sale de la cuenta de desembolso y queda registrada como gasto aparte.
+  commission_usd?: number;
+  commission_expense_id?: string;
   created_at?: string;
 }
 

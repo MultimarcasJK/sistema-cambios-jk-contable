@@ -2086,11 +2086,36 @@ export const StorageService = {
     const m = mode || this.getAppMode();
     this.assertDayOpen(payment.date, m, 'registrar un pago a proveedor');
     const all = this.getSupplierPayments(m);
+    const commission = Number(payment.commission_usd) > 0 ? Number(payment.commission_usd) : 0;
     const newPayment: SupplierPayment = {
       ...payment,
+      commission_usd: commission > 0 ? commission : undefined,
       id: 'pay-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+
+    // La comisión del banco/wallet es un gasto aparte: sale de la misma cuenta pero no baja la deuda
+    if (commission > 0) {
+      const acc = newPayment.account_id
+        ? this.getAccounts(m).find((a) => a.id === newPayment.account_id)
+        : undefined;
+      const exp = this.addExpense(
+        {
+          date: newPayment.date,
+          type: 'egreso',
+          description: `[COMISIÓN PAGO PROVEEDOR] ${newPayment.supplier_name}${
+            newPayment.reference ? ' - Ref: ' + newPayment.reference : ''
+          }`,
+          amount: commission,
+          currency: acc?.currency || 'USD',
+          concept: 'COMISIONES BANCARIAS',
+          account_id: newPayment.account_id || undefined,
+          amount_usd: commission,
+        },
+        m
+      );
+      newPayment.commission_expense_id = exp.id;
+    }
     unmarkDeleted(newPayment.id);
     all.unshift(newPayment);
     saveToStorage(this.getSupplierPaymentsKey(m), all);
@@ -2107,7 +2132,9 @@ export const StorageService = {
       action: 'crear',
       entity: 'pago_proveedor',
       entityId: newPayment.id,
-      summary: `Pago a proveedor ${newPayment.supplier_name}: ${newPayment.amount_usd}`,
+      summary: `Pago a proveedor ${newPayment.supplier_name}: ${newPayment.amount_usd}${
+        commission > 0 ? ` (+ comisión ${commission})` : ''
+      }`,
       data: newPayment,
     });
     return newPayment;

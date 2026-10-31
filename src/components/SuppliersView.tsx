@@ -68,6 +68,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentAccountId, setPaymentAccountId] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
+  const [paymentCommission, setPaymentCommission] = useState('');
 
   // Helper para abrir comprobante gráfico del proveedor
   const handleOpenSupplierVoucher = (sup: Supplier) => {
@@ -228,6 +229,11 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
       alert('Por favor ingrese un monto válido');
       return;
     }
+    const commission = paymentCommission ? parseFormattedNumber(paymentCommission) : 0;
+    if (commission < 0) {
+      alert('La comisión no puede ser negativa');
+      return;
+    }
 
     StorageService.addSupplierPayment({
       date: todayStr,
@@ -236,12 +242,14 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
       amount_usd: amount,
       account_id: paymentAccountId || undefined,
       reference: paymentReference,
+      commission_usd: commission > 0 ? commission : undefined,
     });
 
     setPaymentModalSupplier(null);
     setPaymentAmount('');
     setPaymentAccountId('');
     setPaymentReference('');
+    setPaymentCommission('');
     onDataChange();
   };
 
@@ -1056,6 +1064,31 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
               </div>
 
               <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Comisión del Banco / Wallet (Opcional)
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={paymentCommission}
+                  onChange={(e) => setPaymentCommission(formatInputNumber(e.target.value))}
+                  className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 font-mono"
+                />
+                {(() => {
+                  const amt = parseFormattedNumber(paymentAmount || '0');
+                  const com = parseFormattedNumber(paymentCommission || '0');
+                  if (!(com > 0)) return null;
+                  return (
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Abona {amt.toFixed(2)} a la deuda. Sale de la cuenta {(amt + com).toFixed(2)} en total y la
+                      comisión queda como gasto (Comisiones Bancarias).
+                    </p>
+                  );
+                })()}
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Referencia</label>
                 <input
                   type="text"
@@ -1069,7 +1102,10 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
               <div className="flex justify-end space-x-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setPaymentModalSupplier(null)}
+                  onClick={() => {
+                    setPaymentModalSupplier(null);
+                    setPaymentCommission('');
+                  }}
                   className="px-4 py-2 text-xs text-slate-600 hover:text-slate-800"
                 >
                   Cancelar
