@@ -117,9 +117,20 @@ function isAccountPending(mode: AppMode, id: string): boolean {
   return getPendingAccounts()[mode + ':' + id] !== undefined;
 }
 
+// Momento del último cambio local de cada cuenta (en esta pestaña). Una descarga que empezó
+// antes de ese cambio trae la copia vieja aunque Supabase ya haya confirmado el guardado,
+// así que no puede pisarla (si no, una compra o venta recién anotada desaparecía del saldo).
+const accountLocalChangeAt = new Map<string, number>();
+
+function changedLocallySince(mode: AppMode, id: string, since: number): boolean {
+  const at = accountLocalChangeAt.get(mode + ':' + id);
+  return at !== undefined && at >= since;
+}
+
 function pushAccount(account: Account, mode: AppMode): Promise<void> {
   const key = mode + ':' + account.id;
   const stamp = Date.now();
+  accountLocalChangeAt.set(key, stamp);
   setPendingAccounts({ ...getPendingAccounts(), [key]: stamp });
   return SupabaseSyncService.upsertAccount(account, mode).then((ok) => {
     if (!ok) return;
@@ -751,7 +762,11 @@ export const StorageService = {
         const mergedAccounts = [
           ...validRemote.map((remote) => {
             const loc = localMap.get(remote.id) || localMap.get(remote.name.trim().toUpperCase());
-            if (loc && loc.id === remote.id && isAccountPending(m, remote.id)) {
+            if (
+              loc &&
+              loc.id === remote.id &&
+              (isAccountPending(m, remote.id) || changedLocallySince(m, remote.id, fetchStartedAt))
+            ) {
               pushAccount(loc, m).catch(() => {});
               return loc;
             }
