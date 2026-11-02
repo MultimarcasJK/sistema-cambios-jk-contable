@@ -45,12 +45,12 @@ beforeEach(() => {
   setActor({ id: 'u1', email: 'admin@test', rol: 'ADMIN' });
 });
 
-describe('corregir tasa de venta de una venta mayor', () => {
+describe('corregir tasas de una venta mayor', () => {
   it('recalcula Debe pagar, ganancia y deuda sin mover cuentas', () => {
     const id = ventaMalAnotada(false);
     expect(debt('EDWARD')).toBe(2180.2);
     const copAntes = bal('COP1');
-    const tx = StorageService.changeSellPriceMayor(id, 3020, undefined, MODE)!;
+    const tx = StorageService.changeRatesMayor(id, { sell_price: 3020 }, undefined, MODE)!;
     expect(tx.sell_price).toBe(3020);
     expect(tx.total_to_pay).toBe(1458.28);
     expect(tx.profit_usd).toBeCloseTo(4404000 / 3020 - 4404000 / 3110, 2);
@@ -60,10 +60,10 @@ describe('corregir tasa de venta de una venta mayor', () => {
 
   it('día cerrado: sin motivo bloquea, con motivo corrige y no toca el cierre', () => {
     const id = ventaMalAnotada(true);
-    expect(() => StorageService.changeSellPriceMayor(id, 3020, undefined, MODE)).toThrow(/cerrado/);
+    expect(() => StorageService.changeRatesMayor(id, { sell_price: 3020 }, undefined, MODE)).toThrow(/cerrado/);
     expect(StorageService.getTransactionsMayor(MODE)[0].sell_price).toBe(2020);
     const cierre = JSON.stringify(StorageService.getClosures(MODE));
-    StorageService.changeSellPriceMayor(id, 3020, 'tasa mal anotada', MODE);
+    StorageService.changeRatesMayor(id, { sell_price: 3020 }, 'tasa mal anotada', MODE);
     expect(StorageService.getTransactionsMayor(MODE)[0].total_to_pay).toBe(1458.28);
     expect(debt('EDWARD')).toBe(1458.28);
     expect(JSON.stringify(StorageService.getClosures(MODE))).toBe(cierre);
@@ -72,6 +72,36 @@ describe('corregir tasa de venta de una venta mayor', () => {
   it('solo ADMIN', () => {
     const id = ventaMalAnotada(false);
     setActor({ id: 'u2', email: 'op@test', rol: 'OPERADOR' });
-    expect(() => StorageService.changeSellPriceMayor(id, 3020, 'x', MODE)).toThrow(/ADMIN/);
+    expect(() => StorageService.changeRatesMayor(id, { sell_price: 3020 }, 'x', MODE)).toThrow(/ADMIN/);
+  });
+
+  it('tasa de compra: solo cambia la ganancia, no Debe pagar ni la deuda', () => {
+    const id = ventaMalAnotada(false);
+    const antes = StorageService.getTransactionsMayor(MODE)[0];
+    const tx = StorageService.changeRatesMayor(id, { buy_price: 3000 }, undefined, MODE)!;
+    expect(tx.buy_price).toBe(3000);
+    expect(tx.total_to_pay).toBe(antes.total_to_pay);
+    expect(tx.profit_usd).toBeCloseTo(4404000 / 2020 - 4404000 / 3000, 2);
+    expect(debt('EDWARD')).toBe(2180.2);
+  });
+
+  it('día cerrado: tasa de compra también pide motivo', () => {
+    const id = ventaMalAnotada(true);
+    expect(() => StorageService.changeRatesMayor(id, { buy_price: 3000 }, undefined, MODE)).toThrow(/cerrado/);
+    StorageService.changeRatesMayor(id, { buy_price: 3000 }, 'costo mal anotado', MODE);
+    expect(StorageService.getTransactionsMayor(MODE)[0].buy_price).toBe(3000);
+  });
+
+  it('día cerrado: cambiar la cuenta de salida con motivo (ADMIN) mueve el saldo', () => {
+    const id = ventaMalAnotada(true);
+    const cuentas = StorageService.getAccounts(MODE);
+    localStorage.setItem(
+      StorageService.getAccountsKey(MODE),
+      JSON.stringify([...cuentas, acc('COP2', 'COP', 0)])
+    );
+    expect(() => StorageService.editTransactionMayor(id, { paid_account_id: 'COP2' }, MODE)).toThrow(/cerrado/);
+    StorageService.editTransactionMayor(id, { paid_account_id: 'COP2' }, MODE, 'cuenta equivocada');
+    expect(bal('COP2')).toBe(-4404000);
+    expect(bal('COP1')).toBe(10000000);
   });
 });

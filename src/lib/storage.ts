@@ -2508,9 +2508,11 @@ export const StorageService = {
   editTransactionMayor(
     id: string,
     changes: { client_name?: string; paid_account_id?: string; received_account_id?: string },
-    mode?: AppMode
+    mode?: AppMode,
+    closedDayReason?: string
   ): TransactionMayor | null {
     const m = mode || this.getAppMode();
+    const motivo = (closedDayReason || '').trim();
     let tx = this.getTransactionsMayor(m).find((t) => t.id === id);
     if (!tx) return null;
     const paidChanged = !!changes.paid_account_id && changes.paid_account_id !== tx.paid_account_id;
@@ -2518,7 +2520,10 @@ export const StorageService = {
     if (recvChanged && (!tx.received_account_id || tx.received_account_id === 'POR_COBRAR')) {
       throw new Error('Esta venta está Por Cobrar: registra un abono en vez de cambiar la cuenta.');
     }
-    if (paidChanged || recvChanged) this.assertDayOpen(tx.date, m, 'cambiar la cuenta de una venta');
+    // En un día cerrado solo un ADMIN con motivo puede cambiar las cuentas
+    if ((paidChanged || recvChanged) && !(motivo && isActorAdmin())) {
+      this.assertDayOpen(tx.date, m, 'cambiar la cuenta de una venta');
+    }
     if (paidChanged) {
       const paidAcc = this.getAccounts(m).find((a) => a.id === tx!.paid_account_id);
       const out = tx.amount_ves > 0 ? tx.amount_ves + commissionOutOfAccount(tx, paidAcc?.currency) : 0;
@@ -2545,6 +2550,7 @@ export const StorageService = {
         entity: 'venta_mayor',
         entityId: id,
         summary: `Venta mayor del ${tx.date}: cuentas cambiadas`,
+        ...(motivo ? { reason: motivo } : {}),
         data: { antes: { paid: tx.paid_account_id, recv: tx.received_account_id }, despues: { paid: updated.paid_account_id, recv: updated.received_account_id } },
       });
       tx = updated;
@@ -2553,26 +2559,39 @@ export const StorageService = {
     return tx;
   },
 
-  // Corregir la tasa de venta de una venta mayor (solo ADMIN). Recalcula Debe pagar, la ganancia
-  // y la deuda del cliente. No mueve cuentas: la plata que salió y la comisión siguen iguales.
+  // Corregir las tasas de una venta mayor (solo ADMIN).
+  // Tasa de venta: recalcula Debe pagar, la ganancia y la deuda del cliente.
+  // Tasa de compra: recalcula solo la ganancia (el costo).
+  // No mueve cuentas: la plata que salió y la comisión siguen iguales.
   // En un día cerrado hace falta un motivo; los cierres guardados no se tocan.
-  changeSellPriceMayor(id: string, newSell: number, reason?: string, mode?: AppMode): TransactionMayor | null {
+  changeRatesMayor(
+    id: string,
+    rates: { sell_price?: number; buy_price?: number },
+    reason?: string,
+    mode?: AppMode
+  ): TransactionMayor | null {
     const m = mode || this.getAppMode();
-    if (!isActorAdmin()) throw new Error('Solo un ADMIN puede cambiar la tasa de venta.');
-    if (!(newSell > 0)) throw new Error('La tasa de venta tiene que ser mayor que 0.');
+    if (!isActorAdmin()) throw new Error('Solo un ADMIN puede cambiar las tasas de una venta.');
     const tx = this.getTransactionsMayor(m).find((t) => t.id === id);
     if (!tx) return null;
-    if (!(tx.sell_price > 0) || !(tx.amount_ves > 0)) throw new Error('Esta venta no tiene tasa de venta para corregir.');
-    if (newSell === tx.sell_price) return tx;
+    const newSell = rates.sell_price !== undefined ? rates.sell_price : tx.sell_price;
+    const newBuy = rates.buy_price !== undefined ? rates.buy_price : tx.buy_price;
+    if (rates.sell_price !== undefined && !(newSell > 0)) throw new Error('La tasa de venta tiene que ser mayor que 0.');
+    if (rates.buy_price !== undefined && !(newBuy > 0)) throw new Error('La tasa de compra tiene que ser mayor que 0.');
+    if (newSell === tx.sell_price && newBuy === tx.buy_price) return tx;
+    if (!(tx.sell_price > 0) || !(tx.amount_ves > 0)) throw new Error('Esta venta no tiene tasas para corregir.');
     const motivo = (reason || '').trim();
     const locked = this.isDayLocked(tx.date, m);
-    if (locked && !motivo) this.assertDayOpen(tx.date, m, 'cambiar la tasa de una venta');
+    if (locked && !motivo) this.assertDayOpen(tx.date, m, 'cambiar las tasas de una venta');
 
-    // Misma cuenta que el formulario de ventas: EUR multiplica, las demás monedas dividen
-    const base = (sell: number) => (tx.currency === 'EUR' ? tx.amount_ves * sell : tx.amount_ves / sell);
-    const diff = base(newSell) - base(tx.sell_price);
-    const clientFee = tx.client_fee || 0;
-    const newTotal = Number((base(newSell) + clientFee).toFixed(2));
+    // Misma cuenta que el formulario de ventas: EUR multiplica, las demás monedas dividen.
+    // Sin tasa de compra, el costo es lo mismo que se cobra.
+    const conv = (rate: number) => (tx.currency === 'EUR' ? tx.amount_ves * rate : tx.amount_ves / rate);
+    const cost = (buy: number, sell: number) => (buy > 0 ? conv(buy) : conv(sell));
+    const sellChanged = newSell !== tx.sell_price;
+    const diffIncome = conv(newSell) - conv(tx.sell_price);
+    const diffCost = cost(newBuy, newSell) - cost(tx.buy_price, tx.sell_price);
+    const newTotal = sellChanged ? Number((conv(newSell) + (tx.client_fee || 0)).toFixed(2)) : tx.total_to_pay;
     const received = tx.amount_received !== undefined ? tx.amount_received : 0;
     const unpaidOld = Math.max(0, Number(((tx.total_to_pay || 0) - received).toFixed(2)));
     const unpaidNew = Math.max(0, Number((newTotal - received).toFixed(2)));
@@ -2580,8 +2599,9 @@ export const StorageService = {
     const updated: TransactionMayor = {
       ...tx,
       sell_price: newSell,
+      buy_price: newBuy,
       total_to_pay: newTotal,
-      profit_usd: Number(((tx.profit_usd || 0) + diff).toFixed(4)),
+      profit_usd: Number(((tx.profit_usd || 0) + diffIncome - diffCost).toFixed(4)),
     };
     saveToStorage(
       this.getTransactionsMayorKey(m),
@@ -2590,18 +2610,21 @@ export const StorageService = {
     const debtDelta = Number((unpaidNew - unpaidOld).toFixed(2));
     if (debtDelta !== 0) this.increaseClientDebt(tx.client_name, debtDelta, m);
     SupabaseSyncService.upsertTransactionMayor(updated, m).catch(() => {});
+    const cambios: string[] = [];
+    if (sellChanged) cambios.push(`venta ${tx.sell_price} → ${newSell}`);
+    if (newBuy !== tx.buy_price) cambios.push(`compra ${tx.buy_price} → ${newBuy}`);
     AuditService.log({
       mode: m,
       action: 'editar',
       entity: 'venta_mayor',
       entityId: id,
       summary:
-        `Venta mayor de ${tx.client_name} del ${tx.date}: tasa de venta ${tx.sell_price} → ${newSell}` +
+        `Venta mayor de ${tx.client_name} del ${tx.date}: tasas cambiadas (${cambios.join(', ')})` +
         (locked ? ' (día cerrado; corregido hoy, cierres sin tocar)' : ''),
       ...(motivo ? { reason: motivo } : {}),
       data: {
-        antes: { sell_price: tx.sell_price, total_to_pay: tx.total_to_pay, profit_usd: tx.profit_usd },
-        despues: { sell_price: updated.sell_price, total_to_pay: updated.total_to_pay, profit_usd: updated.profit_usd },
+        antes: { sell_price: tx.sell_price, buy_price: tx.buy_price, total_to_pay: tx.total_to_pay, profit_usd: tx.profit_usd },
+        despues: { sell_price: updated.sell_price, buy_price: updated.buy_price, total_to_pay: updated.total_to_pay, profit_usd: updated.profit_usd },
       },
     });
     return updated;

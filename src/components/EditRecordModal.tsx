@@ -35,8 +35,15 @@ export interface EditRecordConfig {
   nameOptions: string[];
   accounts: Account[];
   accountFields: AccountField[];
-  // Campo opcional para corregir una tasa (ej. tasa de venta). Vuelve como texto en el resultado.
-  rateField?: { key: string; label: string; current: number; help?: string };
+  // Campos opcionales para corregir tasas (ej. venta y compra). Vuelven como texto en el resultado.
+  rateFields?: RateField[];
+}
+
+export interface RateField {
+  key: string;
+  label: string;
+  current: number;
+  help?: string;
 }
 
 export type EditRecordResult = { name?: string } & Record<string, string | undefined>;
@@ -49,9 +56,12 @@ function EditRecordModal({ cfg, onDone }: { cfg: EditRecordConfig; onDone: (r: E
   const [accs, setAccs] = useState<Record<string, string>>(() =>
     Object.fromEntries(cfg.accountFields.map((f) => [f.key, f.current || '']))
   );
-  const [rate, setRate] = useState(() => (cfg.rateField ? String(cfg.rateField.current) : ''));
-  const rateNum = parseFormattedNumber(rate);
-  const rateOk = !cfg.rateField || rateNum > 0;
+  const rateFields = useMemo(() => cfg.rateFields || [], [cfg.rateFields]);
+  const [rates, setRates] = useState<Record<string, string>>(() =>
+    Object.fromEntries(rateFields.map((f) => [f.key, String(f.current)]))
+  );
+  const rateNum = (key: string) => parseFormattedNumber(rates[key]);
+  const ratesOk = rateFields.every((f) => rateNum(f.key) > 0);
   const typed = name.trim().toUpperCase();
   const nameOk = typed === currentUpper || cfg.nameOptions.includes(typed);
 
@@ -61,10 +71,13 @@ function EditRecordModal({ cfg, onDone }: { cfg: EditRecordConfig; onDone: (r: E
     cfg.accountFields.forEach((f) => {
       if (!f.lockedReason && accs[f.key] && accs[f.key] !== (f.current || '')) r[f.key] = accs[f.key];
     });
-    if (cfg.rateField && rateOk && rateNum !== cfg.rateField.current) r[cfg.rateField.key] = String(rateNum);
+    rateFields.forEach((f) => {
+      const v = parseFormattedNumber(rates[f.key]);
+      if (v > 0 && v !== f.current) r[f.key] = String(v);
+    });
     return r;
-  }, [typed, currentUpper, nameOk, accs, cfg.accountFields, cfg.rateField, rateOk, rateNum]);
-  const canSave = nameOk && rateOk && Object.keys(changes).length > 0;
+  }, [typed, currentUpper, nameOk, accs, cfg.accountFields, rateFields, rates]);
+  const canSave = nameOk && ratesOk && Object.keys(changes).length > 0;
 
   const input =
     'w-full text-xs font-bold border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500';
@@ -85,8 +98,8 @@ function EditRecordModal({ cfg, onDone }: { cfg: EditRecordConfig; onDone: (r: E
         <div>
           <h3 className="text-base font-bold text-slate-800">{cfg.title}</h3>
           <p className="text-[11px] text-slate-500">
-            {cfg.rateField
-              ? 'Los montos no cambian. Si corriges la tasa se recalculan Debe pagar, la ganancia y la deuda.'
+            {rateFields.length > 0
+              ? 'Los montos no cambian. Si corriges una tasa se recalculan la ganancia y, con la de venta, Debe pagar y la deuda.'
               : 'Montos, tasas y ganancia no cambian.'}
           </p>
         </div>
@@ -152,19 +165,25 @@ function EditRecordModal({ cfg, onDone }: { cfg: EditRecordConfig; onDone: (r: E
           );
         })}
 
-        {cfg.rateField && (
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">{cfg.rateField.label}</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={rate}
-              onChange={(e) => setRate(e.target.value)}
-              onFocus={(e) => e.target.select()}
-              className={`${input} font-mono`}
-            />
-            {!rateOk && <p className="text-[11px] font-semibold text-rose-600 mt-1">Escribe una tasa mayor que 0.</p>}
-            {cfg.rateField.help && <p className="text-[11px] text-slate-400 mt-1">{cfg.rateField.help}</p>}
+        {rateFields.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            {rateFields.map((f) => (
+              <div key={f.key}>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">{f.label}</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={rates[f.key] ?? ''}
+                  onChange={(e) => setRates((s) => ({ ...s, [f.key]: e.target.value }))}
+                  onFocus={(e) => e.target.select()}
+                  className={`${input} font-mono`}
+                />
+                {!(rateNum(f.key) > 0) && (
+                  <p className="text-[11px] font-semibold text-rose-600 mt-1">Escribe una tasa mayor que 0.</p>
+                )}
+                {f.help && <p className="text-[11px] text-slate-400 mt-1">{f.help}</p>}
+              </div>
+            ))}
           </div>
         )}
 
