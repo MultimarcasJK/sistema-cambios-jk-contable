@@ -635,18 +635,23 @@ export const SupabaseSyncService = {
     }
   },
 
-  async upsertSupplier(supplier: Supplier, mode: AppMode): Promise<void> {
-    if (!isSupabaseConfigured || !supabase) return;
+  async upsertSupplier(supplier: Supplier, mode: AppMode): Promise<boolean> {
+    if (!isSupabaseConfigured || !supabase) return false;
     const table = `${mode}_proveedores`;
     try {
-      await supabase.from(table).upsert({
+      const { error } = await supabase.from(table).upsert({
         id: supplier.id,
         name: supplier.name,
         contact_info: supplier.contact_info || supplier.type || '',
         current_debt_usd: supplier.current_debt_usd || 0,
       });
+      if (error) {
+        console.error(`[SupabaseSync] Error al guardar proveedor ${supplier.name} en ${table}:`, error);
+        return false;
+      }
+      return true;
     } catch (err) {
-      /* warn */
+      return false;
     }
   },
 

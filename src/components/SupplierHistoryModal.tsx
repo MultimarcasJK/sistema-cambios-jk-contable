@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Supplier, SupplierPurchase, SupplierPayment, Account } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { recordTime } from '@/lib/order';
+import { isActorAdmin } from '@/lib/actor';
 import { formatRateExact } from '@/lib/formatters';
 import { SupplierVoucherData } from './ShareSupplierVoucherModal';
 import {
@@ -75,6 +76,12 @@ export function SupplierHistoryModal({
         (p.supplier_name && p.supplier_name.trim().toUpperCase() === supName)
     );
   }, [supplier, allPayments]);
+
+  // Saldo según el extracto (compras + remesas pagadas como aliado − pagos) vs. la deuda guardada
+  const ledger = useMemo(() => {
+    if (!supplier) return null;
+    return StorageService.getSupplierLedger(supplier);
+  }, [supplier, allPurchases, allPayments]);
 
   // Cálculos financieros
   const financials = useMemo(() => {
@@ -247,6 +254,27 @@ export function SupplierHistoryModal({
     });
   };
 
+  const fmtUsd = (n: number) => `$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const describeDebt = (n: number) =>
+    n > 0 ? `debemos ${fmtUsd(n)}` : n < 0 ? `nos debe ${fmtUsd(n)} (saldo a favor)` : 'al día ($0.00)';
+  const descuadrado = !!ledger && Math.abs(ledger.differenceUsd) >= 0.01;
+
+  const handleReconcile = () => {
+    if (!ledger) return;
+    const motivo = prompt(
+      `La deuda guardada dice que ${describeDebt(ledger.storedDebtUsd)}, pero el extracto dice que ${describeDebt(
+        ledger.extractDebtUsd
+      )}.\n\nSe dejará la deuda igual al extracto. No se mueven cuentas ni registros.\nSi este proveedor tenía una deuda inicial anotada sin compra, no lo hagas.\n\nEscribe el motivo:`
+    );
+    if (motivo === null) return;
+    try {
+      StorageService.reconcileSupplierDebt(supplier.id, motivo);
+      if (onDataChange) onDataChange();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo cuadrar la deuda.');
+    }
+  };
+
   const handleDeleteMovement = async (mov: { type: 'COMPRA' | 'PAGO'; originalId: string }) => {
     if (mov.type === 'COMPRA') {
       if (confirm('¿Deseas revertir y eliminar esta compra de inventario? Se ajustarán saldos y la deuda del proveedor.')) {
@@ -366,14 +394,19 @@ export function SupplierHistoryModal({
                   financials.currentDebtUsd > 0 ? 'text-rose-700' : 'text-emerald-700'
                 }`}
               >
-                {financials.currentDebtUsd > 0 ? '-' : ''}${financials.currentDebtUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                {financials.currentDebtUsd > 0 ? '-' : financials.currentDebtUsd < 0 ? '+' : ''}
+                {fmtUsd(financials.currentDebtUsd)}
               </span>
               <span
                 className={`text-[10px] ${
                   financials.currentDebtUsd > 0 ? 'text-rose-600' : 'text-emerald-600'
                 }`}
               >
-                {financials.currentDebtUsd > 0 ? 'Cuenta por pagar' : 'Al día ($0.00)'}
+                {financials.currentDebtUsd > 0
+                  ? 'Cuenta por pagar'
+                  : financials.currentDebtUsd < 0
+                  ? 'Saldo a favor nuestro'
+                  : 'Al día ($0.00)'}
               </span>
             </div>
 
@@ -399,6 +432,38 @@ export function SupplierHistoryModal({
             <span className="text-[10px] text-blue-600">Compras y pagos</span>
           </div>
         </div>
+
+        {ledger && ledger.remesasCount > 0 && (
+          <p className="text-[11px] text-slate-500 -mt-3 mb-4">
+            Además de las compras, este aliado pagó {ledger.remesasCount} remesa(s) por {fmtUsd(ledger.remesasUsd)} USD que
+            también suman a la deuda.
+          </p>
+        )}
+
+        {ledger && descuadrado && (
+          <div className="-mt-2 mb-5 p-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <p className="font-bold">El saldo no cuadra con el extracto</p>
+              <p className="mt-0.5">
+                Deuda guardada: {describeDebt(ledger.storedDebtUsd)}. Según el extracto (compras
+                {ledger.remesasCount > 0 ? ' + remesas' : ''} − pagos): {describeDebt(ledger.extractDebtUsd)}. Diferencia:{' '}
+                {fmtUsd(ledger.differenceUsd)}.
+              </p>
+              <p className="mt-0.5 text-amber-700">
+                Si el proveedor no tenía una deuda inicial anotada a mano, el saldo correcto es el del extracto.
+              </p>
+            </div>
+            {isActorAdmin() && (
+              <button
+                type="button"
+                onClick={handleReconcile}
+                className="shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer"
+              >
+                Cuadrar con el extracto
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Historial Cronológico Unificado */}
         <div className="space-y-3">
