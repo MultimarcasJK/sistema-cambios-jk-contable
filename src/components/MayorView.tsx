@@ -1107,31 +1107,41 @@ export function MayorView({
                                           : undefined,
                                     },
                                   ],
-                                  rateField:
+                                  rateFields:
                                     tx.sell_price > 0 && tx.amount_ves > 0
-                                      ? { key: 'sell_price', label: 'Tasa de Venta', current: tx.sell_price }
+                                      ? [
+                                          { key: 'sell_price', label: 'Tasa de Venta', current: tx.sell_price },
+                                          { key: 'buy_price', label: 'Tasa de Compra (Costo)', current: tx.buy_price || 0 },
+                                        ]
                                       : undefined,
                                 });
                                 if (!ch) return;
-                                // Corregir la tasa primero; en un día cerrado el ADMIN da un motivo
-                                if (ch.sell_price) {
-                                  let motivo: string | undefined;
-                                  if (StorageService.isDayLocked(tx.date, appMode)) {
-                                    const r = window.prompt(
-                                      `El ${tx.date} ya está cerrado.\n\n` +
-                                        `Vas a cambiar la tasa de venta de ${tx.sell_price} a ${ch.sell_price}. ` +
-                                        'Se recalculan Debe pagar, la ganancia y la deuda del cliente. ' +
-                                        'Los cierres guardados no se tocan.\n\nEscribe el motivo:'
-                                    );
-                                    if (r === null) return;
-                                    if (!r.trim()) {
-                                      window.alert('Para cambiar la tasa en un día cerrado hace falta un motivo.');
-                                      return;
-                                    }
-                                    motivo = r.trim();
+                                // En un día cerrado, cualquier cambio necesita un motivo (uno solo para todo)
+                                let motivo: string | undefined;
+                                if (StorageService.isDayLocked(tx.date, appMode)) {
+                                  const r = window.prompt(
+                                    `El ${tx.date} ya está cerrado.\n\n` +
+                                      'Los cambios se aplican hoy y los cierres guardados no se tocan. ' +
+                                      'Escribe el motivo (quedará en la bitácora):'
+                                  );
+                                  if (r === null) return;
+                                  if (!r.trim()) {
+                                    window.alert('Para editar una venta de un día cerrado hace falta un motivo.');
+                                    return;
                                   }
+                                  motivo = r.trim();
+                                }
+                                if (ch.sell_price || ch.buy_price) {
                                   const ok = runEdit(() =>
-                                    StorageService.changeSellPriceMayor(tx.id, Number(ch.sell_price), motivo, appMode)
+                                    StorageService.changeRatesMayor(
+                                      tx.id,
+                                      {
+                                        sell_price: ch.sell_price ? Number(ch.sell_price) : undefined,
+                                        buy_price: ch.buy_price ? Number(ch.buy_price) : undefined,
+                                      },
+                                      motivo,
+                                      appMode
+                                    )
                                   );
                                   if (!ok) return;
                                 }
@@ -1140,13 +1150,14 @@ export function MayorView({
                                     StorageService.editTransactionMayor(
                                       tx.id,
                                       { client_name: ch.name, paid_account_id: ch.paid_account_id, received_account_id: ch.received_account_id },
-                                      appMode
+                                      appMode,
+                                      motivo
                                     )
                                   );
                                 }
                                 onDataChange();
                               }}
-                              title="Editar venta (cliente, cuentas y tasa de venta)"
+                              title="Editar venta (cliente, cuentas y tasas)"
                               className="p-1.5 mr-1 bg-sky-50 hover:bg-sky-100 text-sky-600 hover:text-sky-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
                             >
                               <Pencil className="w-4 h-4 text-sky-600" />
