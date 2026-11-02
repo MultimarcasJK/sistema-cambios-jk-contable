@@ -1135,7 +1135,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
         <SupplierHistoryModal
           isOpen={!!selectedSupplierForHistory}
           onClose={() => setSelectedSupplierForHistory(null)}
-          supplier={selectedSupplierForHistory}
+          supplier={suppliers.find((s) => s.id === selectedSupplierForHistory.id) || selectedSupplierForHistory}
           accounts={accounts}
           onOpenPayment={(sup) => {
             setPaymentModalSupplier(sup);

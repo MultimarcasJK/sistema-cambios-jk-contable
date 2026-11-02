@@ -143,6 +143,53 @@ function pushAccount(account: Account, mode: AppMode): Promise<void> {
   });
 }
 
+// Lo mismo para la deuda de cada proveedor: si el guardado en Supabase no se confirmó, o si la
+// deuda cambió aquí mientras se descargaban los proveedores, la copia descargada no la pisa.
+const PENDING_SUPPLIERS_KEY = 'cambiosjk_pending_suppliers_v1';
+const supplierLocalChangeAt = new Map<string, number>();
+
+function getPendingSuppliers(): Record<string, number> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(PENDING_SUPPLIERS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+function setPendingSuppliers(map: Record<string, number>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PENDING_SUPPLIERS_KEY, JSON.stringify(map));
+  } catch {
+    // sin espacio: se pierde solo la marca, el dato ya quedó guardado
+  }
+}
+
+function supplierKeptLocally(mode: AppMode, id: string, since: number): boolean {
+  const key = mode + ':' + id;
+  if (getPendingSuppliers()[key] !== undefined) return true;
+  const at = supplierLocalChangeAt.get(key);
+  return at !== undefined && at >= since;
+}
+
+function pushSupplier(supplier: Supplier, mode: AppMode): Promise<void> {
+  const key = mode + ':' + supplier.id;
+  const stamp = Date.now();
+  supplierLocalChangeAt.set(key, stamp);
+  setPendingSuppliers({ ...getPendingSuppliers(), [key]: stamp });
+  return SupabaseSyncService.upsertSupplier(supplier, mode).then((ok) => {
+    if (!ok) return;
+    const map = getPendingSuppliers();
+    if (map[key] === stamp) {
+      delete map[key];
+      setPendingSuppliers(map);
+    }
+  });
+}
+
 const DELETED_IDS_KEY = 'cambiosjk_deleted_ids_v1';
 
 function getDeletedIds(): Set<string> {
@@ -844,14 +891,23 @@ export const StorageService = {
           return true;
         });
         const local = this.getSuppliers(m);
+        const localById = new Map(local.filter(Boolean).map((s) => [s.id, s]));
+        const mergedRemote = validRemote.map((remote) => {
+          const loc = localById.get(remote.id);
+          if (loc && supplierKeptLocally(m, remote.id, fetchStartedAt)) {
+            pushSupplier(loc, m).catch(() => {});
+            return loc;
+          }
+          return remote;
+        });
         const remoteIds = new Set(validRemote.map((s) => s.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getSuppliersKey(m)) : new Set<string>();
         const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id) && !seenRemote.has(s.id) && (seenRemote.size > 0 || isRecentLocal(s)));
         rememberSeenRemote(this.getSuppliersKey(m), seenRemote, remoteIds);
         localPending.forEach((s) => {
-          SupabaseSyncService.upsertSupplier(s, m).catch(() => {});
+          pushSupplier(s, m).catch(() => {});
         });
-        saveToStorage(this.getSuppliersKey(m), [...validRemote, ...localPending]);
+        saveToStorage(this.getSuppliersKey(m), [...mergedRemote, ...localPending]);
       }
       if (remoteTransfers !== null) {
         const validRemote = remoteTransfers.filter((t) => {
@@ -2010,7 +2066,7 @@ export const StorageService = {
     });
     this.saveSuppliers(updated, m);
     if (updatedSup) {
-      SupabaseSyncService.upsertSupplier(updatedSup, m).catch(() => {});
+      pushSupplier(updatedSup, m).catch(() => {});
     }
   },
 
@@ -2025,7 +2081,7 @@ export const StorageService = {
     unmarkDeleted(newSupplier.id);
     all.unshift(newSupplier);
     this.saveSuppliers(all, m);
-    SupabaseSyncService.upsertSupplier(newSupplier, m).catch(() => {});
+    pushSupplier(newSupplier, m).catch(() => {});
     return newSupplier;
   },
 
@@ -2042,8 +2098,74 @@ export const StorageService = {
     });
     this.saveSuppliers(updated, m);
     if (updatedSup) {
-      SupabaseSyncService.upsertSupplier(updatedSup, m).catch(() => {});
+      pushSupplier(updatedSup, m).catch(() => {});
     }
+  },
+
+  // Saldo del proveedor según su extracto: compras (menos lo abonado al comprar) + remesas que
+  // pagó como aliado − pagos. Sirve para revisar si la deuda guardada se desincronizó.
+  getSupplierLedger(
+    supplier: Pick<Supplier, 'id' | 'name' | 'current_debt_usd'>,
+    mode?: AppMode
+  ): {
+    purchasesUsd: number;
+    creditedUsd: number;
+    remesasUsd: number;
+    remesasCount: number;
+    paymentsUsd: number;
+    extractDebtUsd: number;
+    storedDebtUsd: number;
+    differenceUsd: number;
+  } {
+    const m = mode || this.getAppMode();
+    const name = (supplier.name || '').trim().toUpperCase();
+    const mine = (r: { supplier_id?: string; supplier_name?: string }) =>
+      r.supplier_id === supplier.id || (!!r.supplier_name && r.supplier_name.trim().toUpperCase() === name);
+    const purchases = this.getSupplierPurchases(m).filter((p) => p && mine(p));
+    const payments = this.getSupplierPayments(m).filter((p) => p && mine(p));
+    const remesas = this.getRemesas(m).filter(
+      (r) => r && r.estado === 'pagada' && r.metodo_pago === 'aliado' && r.aliado_id === supplier.id
+    );
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const purchasesUsd = r2(purchases.reduce((s, p) => s + (Number(p.cost_usd) || 0), 0));
+    const creditedUsd = r2(purchases.reduce((s, p) => s + (Number(p.credited_amount) || 0), 0));
+    const remesasUsd = r2(remesas.reduce((s, r) => s + (Number(r.costo_usd) || 0), 0));
+    const paymentsUsd = r2(payments.reduce((s, p) => s + (Number(p.amount_usd) || 0), 0));
+    const extractDebtUsd = r2(purchasesUsd - creditedUsd + remesasUsd - paymentsUsd);
+    const storedDebtUsd = r2(Number(supplier.current_debt_usd) || 0);
+    return {
+      purchasesUsd,
+      creditedUsd,
+      remesasUsd,
+      remesasCount: remesas.length,
+      paymentsUsd,
+      extractDebtUsd,
+      storedDebtUsd,
+      differenceUsd: r2(storedDebtUsd - extractDebtUsd),
+    };
+  },
+
+  // Solo ADMIN: deja la deuda guardada igual al saldo del extracto, con motivo en la bitácora.
+  // No mueve cuentas ni registros: solo corrige el número de la deuda.
+  reconcileSupplierDebt(supplierId: string, reason: string, mode?: AppMode): number {
+    const m = mode || this.getAppMode();
+    if (!isActorAdmin()) throw new Error('Solo un ADMIN puede cuadrar la deuda de un proveedor.');
+    const motivo = (reason || '').trim();
+    if (!motivo) throw new Error('Hace falta un motivo.');
+    const sup = this.getSuppliers(m).find((s) => s.id === supplierId);
+    if (!sup) throw new Error('No se encontró el proveedor.');
+    const ledger = this.getSupplierLedger(sup, m);
+    this.updateSupplier(supplierId, { current_debt_usd: ledger.extractDebtUsd }, m);
+    AuditService.log({
+      mode: m,
+      action: 'editar',
+      entity: 'proveedor',
+      entityId: supplierId,
+      summary: `Deuda de ${sup.name} cuadrada con el extracto: de ${ledger.storedDebtUsd} a ${ledger.extractDebtUsd} USD`,
+      reason: motivo,
+      data: { antes: ledger.storedDebtUsd, despues: ledger.extractDebtUsd, ledger },
+    });
+    return ledger.extractDebtUsd;
   },
 
   async deleteSupplier(supplierId: string, mode?: AppMode): Promise<void> {
