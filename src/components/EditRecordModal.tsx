@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { Account, AppMode } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { parseFormattedNumber } from '@/lib/formatters';
 
 // Nombres que se pueden elegir al corregir: clientes y deudores (y remitentes en remesas)
 export function knownClientNames(mode: AppMode | undefined, withRemitentes = false): string[] {
@@ -34,6 +35,8 @@ export interface EditRecordConfig {
   nameOptions: string[];
   accounts: Account[];
   accountFields: AccountField[];
+  // Campo opcional para corregir una tasa (ej. tasa de venta). Vuelve como texto en el resultado.
+  rateField?: { key: string; label: string; current: number; help?: string };
 }
 
 export type EditRecordResult = { name?: string } & Record<string, string | undefined>;
@@ -46,6 +49,9 @@ function EditRecordModal({ cfg, onDone }: { cfg: EditRecordConfig; onDone: (r: E
   const [accs, setAccs] = useState<Record<string, string>>(() =>
     Object.fromEntries(cfg.accountFields.map((f) => [f.key, f.current || '']))
   );
+  const [rate, setRate] = useState(() => (cfg.rateField ? String(cfg.rateField.current) : ''));
+  const rateNum = parseFormattedNumber(rate);
+  const rateOk = !cfg.rateField || rateNum > 0;
   const typed = name.trim().toUpperCase();
   const nameOk = typed === currentUpper || cfg.nameOptions.includes(typed);
 
@@ -55,9 +61,10 @@ function EditRecordModal({ cfg, onDone }: { cfg: EditRecordConfig; onDone: (r: E
     cfg.accountFields.forEach((f) => {
       if (!f.lockedReason && accs[f.key] && accs[f.key] !== (f.current || '')) r[f.key] = accs[f.key];
     });
+    if (cfg.rateField && rateOk && rateNum !== cfg.rateField.current) r[cfg.rateField.key] = String(rateNum);
     return r;
-  }, [typed, currentUpper, nameOk, accs, cfg.accountFields]);
-  const canSave = nameOk && Object.keys(changes).length > 0;
+  }, [typed, currentUpper, nameOk, accs, cfg.accountFields, cfg.rateField, rateOk, rateNum]);
+  const canSave = nameOk && rateOk && Object.keys(changes).length > 0;
 
   const input =
     'w-full text-xs font-bold border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500';
@@ -77,7 +84,11 @@ function EditRecordModal({ cfg, onDone }: { cfg: EditRecordConfig; onDone: (r: E
       >
         <div>
           <h3 className="text-base font-bold text-slate-800">{cfg.title}</h3>
-          <p className="text-[11px] text-slate-500">Montos, tasas y ganancia no cambian.</p>
+          <p className="text-[11px] text-slate-500">
+            {cfg.rateField
+              ? 'Los montos no cambian. Si corriges la tasa se recalculan Debe pagar, la ganancia y la deuda.'
+              : 'Montos, tasas y ganancia no cambian.'}
+          </p>
         </div>
 
         <div>
@@ -140,6 +151,22 @@ function EditRecordModal({ cfg, onDone }: { cfg: EditRecordConfig; onDone: (r: E
             </div>
           );
         })}
+
+        {cfg.rateField && (
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">{cfg.rateField.label}</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              className={`${input} font-mono`}
+            />
+            {!rateOk && <p className="text-[11px] font-semibold text-rose-600 mt-1">Escribe una tasa mayor que 0.</p>}
+            {cfg.rateField.help && <p className="text-[11px] text-slate-400 mt-1">{cfg.rateField.help}</p>}
+          </div>
+        )}
 
         <div className="flex justify-end gap-2">
           <button

@@ -2553,6 +2553,60 @@ export const StorageService = {
     return tx;
   },
 
+  // Corregir la tasa de venta de una venta mayor (solo ADMIN). Recalcula Debe pagar, la ganancia
+  // y la deuda del cliente. No mueve cuentas: la plata que salió y la comisión siguen iguales.
+  // En un día cerrado hace falta un motivo; los cierres guardados no se tocan.
+  changeSellPriceMayor(id: string, newSell: number, reason?: string, mode?: AppMode): TransactionMayor | null {
+    const m = mode || this.getAppMode();
+    if (!isActorAdmin()) throw new Error('Solo un ADMIN puede cambiar la tasa de venta.');
+    if (!(newSell > 0)) throw new Error('La tasa de venta tiene que ser mayor que 0.');
+    const tx = this.getTransactionsMayor(m).find((t) => t.id === id);
+    if (!tx) return null;
+    if (!(tx.sell_price > 0) || !(tx.amount_ves > 0)) throw new Error('Esta venta no tiene tasa de venta para corregir.');
+    if (newSell === tx.sell_price) return tx;
+    const motivo = (reason || '').trim();
+    const locked = this.isDayLocked(tx.date, m);
+    if (locked && !motivo) this.assertDayOpen(tx.date, m, 'cambiar la tasa de una venta');
+
+    // Misma cuenta que el formulario de ventas: EUR multiplica, las demás monedas dividen
+    const base = (sell: number) => (tx.currency === 'EUR' ? tx.amount_ves * sell : tx.amount_ves / sell);
+    const diff = base(newSell) - base(tx.sell_price);
+    const clientFee = tx.client_fee || 0;
+    const newTotal = Number((base(newSell) + clientFee).toFixed(2));
+    const received = tx.amount_received !== undefined ? tx.amount_received : 0;
+    const unpaidOld = Math.max(0, Number(((tx.total_to_pay || 0) - received).toFixed(2)));
+    const unpaidNew = Math.max(0, Number((newTotal - received).toFixed(2)));
+
+    const updated: TransactionMayor = {
+      ...tx,
+      sell_price: newSell,
+      total_to_pay: newTotal,
+      profit_usd: Number(((tx.profit_usd || 0) + diff).toFixed(4)),
+    };
+    saveToStorage(
+      this.getTransactionsMayorKey(m),
+      this.getTransactionsMayor(m).map((t) => (t.id === id ? updated : t))
+    );
+    const debtDelta = Number((unpaidNew - unpaidOld).toFixed(2));
+    if (debtDelta !== 0) this.increaseClientDebt(tx.client_name, debtDelta, m);
+    SupabaseSyncService.upsertTransactionMayor(updated, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'editar',
+      entity: 'venta_mayor',
+      entityId: id,
+      summary:
+        `Venta mayor de ${tx.client_name} del ${tx.date}: tasa de venta ${tx.sell_price} → ${newSell}` +
+        (locked ? ' (día cerrado; corregido hoy, cierres sin tocar)' : ''),
+      ...(motivo ? { reason: motivo } : {}),
+      data: {
+        antes: { sell_price: tx.sell_price, total_to_pay: tx.total_to_pay, profit_usd: tx.profit_usd },
+        despues: { sell_price: updated.sell_price, total_to_pay: updated.total_to_pay, profit_usd: updated.profit_usd },
+      },
+    });
+    return updated;
+  },
+
   // Transfers
   getTransfers(mode?: AppMode): BalanceTransfer[] {
     const m = mode || this.getAppMode();

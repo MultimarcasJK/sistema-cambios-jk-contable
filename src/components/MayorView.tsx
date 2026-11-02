@@ -1107,20 +1107,46 @@ export function MayorView({
                                           : undefined,
                                     },
                                   ],
+                                  rateField:
+                                    tx.sell_price > 0 && tx.amount_ves > 0
+                                      ? { key: 'sell_price', label: 'Tasa de Venta', current: tx.sell_price }
+                                      : undefined,
                                 });
                                 if (!ch) return;
-                                if (
+                                // Corregir la tasa primero; en un día cerrado el ADMIN da un motivo
+                                if (ch.sell_price) {
+                                  let motivo: string | undefined;
+                                  if (StorageService.isDayLocked(tx.date, appMode)) {
+                                    const r = window.prompt(
+                                      `El ${tx.date} ya está cerrado.\n\n` +
+                                        `Vas a cambiar la tasa de venta de ${tx.sell_price} a ${ch.sell_price}. ` +
+                                        'Se recalculan Debe pagar, la ganancia y la deuda del cliente. ' +
+                                        'Los cierres guardados no se tocan.\n\nEscribe el motivo:'
+                                    );
+                                    if (r === null) return;
+                                    if (!r.trim()) {
+                                      window.alert('Para cambiar la tasa en un día cerrado hace falta un motivo.');
+                                      return;
+                                    }
+                                    motivo = r.trim();
+                                  }
+                                  const ok = runEdit(() =>
+                                    StorageService.changeSellPriceMayor(tx.id, Number(ch.sell_price), motivo, appMode)
+                                  );
+                                  if (!ok) return;
+                                }
+                                if (ch.name || ch.paid_account_id || ch.received_account_id) {
                                   runEdit(() =>
                                     StorageService.editTransactionMayor(
                                       tx.id,
                                       { client_name: ch.name, paid_account_id: ch.paid_account_id, received_account_id: ch.received_account_id },
                                       appMode
                                     )
-                                  )
-                                )
-                                  onDataChange();
+                                  );
+                                }
+                                onDataChange();
                               }}
-                              title="Editar venta (cliente y cuentas)"
+                              title="Editar venta (cliente, cuentas y tasa de venta)"
                               className="p-1.5 mr-1 bg-sky-50 hover:bg-sky-100 text-sky-600 hover:text-sky-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
                             >
                               <Pencil className="w-4 h-4 text-sky-600" />
