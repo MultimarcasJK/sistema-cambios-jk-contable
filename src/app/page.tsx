@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { Navigation, TabKey } from '@/components/Navigation';
 import { DashboardView } from '@/components/DashboardView';
+import { AnalyticsView } from '@/components/AnalyticsView';
 import { DetalView } from '@/components/DetalView';
 import { MayorView } from '@/components/MayorView';
 import { SuppliersView } from '@/components/SuppliersView';
@@ -311,6 +312,22 @@ export default function Home() {
               expenses={expenses}
               closures={closures}
               remesas={remesas}
+              onNavigate={setActiveTab}
+            />
+          )}
+
+          {activeTab === 'analisis' && profile?.rol === 'ADMIN' && (
+            <AnalyticsView
+              accounts={accounts}
+              suppliers={suppliers}
+              debtors={debtors}
+              detalTxs={detalTxs}
+              mayorTxs={mayorTxs}
+              expenses={expenses}
+              closures={closures}
+              remesas={remesas}
+              serviceExpenses={serviceExpenses}
+              appMode={appMode}
               onNavigate={setActiveTab}
             />
           )}
