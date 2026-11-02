@@ -3368,18 +3368,27 @@ export const StorageService = {
     return pay;
   },
 
-  async deleteDebtPayment(id: string, mode?: AppMode): Promise<void> {
+  // Anular un abono. En un día cerrado solo un ADMIN puede hacerlo y con motivo (closedDayReason):
+  // el saldo de la cuenta y la deuda del cliente se corrigen hoy y los cierres guardados no se tocan.
+  async deleteDebtPayment(id: string, mode?: AppMode, closedDayReason?: string): Promise<void> {
     const m = mode || this.getAppMode();
     const all = this.getDebtPayments(m);
     const pay = all.find((p) => p.id === id);
     if (pay) {
-      this.assertDayOpen(pay.date, m, 'anular un abono');
+      const motivo = (closedDayReason || '').trim();
+      const locked = this.isDayLocked(pay.date, m);
+      if (locked && !(motivo && isActorAdmin())) {
+        this.assertDayOpen(pay.date, m, 'anular un abono');
+      }
       AuditService.log({
         mode: m,
         action: 'eliminar',
         entity: 'abono_cliente',
         entityId: id,
-        summary: 'Anulado registro del ' + pay.date,
+        summary: locked
+          ? `Anulado abono de ${pay.client_name} del ${pay.date} (día cerrado; corregido hoy, cierres sin tocar)`
+          : 'Anulado registro del ' + pay.date,
+        ...(locked ? { reason: motivo } : {}),
         data: pay,
       });
     }

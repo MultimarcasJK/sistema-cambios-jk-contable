@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Account, TransactionMayor, Client, AppMode, CurrencyConfig } from '@/types';
 import { StorageService } from '@/lib/storage';
+import { anularAbono } from '@/lib/anular-abono';
 import { recordTime } from '@/lib/order';
 import { CurrencyService } from '@/lib/currencies';
 import { RatesService } from '@/lib/rates-service';
@@ -1204,10 +1205,7 @@ export function MayorView({
                           </button>
                           <button
                             onClick={async () => {
-                              if (confirm(`¿Eliminar este registro de abono de ${pay.client_name}?`)) {
-                                await StorageService.deleteDebtPayment(pay.id, appMode);
-                                onDataChange();
-                              }
+                              if (await anularAbono(pay, appMode)) onDataChange();
                             }}
                             title="Eliminar abono"
                             className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 rounded-lg transition cursor-pointer inline-flex items-center justify-center shadow-2xs"
