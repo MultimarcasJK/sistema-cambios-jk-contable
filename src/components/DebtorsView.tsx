@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Debtor, DebtPayment, Account, Currency, Client, TransactionDetal, TransactionMayor } from '@/types';
 import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
+import { anularAbono } from '@/lib/anular-abono';
 import { CurrencyService } from '@/lib/currencies';
 import { ShareVoucherModal, VoucherData } from './ShareVoucherModal';
 import { ClientHistoryModal } from './ClientHistoryModal';
@@ -216,11 +217,13 @@ export function DebtorsView({
     setPaymentNotes('');
   };
 
-  const handleDeletePayment = async (id: string) => {
-    if (confirm('¿Deseas eliminar este registro de abono? Se revertirá el saldo de la cuenta receptora y se volverá a sumar la deuda al cliente.')) {
-      await StorageService.deleteDebtPayment(id, appMode);
-      onDataChange();
-    }
+  const handleDeletePayment = async (pay: DebtPayment) => {
+    const ok = await anularAbono(
+      pay,
+      appMode,
+      '¿Deseas eliminar este registro de abono? Se revertirá el saldo de la cuenta receptora y se volverá a sumar la deuda al cliente.'
+    );
+    if (ok) onDataChange();
   };
 
   const handleDeleteDebtor = async (debtor: Debtor) => {
@@ -782,7 +785,7 @@ export function DebtorsView({
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleDeletePayment(pay.id)}
+                            onClick={() => handleDeletePayment(pay)}
                             title="Eliminar abono y revertir saldo"
                             className="p-1.5 text-rose-500 hover:text-white hover:bg-rose-600 rounded-lg transition-all duration-150 shadow-sm border border-rose-200 hover:border-rose-600 inline-flex items-center justify-center cursor-pointer"
                           >
