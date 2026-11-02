@@ -7,6 +7,7 @@ import { StorageService } from '@/lib/storage';
 import { CurrencyService } from '@/lib/currencies';
 import { ShareVoucherModal, VoucherData } from './ShareVoucherModal';
 import { ClientHistoryModal } from './ClientHistoryModal';
+import { DebtDetailModal } from './DebtDetailModal';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatInputNumber } from '@/lib/formatters';
 import {
   Users,
@@ -24,6 +25,7 @@ import {
   Trash2,
   Pencil,
   History,
+  CalendarClock,
 } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
 import { stripManualTag, LostDebtCandidate } from '@/lib/debtor-sync';
@@ -66,6 +68,7 @@ export function DebtorsView({
   const [paymentNotes, setPaymentNotes] = useState('');
   const [voucherData, setVoucherData] = useState<VoucherData | null>(null);
   const [selectedClientForHistory, setSelectedClientForHistory] = useState<string | null>(null);
+  const [detailDebtor, setDetailDebtor] = useState<Debtor | null>(null);
   const [activeTab, setActiveTab] = useState<'debtors' | 'payments'>('debtors');
   // Revisión de deudas anotadas a mano que el recálculo borró (antes de la marca [MANUAL])
   const [lostDebts, setLostDebts] = useState<LostDebtCandidate[] | null>(null);
@@ -624,6 +627,17 @@ export function DebtorsView({
                     <span>Historial</span>
                   </button>
 
+                  {d.current_debt > 0 && (
+                    <button
+                      onClick={() => setDetailDebtor(d)}
+                      className="px-2 py-1 text-[11px] bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-md font-semibold flex items-center space-x-1 transition cursor-pointer"
+                      title="Ver la deuda separada por fecha"
+                    >
+                      <CalendarClock className="w-3 h-3 text-slate-600" />
+                      <span>Ver detalle</span>
+                    </button>
+                  )}
+
                   <div className="flex items-center space-x-1">
                     <button
                       onClick={() => handleOpenVoucher(d)}
@@ -997,6 +1011,16 @@ export function DebtorsView({
       )}
 
       {/* Modal de Historial Completo del Cliente */}
+      {detailDebtor && (
+        <DebtDetailModal
+          debtor={detailDebtor}
+          detalTxs={detalTxs}
+          mayorTxs={mayorTxs}
+          appMode={appMode}
+          onClose={() => setDetailDebtor(null)}
+        />
+      )}
+
       {selectedClientForHistory && (
         <ClientHistoryModal
           isOpen={!!selectedClientForHistory}
