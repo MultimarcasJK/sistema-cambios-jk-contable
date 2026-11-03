@@ -1173,6 +1173,10 @@ export const StorageService = {
         });
         saveToStorage(this.getServiceExpensesKey(m), merged);
       }
+      // La deuda de cada proveedor sale de sus compras, remesas y pagos ya descargados
+      if (remotePurchases !== null && remoteSupplierPayments !== null) {
+        this.recalcAllSupplierDebts(m);
+      }
     } catch (err) {
       console.warn('[Sync ' + m + '] Sincronización secundaria pospuesta:', err);
     }
@@ -1760,6 +1764,7 @@ export const StorageService = {
     updated.estado = nuevo;
     updated.historial.push({ estado: nuevo, ts: now, date: today, user_email: getActor()?.email, nota: opts.nota });
     this.persistRemesa(updated, m);
+    if (updated.aliado_id) this.recalcSupplierDebt(updated.aliado_id, m);
     if (opts.metodo_pago) {
       this.saveRemesaPref(
         updated.pais_pago,
@@ -1831,6 +1836,7 @@ export const StorageService = {
       ],
     };
     this.persistRemesa(updated, m);
+    if (remesa.aliado_id) this.recalcSupplierDebt(remesa.aliado_id, m);
     AuditService.log({
       mode: m,
       action: 'editar',
@@ -2050,31 +2056,93 @@ export const StorageService = {
     saveToStorage(this.getSuppliersKey(m), suppliers);
   },
 
-  updateSupplierDebt(supplierId: string, deltaUsd: number, mode?: AppMode): void {
+  // La deuda ya no se suma ni se resta sobre un número guardado (eso se pisaba entre equipos):
+  // se vuelve a calcular con las compras, remesas y pagos del proveedor. Llamar DESPUÉS de guardar
+  // el registro que cambió. El delta se ignora y queda solo por compatibilidad.
+  updateSupplierDebt(supplierId: string, _deltaUsd?: number, mode?: AppMode): void {
+    this.recalcSupplierDebt(supplierId, mode || this.getAppMode());
+  },
+
+  recalcSupplierDebt(supplierId: string, mode?: AppMode): void {
     const m = mode || this.getAppMode();
-    const suppliers = this.getSuppliers(m);
     let updatedSup: Supplier | null = null;
-    const updated = suppliers.map((s) => {
-      if (s.id === supplierId) {
-        updatedSup = {
-          ...s,
-          current_debt_usd: Number((s.current_debt_usd + deltaUsd).toFixed(2)),
-        };
+    const updated = this.getSuppliers(m).map((s) => {
+      if (s && s.id === supplierId) {
+        const debt = this.getSupplierLedger(s, m).extractDebtUsd;
+        if (debt === s.current_debt_usd) return s;
+        updatedSup = { ...s, current_debt_usd: debt };
         return updatedSup;
       }
       return s;
     });
+    if (!updatedSup) return;
     this.saveSuppliers(updated, m);
-    if (updatedSup) {
-      pushSupplier(updatedSup, m).catch(() => {});
-    }
+    pushSupplier(updatedSup, m).catch(() => {});
+  },
+
+  recalcAllSupplierDebts(mode?: AppMode): void {
+    const m = mode || this.getAppMode();
+    const changed: Supplier[] = [];
+    const updated = this.getSuppliers(m).map((s) => {
+      if (!s) return s;
+      const debt = this.getSupplierLedger(s, m).extractDebtUsd;
+      if (debt === s.current_debt_usd) return s;
+      const next = { ...s, current_debt_usd: debt };
+      changed.push(next);
+      return next;
+    });
+    if (changed.length === 0) return;
+    this.saveSuppliers(updated, m);
+    changed.forEach((s) => pushSupplier(s, m).catch(() => {}));
+  },
+
+  // Deja anotado en el extracto un ajuste de saldo (deuda inicial o corrección). Es un registro más,
+  // así que viaja entre equipos y no se pierde. Positivo = le debemos más; negativo = menos.
+  addSupplierAdjustment(supplierId: string, amountUsd: number, reason: string, mode?: AppMode): SupplierPurchase | null {
+    const m = mode || this.getAppMode();
+    const amount = Math.round((Number(amountUsd) || 0) * 100) / 100;
+    if (!amount) return null;
+    const sup = this.getSuppliers(m).find((s) => s.id === supplierId);
+    if (!sup) throw new Error('No se encontró el proveedor.');
+    const adj: SupplierPurchase = {
+      id: 'adj-' + Date.now(),
+      date: localDateStr(),
+      supplier_id: sup.id,
+      supplier_name: sup.name,
+      currency: 'USD' as SupplierPurchase['currency'],
+      quantity: 0,
+      buy_price: 0,
+      cost_usd: amount,
+      credited_amount: 0,
+      account_id: '',
+      notes: (reason || '').trim() || 'Ajuste de saldo',
+      created_at: new Date().toISOString(),
+    };
+    unmarkDeleted(adj.id);
+    const all = this.getSupplierPurchases(m);
+    all.unshift(adj);
+    saveToStorage(this.getSupplierPurchasesKey(m), all);
+    SupabaseSyncService.upsertSupplierPurchase(adj, m).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'crear',
+      entity: 'proveedor',
+      entityId: sup.id,
+      summary: `Ajuste de saldo a ${sup.name}: ${amount > 0 ? '+' : ''}${amount} USD`,
+      reason: adj.notes,
+      data: adj,
+    });
+    this.recalcSupplierDebt(sup.id, m);
+    return adj;
   },
 
   addSupplier(supplier: Omit<Supplier, 'id' | 'created_at'>, mode?: AppMode): Supplier {
     const m = mode || this.getAppMode();
     const all = this.getSuppliers(m);
+    const initialDebt = Number(supplier.current_debt_usd) || 0;
     const newSupplier: Supplier = {
       ...supplier,
+      current_debt_usd: 0,
       id: 'sup-' + Date.now(),
       created_at: new Date().toISOString(),
     };
@@ -2082,23 +2150,33 @@ export const StorageService = {
     all.unshift(newSupplier);
     this.saveSuppliers(all, m);
     pushSupplier(newSupplier, m).catch(() => {});
+    if (initialDebt) {
+      this.addSupplierAdjustment(newSupplier.id, initialDebt, 'Deuda inicial', m);
+      return this.getSuppliers(m).find((s) => s.id === newSupplier.id) || newSupplier;
+    }
     return newSupplier;
   },
 
+  // Cambiar la deuda desde Editar no reescribe el número: deja un ajuste en el extracto por la diferencia
   updateSupplier(supplierId: string, updates: Partial<Supplier>, mode?: AppMode): void {
     const m = mode || this.getAppMode();
-    const all = this.getSuppliers(m);
+    const { current_debt_usd: wantedDebt, ...rest } = updates;
     let updatedSup: Supplier | null = null;
-    const updated = all.map((s) => {
+    const updated = this.getSuppliers(m).map((s) => {
       if (s.id === supplierId) {
-        updatedSup = { ...s, ...updates };
+        updatedSup = { ...s, ...rest };
         return updatedSup;
       }
       return s;
     });
+    if (!updatedSup) return;
     this.saveSuppliers(updated, m);
-    if (updatedSup) {
-      pushSupplier(updatedSup, m).catch(() => {});
+    pushSupplier(updatedSup, m).catch(() => {});
+    if (wantedDebt !== undefined && wantedDebt !== null) {
+      const current = this.getSupplierLedger(updatedSup, m).extractDebtUsd;
+      const diff = Math.round(((Number(wantedDebt) || 0) - current) * 100) / 100;
+      if (diff) this.addSupplierAdjustment(supplierId, diff, 'Ajuste de saldo desde Editar', m);
+      else this.recalcSupplierDebt(supplierId, m);
     }
   },
 
@@ -2155,7 +2233,7 @@ export const StorageService = {
     const sup = this.getSuppliers(m).find((s) => s.id === supplierId);
     if (!sup) throw new Error('No se encontró el proveedor.');
     const ledger = this.getSupplierLedger(sup, m);
-    this.updateSupplier(supplierId, { current_debt_usd: ledger.extractDebtUsd }, m);
+    this.recalcSupplierDebt(supplierId, m);
     AuditService.log({
       mode: m,
       action: 'editar',
@@ -2277,8 +2355,8 @@ export const StorageService = {
     return newPayment;
   },
 
-  // Quitar una copia repetida que llegó por sincronización: borra el registro SIN mover saldos ni deudas,
-  // porque esa copia nunca los movió. Solo ADMIN, con motivo y en día abierto.
+  // Quitar una copia repetida que llegó por sincronización: borra el registro SIN mover saldos de cuentas,
+  // porque esa copia nunca los movió. La deuda del proveedor se recalcula sin ella. Solo ADMIN, con motivo.
   async removeDuplicateRecord(kind: 'traspaso' | 'compra_proveedor', id: string, reason: string, mode?: AppMode): Promise<void> {
     const m = mode || this.getAppMode();
     if (!isActorAdmin()) throw new Error('Solo un ADMIN puede quitar copias repetidas.');
@@ -2304,7 +2382,11 @@ export const StorageService = {
       all.filter((r) => r && r.id !== id),
     );
     if (kind === 'traspaso') await SupabaseSyncService.deleteTransfer(id, m).catch(() => {});
-    else await SupabaseSyncService.deleteSupplierPurchase(id, m).catch(() => {});
+    else {
+      const sup = (rec as { supplier_id?: string }).supplier_id;
+      if (sup) this.recalcSupplierDebt(sup, m);
+      await SupabaseSyncService.deleteSupplierPurchase(id, m).catch(() => {});
+    }
   },
 
   async deleteSupplierPurchase(id: string, mode?: AppMode): Promise<void> {
@@ -2324,13 +2406,12 @@ export const StorageService = {
     }
     markAsDeleted(id);
     if (purchase) {
-      const netDebtIncrease = purchase.cost_usd - (purchase.credited_amount || 0);
-      this.updateSupplierDebt(purchase.supplier_id, -netDebtIncrease, m);
       if (purchase.account_id && purchase.quantity > 0) {
         this.updateAccountBalance(purchase.account_id, -purchase.quantity, m);
       }
     }
     saveToStorage(this.getSupplierPurchasesKey(m), all.filter((p) => p.id !== id));
+    if (purchase) this.recalcSupplierDebt(purchase.supplier_id, m);
     await SupabaseSyncService.deleteSupplierPurchase(id, m).catch(() => {});
   },
 
@@ -2351,12 +2432,12 @@ export const StorageService = {
     }
     markAsDeleted(id);
     if (payment) {
-      this.updateSupplierDebt(payment.supplier_id, payment.amount_usd, m);
       if (payment.account_id && payment.amount_usd > 0) {
         this.updateAccountBalance(payment.account_id, payment.amount_usd, m);
       }
     }
     saveToStorage(this.getSupplierPaymentsKey(m), all.filter((p) => p.id !== id));
+    if (payment) this.recalcSupplierDebt(payment.supplier_id, m);
     await SupabaseSyncService.deleteSupplierPayment(id, m).catch(() => {});
   },
 

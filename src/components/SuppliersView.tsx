@@ -323,7 +323,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
     return suppliers.reduce((sum, s) => sum + (s.current_debt_usd || 0), 0);
   }, [suppliers]);
 
-  const purchasesHistory = newestFirst(StorageService.getSupplierPurchases());
+  const purchasesHistory = newestFirst(StorageService.getSupplierPurchases()).filter((p) => !String(p.id).startsWith('adj-'));
   // Compras que parecen la misma anotada dos veces (mismo día, proveedor y casi el mismo monto)
   const posiblesCopias = new Set(
     purchasesHistory
@@ -342,7 +342,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
   const handleQuitarCopia = async (p: SupplierPurchase) => {
     const motivo = window.prompt(
       `Quitar la compra de ${formatRegionalAmount(p.quantity)} ${p.currency} del ${p.date} como COPIA REPETIDA.\n\n` +
-        'Se borra el registro SIN mover el saldo de la cuenta ni la deuda del proveedor ' +
+        'Se borra el registro SIN mover el saldo de la cuenta; la deuda del proveedor se recalcula sin esa copia ' +
         '(úsalo solo con la copia que sobra, la que hace que la cuenta no cuadre). Escribe el motivo:',
       'Copia repetida por sincronización',
     );

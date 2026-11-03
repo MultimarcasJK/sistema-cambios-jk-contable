@@ -89,7 +89,9 @@ export function SupplierHistoryModal({
       return { totalPurchasedUsd: 0, totalPaidUsd: 0, currentDebtUsd: 0, totalOps: 0 };
     }
 
-    const totalPurchasedUsd = supplierPurchases.reduce((sum, p) => sum + (p.cost_usd || 0), 0);
+    const totalPurchasedUsd = supplierPurchases
+      .filter((p) => !String(p.id).startsWith('adj-'))
+      .reduce((sum, p) => sum + (p.cost_usd || 0), 0);
     const totalPaymentsUsd = supplierPayments.reduce((sum, p) => sum + (p.amount_usd || 0), 0);
     const totalCreditedOnPurchase = supplierPurchases.reduce((sum, p) => sum + (p.credited_amount || 0), 0);
     const totalPaidUsd = totalPaymentsUsd + totalCreditedOnPurchase;
@@ -129,6 +131,31 @@ export function SupplierHistoryModal({
 
     // 1. Compras de Inventario
     supplierPurchases.forEach((p) => {
+      if (String(p.id).startsWith('adj-')) {
+        const amt = p.cost_usd || 0;
+        list.push({
+          id: `pur-${p.id}`,
+          originalId: p.id,
+          type: 'COMPRA',
+          date: p.date,
+          timestamp: recordTime(p),
+          badgeLabel: 'Ajuste de saldo',
+          badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
+          dotColor: 'bg-amber-500',
+          rowBorder: 'border-l-4 border-l-amber-500',
+          detail: <div className="font-semibold text-amber-800">{amt > 0 ? 'Le debemos más' : 'Le debemos menos'}</div>,
+          totalCostFormatted: `${amt < 0 ? '-' : ''}$${Math.abs(amt).toLocaleString('en-US', { minimumFractionDigits: 2 })} USD`,
+          paidAmountFormatted: '-',
+          statusBadge: (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+              Ajuste
+            </span>
+          ),
+          accountName: 'Sin cuenta (solo deuda)',
+          notes: p.notes || '-',
+        });
+        return;
+      }
       const targetAcc = accounts.find((a) => a.id === p.account_id);
       const isFullPaid = (p.credited_amount || 0) >= p.cost_usd;
       const isPartial = (p.credited_amount || 0) > 0 && (p.credited_amount || 0) < p.cost_usd;
@@ -277,7 +304,14 @@ export function SupplierHistoryModal({
 
   const handleDeleteMovement = async (mov: { type: 'COMPRA' | 'PAGO'; originalId: string }) => {
     if (mov.type === 'COMPRA') {
-      if (confirm('¿Deseas revertir y eliminar esta compra de inventario? Se ajustarán saldos y la deuda del proveedor.')) {
+      const esAjuste = mov.originalId.startsWith('adj-');
+      if (
+        confirm(
+          esAjuste
+            ? '¿Deseas eliminar este ajuste de saldo? La deuda del proveedor se recalcula sin él.'
+            : '¿Deseas revertir y eliminar esta compra de inventario? Se ajustarán saldos y la deuda del proveedor.'
+        )
+      ) {
         await StorageService.deleteSupplierPurchase(mov.originalId);
         if (onDataChange) onDataChange();
       }
@@ -432,6 +466,18 @@ export function SupplierHistoryModal({
             <span className="text-[10px] text-blue-600">Compras y pagos</span>
           </div>
         </div>
+
+        {(() => {
+          const ajustes = supplierPurchases.filter((p) => String(p.id).startsWith('adj-'));
+          if (ajustes.length === 0) return null;
+          const total = ajustes.reduce((sum, p) => sum + (p.cost_usd || 0), 0);
+          return (
+            <p className="text-[11px] text-slate-500 -mt-3 mb-4">
+              El saldo incluye {ajustes.length} ajuste(s) de saldo por {total < 0 ? '-' : '+'}
+              {fmtUsd(total)} USD (deuda inicial o correcciones), que aparecen en el extracto.
+            </p>
+          );
+        })()}
 
         {ledger && ledger.remesasCount > 0 && (
           <p className="text-[11px] text-slate-500 -mt-3 mb-4">
