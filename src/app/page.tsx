@@ -38,6 +38,7 @@ import {
 } from '@/types';
 import { useAuth } from '@/lib/auth-context';
 import { LoginView } from '@/components/LoginView';
+import { UpdateBanner } from '@/components/UpdateBanner';
 
 export default function Home() {
   const { user, profile, isLoading: isAuthLoading } = useAuth();
@@ -284,6 +285,7 @@ export default function Home() {
   return (
     <div className={`min-h-screen flex flex-col selection:bg-emerald-500 selection:text-white transition-colors duration-300 ${isDark ? 'bg-[#0f172a]' : 'bg-slate-50'}`} data-theme={appMode}>
       <FloatingScrollbar />
+      <UpdateBanner />
       <Header
         appMode={appMode}
         onModeChange={handleModeChange}
