@@ -180,12 +180,21 @@ export default function Home() {
           console.warn('Error sincronizando tasas en segundo plano:', err);
         });
 
-      // Auto-sincronizar en tiempo real cuando el usuario regresa a la pestaña o cambia de ventana
-      const handleWindowFocus = () => {
+      // Cuidar el presupuesto de disco de Supabase (plan Free): cada sincronización descarga
+      // todas las tablas del modo, así que se evita repetirla sin necesidad.
+      let ultimaSync = Date.now();
+      const sincronizar = () => {
+        ultimaSync = Date.now();
         const currentMode = StorageService.getAppMode();
         StorageService.syncFromSupabase(currentMode)
           .then(() => refreshData(currentMode))
           .catch(() => {});
+      };
+
+      // Al volver a la pestaña o a la ventana: sincronizar, pero como mucho una vez cada 30 s
+      // (focus y visibilitychange llegan juntos y antes disparaban dos descargas completas).
+      const handleWindowFocus = () => {
+        if (Date.now() - ultimaSync >= 30000) sincronizar();
         RatesService.syncRatesFromSheets()
           .then(() => setLastRatesSync(RatesService.getLastSyncTime()))
           .catch(() => {});
@@ -198,28 +207,31 @@ export default function Home() {
       window.addEventListener('focus', handleWindowFocus);
       document.addEventListener('visibilitychange', handleVisibilityChange);
 
-      // Auto-sincronizar Supabase en segundo plano cada 10 segundos para multi-dispositivo en vivo
+      // Respaldo por si se pierde algún aviso en tiempo real: cada 2 minutos y solo con la
+      // pestaña visible (antes era cada 10 s en todas las pestañas abiertas, incluso minimizadas).
       const supabaseInterval = setInterval(() => {
-        const currentMode = StorageService.getAppMode();
-        StorageService.syncFromSupabase(currentMode)
-          .then(() => refreshData(currentMode))
-          .catch(() => {});
-      }, 10000);
+        if (document.visibilityState !== 'visible') return;
+        if (Date.now() - ultimaSync < 110000) return;
+        sincronizar();
+      }, 120000);
 
       // Sincronización instantánea: Supabase avisa cuando otra computadora guarda o borra algo.
-      // Se agrupan los avisos seguidos (500 ms) para no sincronizar varias veces por un solo guardado.
+      // Se agrupan los avisos seguidos (1,5 s) para no sincronizar varias veces por un solo guardado.
+      // La bitácora de auditoría se ignora: siempre acompaña a otro cambio que ya avisa.
+      // Con la pestaña oculta no se descarga nada; se sincroniza al volver.
       let realtimeTimer: ReturnType<typeof setTimeout> | null = null;
       const realtimeChannel = supabase
         ?.channel('jk-cambios')
         .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
           const currentMode = StorageService.getAppMode();
           if (!payload.table?.startsWith(`${currentMode}_`)) return;
+          if (payload.table === `${currentMode}_auditoria`) return;
+          if (document.visibilityState !== 'visible') {
+            ultimaSync = 0; // forzar sincronización al volver a la pestaña
+            return;
+          }
           if (realtimeTimer) clearTimeout(realtimeTimer);
-          realtimeTimer = setTimeout(() => {
-            StorageService.syncFromSupabase(currentMode)
-              .then(() => refreshData(currentMode))
-              .catch(() => {});
-          }, 500);
+          realtimeTimer = setTimeout(sincronizar, 1500);
         })
         .subscribe();
 
