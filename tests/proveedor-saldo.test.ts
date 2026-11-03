@@ -45,7 +45,9 @@ const pago = (id: string, amount: number) => ({
 });
 const debt = () => StorageService.getSuppliers(MODE).find((s) => s.id === 'sup-1')!.current_debt_usd;
 
-beforeEach(() => {
+beforeEach(async () => {
+  // El cambio local de la prueba anterior queda en memoria con su hora: que esta prueba empiece después
+  await new Promise((r) => setTimeout(r, 5));
   localStorage.clear();
   setActor({ id: 'u1', email: 'admin@test', rol: 'ADMIN' });
   fake.remoteSuppliers = [sup(0)];
