@@ -3,7 +3,7 @@
 -- =========================================================================
 -- Activa los avisos en tiempo real para todas las tablas detal_* y mayor_*.
 -- Así, cuando una computadora guarda o borra algo, las demás se actualizan
--- al instante (la app sigue revisando cada 10 segundos como respaldo).
+-- al instante (la app revisa cada 2 minutos como respaldo).
 -- Los avisos respetan la seguridad (RLS): cada usuario solo recibe cambios
 -- de las tablas que puede leer.
 --
