@@ -358,9 +358,10 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
 
   const commonCurrencies = ['USDT', 'VES', 'COP', 'PEN', 'EUR', 'USD'];
 
-  const filteredSuppliers = suppliers.filter((s) =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Orden fijo por nombre: el orden que llega de Supabase cambia cada vez que se guarda un proveedor
+  const filteredSuppliers = suppliers
+    .filter((s) => s && s.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
 
   return (
     <div className="space-y-6">
@@ -499,7 +500,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                 required
               >
                 <option value="">Seleccionar proveedor...</option>
-                {suppliers.map((s) => (
+                {[...suppliers].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })).map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name} (Deuda: ${s.current_debt_usd.toFixed(2)} USD)
                   </option>
