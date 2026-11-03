@@ -27,7 +27,9 @@ const acc = (id: string, initial: number, current: number) =>
      initial_balance: initial, scope: 'mayor', is_active: true, created_at: '2026-10-01T00:00:00Z' }) as unknown as Account;
 const get = (id: string) => StorageService.getAccounts(MODE).find((a) => a.id === id)!;
 
-beforeEach(() => {
+beforeEach(async () => {
+  // El cambio local de la prueba anterior queda en memoria con su hora: que esta prueba empiece después
+  await new Promise((r) => setTimeout(r, 5));
   localStorage.clear();
   setActor({ id: 'u1', email: 'admin@test', rol: 'ADMIN' });
   localStorage.setItem(StorageService.getAccountsKey(MODE), JSON.stringify([acc('VES1', 0, 0)]));

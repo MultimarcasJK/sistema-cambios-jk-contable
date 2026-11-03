@@ -40,7 +40,9 @@ const acc = (id: string, current: number) =>
 const get = (id: string) => StorageService.getAccounts(MODE).find((a) => a.id === id)!;
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-beforeEach(() => {
+beforeEach(async () => {
+  // El cambio local de la prueba anterior queda en memoria con su hora: que esta prueba empiece después
+  await new Promise((r) => setTimeout(r, 5));
   localStorage.clear();
   setActor({ id: 'u1', email: 'admin@test', rol: 'ADMIN' });
   localStorage.setItem(StorageService.getAccountsKey(MODE), JSON.stringify([acc('COP1', -113550)]));
