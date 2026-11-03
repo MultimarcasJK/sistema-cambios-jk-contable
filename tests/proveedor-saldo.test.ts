@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Supabase falso: la descarga de proveedores espera hasta que la prueba la suelte
+// Supabase falso: proveedores, compras y pagos vienen de aquí
 const fake = vi.hoisted(() => ({
   remoteSuppliers: [] as any[],
-  release: null as null | (() => void),
+  remotePurchases: [] as any[],
+  remotePayments: [] as any[],
   upsertOk: true,
 }));
 vi.mock('../src/lib/supabase-sync', () => {
@@ -11,12 +12,9 @@ vi.mock('../src/lib/supabase-sync', () => {
     {},
     {
       get(_t, prop: string) {
-        if (prop === 'fetchSuppliers')
-          return async () => {
-            const snapshot = fake.remoteSuppliers.map((s) => ({ ...s }));
-            await new Promise<void>((r) => (fake.release = r));
-            return snapshot;
-          };
+        if (prop === 'fetchSuppliers') return async () => fake.remoteSuppliers.map((s) => ({ ...s }));
+        if (prop === 'fetchSupplierPurchases') return async () => fake.remotePurchases.map((s) => ({ ...s }));
+        if (prop === 'fetchSupplierPayments') return async () => fake.remotePayments.map((s) => ({ ...s }));
         if (prop === 'upsertSupplier')
           return async (s: any) => {
             if (!fake.upsertOk) return false;
@@ -33,60 +31,80 @@ vi.mock('../src/lib/supabase-sync', () => {
 
 import { StorageService } from '@/lib/storage';
 import { setActor } from '@/lib/actor';
+import { resumenProveedores } from '@/lib/dashboard-metrics';
 
 const MODE = 'mayor' as const;
-const sup = (debt: number) => ({ id: 'sup-1', name: 'CABALLO', type: 'COP', current_debt_usd: debt, created_at: '2026-10-01T00:00:00Z' });
-const get = () => StorageService.getSuppliers(MODE).find((s) => s.id === 'sup-1')!;
-const tick = () => new Promise((r) => setTimeout(r, 0));
+const TODAY = new Date().toLocaleDateString('en-CA');
+const sup = (debt: number) => ({ id: 'sup-1', name: 'MAURICIO', type: 'USDT', current_debt_usd: debt, created_at: '2026-10-01T00:00:00Z' });
+const compra = (id: string, cost: number) => ({
+  id, date: TODAY, supplier_id: 'sup-1', supplier_name: 'MAURICIO', currency: 'USDT',
+  quantity: cost, buy_price: 1, cost_usd: cost, credited_amount: 0, created_at: '2026-11-02T10:00:00Z',
+});
+const pago = (id: string, amount: number) => ({
+  id, date: TODAY, supplier_id: 'sup-1', supplier_name: 'MAURICIO', amount_usd: amount, created_at: '2026-11-02T11:00:00Z',
+});
+const debt = () => StorageService.getSuppliers(MODE).find((s) => s.id === 'sup-1')!.current_debt_usd;
 
 beforeEach(() => {
   localStorage.clear();
   setActor({ id: 'u1', email: 'admin@test', rol: 'ADMIN' });
-  localStorage.setItem(StorageService.getSuppliersKey(MODE), JSON.stringify([sup(0)]));
   fake.remoteSuppliers = [sup(0)];
-  fake.release = null;
+  fake.remotePurchases = [];
+  fake.remotePayments = [];
   fake.upsertOk = true;
+  localStorage.setItem(StorageService.getSuppliersKey(MODE), JSON.stringify([sup(0)]));
 });
 
-describe('deuda del proveedor', () => {
-  it('una descarga vieja no pisa una deuda recién cambiada', async () => {
-    const sync = StorageService.syncFromSupabase(MODE);
-    while (!fake.release) await tick();
-    StorageService.updateSupplierDebt('sup-1', 300, MODE);
-    await tick();
-    fake.release();
-    await sync;
-    expect(get().current_debt_usd).toBe(300);
+describe('la deuda del proveedor sale de su extracto', () => {
+  it('un número guardado pisado se corrige solo al sincronizar', async () => {
+    // Caso MAURICIO: 15.000 + 15.000 comprados, 18.760 pagados, pero la deuda guardada quedó en 30.000
+    fake.remoteSuppliers = [sup(30000)];
+    fake.remotePurchases = [compra('pur-1', 15000), compra('pur-2', 15000)];
+    fake.remotePayments = [pago('pay-1', 18760)];
+    await StorageService.syncFromSupabase(MODE);
+    expect(debt()).toBe(11240);
+    expect(fake.remoteSuppliers[0].current_debt_usd).toBe(11240);
   });
 
-  it('si Supabase no confirmó el guardado, la descarga tampoco la pisa', async () => {
-    fake.upsertOk = false;
-    StorageService.updateSupplierDebt('sup-1', 41.85, MODE);
-    await tick();
-    fake.upsertOk = true;
-    const sync = StorageService.syncFromSupabase(MODE);
-    while (!fake.release) await tick();
-    fake.release();
-    await sync;
-    expect(get().current_debt_usd).toBe(41.85);
-    expect(fake.remoteSuppliers[0].current_debt_usd).toBe(41.85);
+  it('compras y pagos recalculan la deuda aunque el número guardado estuviera mal', () => {
+    localStorage.setItem(StorageService.getSuppliersKey(MODE), JSON.stringify([sup(999)]));
+    StorageService.addSupplierPurchase({ ...compra('x', 15000), id: undefined } as any, MODE);
+    expect(debt()).toBe(15000);
+    StorageService.addSupplierPayment({ ...pago('x', 760), id: undefined } as any, MODE);
+    expect(debt()).toBe(14240);
   });
 
-  it('el extracto muestra la diferencia y el ADMIN puede cuadrarla', () => {
-    localStorage.setItem(StorageService.getSuppliersKey(MODE), JSON.stringify([sup(5.69)]));
-    localStorage.setItem(
-      StorageService.getSupplierPurchasesKey(MODE),
-      JSON.stringify([{ id: 'pur-1', date: '2026-11-02', supplier_id: 'sup-1', supplier_name: 'CABALLO', currency: 'COP', quantity: 1, buy_price: 1, cost_usd: 1000, credited_amount: 0, created_at: '' }])
-    );
-    localStorage.setItem(
-      StorageService.getSupplierPaymentsKey(MODE),
-      JSON.stringify([{ id: 'pay-1', date: '2026-11-02', supplier_id: 'sup-1', supplier_name: 'CABALLO', amount_usd: 1085.02, created_at: '' }])
-    );
-    const ledger = StorageService.getSupplierLedger(get(), MODE);
-    expect(ledger.extractDebtUsd).toBe(-85.02);
-    expect(ledger.differenceUsd).toBe(90.71);
-    StorageService.reconcileSupplierDebt('sup-1', 'cuadre', MODE);
-    expect(get().current_debt_usd).toBe(-85.02);
+  it('borrar un pago devuelve la deuda', async () => {
+    StorageService.addSupplierPurchase({ ...compra('x', 1000), id: undefined } as any, MODE);
+    const p = StorageService.addSupplierPayment({ ...pago('x', 400), id: undefined } as any, MODE);
+    expect(debt()).toBe(600);
+    await StorageService.deleteSupplierPayment(p.id, MODE);
+    expect(debt()).toBe(1000);
+  });
+
+  it('Editar la deuda deja un ajuste en el extracto que no se pierde', () => {
+    StorageService.updateSupplier('sup-1', { current_debt_usd: 500 }, MODE);
+    expect(debt()).toBe(500);
+    const ajustes = StorageService.getSupplierPurchases(MODE).filter((p) => p.id.startsWith('adj-'));
+    expect(ajustes).toHaveLength(1);
+    expect(ajustes[0].cost_usd).toBe(500);
+    StorageService.addSupplierPurchase({ ...compra('x', 100), id: undefined } as any, MODE);
+    expect(debt()).toBe(600);
+    // Guardar Editar sin cambiar la deuda no crea otro ajuste
+    StorageService.updateSupplier('sup-1', { name: 'MAURICIO', current_debt_usd: 600 }, MODE);
+    expect(StorageService.getSupplierPurchases(MODE).filter((p) => p.id.startsWith('adj-'))).toHaveLength(1);
+  });
+
+  it('un proveedor nuevo con deuda inicial la guarda como ajuste', () => {
+    const s = StorageService.addSupplier({ name: 'NUEVO', type: 'USDT', current_debt_usd: 250 } as any, MODE);
+    expect(s.current_debt_usd).toBe(250);
+    expect(StorageService.getSupplierLedger(s, MODE).extractDebtUsd).toBe(250);
+  });
+
+  it('los ajustes no cuentan como compras en el resumen', () => {
+    StorageService.updateSupplier('sup-1', { current_debt_usd: 500 }, MODE);
+    const r = resumenProveedores(StorageService.getSupplierPurchases(MODE), [], '2000-01-01', '2100-01-01');
+    expect(r.compras).toBe(0);
   });
 
   it('solo un ADMIN puede cuadrar', () => {

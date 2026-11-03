@@ -284,7 +284,7 @@ export function resumenProveedores(
 ): ResumenProveedores {
   const p = (pagos || []).filter((x) => x && enRango(x.date, desde, hasta));
   return {
-    compras: r2((compras || []).filter((x) => x && enRango(x.date, desde, hasta)).reduce((s, x) => s + (x.cost_usd || 0), 0)),
+    compras: r2((compras || []).filter((x) => x && !String(x.id || '').startsWith('adj-') && enRango(x.date, desde, hasta)).reduce((s, x) => s + (x.cost_usd || 0), 0)),
     pagos: r2(p.reduce((s, x) => s + (x.amount_usd || 0), 0)),
     comisiones: r2(p.reduce((s, x) => s + (x.commission_usd || 0), 0)),
   };
