@@ -181,7 +181,7 @@ export default function Home() {
         });
 
       // Cuidar el presupuesto de disco de Supabase (plan Free): cada sincronización descarga
-      // todas las tablas del modo, así que se evita repetirla sin necesidad.
+      // las tablas del modo, así que se evita repetirla sin necesidad.
       let ultimaSync = Date.now();
       const sincronizar = () => {
         ultimaSync = Date.now();
@@ -207,18 +207,15 @@ export default function Home() {
       window.addEventListener('focus', handleWindowFocus);
       document.addEventListener('visibilitychange', handleVisibilityChange);
 
-      // Respaldo por si se pierde algún aviso en tiempo real: cada 2 minutos y solo con la
-      // pestaña visible (antes era cada 10 s en todas las pestañas abiertas, incluso minimizadas).
+      // Respaldo cada 2 minutos (120,000 ms) y solo con la pestaña visible
       const supabaseInterval = setInterval(() => {
         if (document.visibilityState !== 'visible') return;
         if (Date.now() - ultimaSync < 110000) return;
         sincronizar();
       }, 120000);
 
-      // Sincronización instantánea: Supabase avisa cuando otra computadora guarda o borra algo.
-      // Se agrupan los avisos seguidos (1,5 s) para no sincronizar varias veces por un solo guardado.
-      // La bitácora de auditoría se ignora: siempre acompaña a otro cambio que ya avisa.
-      // Con la pestaña oculta no se descarga nada; se sincroniza al volver.
+      // Sincronización instantánea inteligente: Supabase avisa qué tabla cambió
+      // y SOLO sincroniza esa tabla específica, evitando recargar todas las tablas juntas
       let realtimeTimer: ReturnType<typeof setTimeout> | null = null;
       const realtimeChannel = supabase
         ?.channel('jk-cambios')
@@ -231,7 +228,11 @@ export default function Home() {
             return;
           }
           if (realtimeTimer) clearTimeout(realtimeTimer);
-          realtimeTimer = setTimeout(sincronizar, 1500);
+          realtimeTimer = setTimeout(() => {
+            StorageService.syncTableFromSupabase(payload.table, currentMode)
+              .then(() => refreshData(currentMode))
+              .catch(() => {});
+          }, 500);
         })
         .subscribe();
 

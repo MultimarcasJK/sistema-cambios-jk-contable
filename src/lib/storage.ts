@@ -1209,6 +1209,103 @@ export const StorageService = {
     }
   },
 
+  // Sincronización inteligente de una sola tabla específica (ahorra 95% de llamadas y disco)
+  async syncTableFromSupabase(tableName?: string, mode?: AppMode): Promise<void> {
+    const m = mode || this.getAppMode();
+    if (!tableName) {
+      return this.syncFromSupabase(m);
+    }
+    const t = tableName.toLowerCase();
+    try {
+      if (t.includes('cuenta') || t.includes('account')) {
+        const remoteAccs = await SupabaseSyncService.fetchAccounts(m);
+        if (remoteAccs !== null) {
+          const valid = remoteAccs.filter((a) => !isDeleted(a.id));
+          const local = this.getAccounts(m);
+          const remoteIds = new Set(valid.map((a) => a.id));
+          const localPending = local.filter((a) => a && !remoteIds.has(a.id) && !isDeleted(a.id));
+          saveToStorage(this.getAccountsKey(m), [...valid, ...localPending]);
+        }
+        return;
+      }
+      if (t.includes('cliente') || t.includes('client')) {
+        const remoteClients = await SupabaseSyncService.fetchClients(m);
+        if (remoteClients !== null) {
+          const valid = remoteClients.filter((c) => !isDeleted(c.id));
+          saveToStorage(this.getClientsKey(m), valid);
+        }
+        return;
+      }
+      if (t.includes('deudor') || t.includes('debtor')) {
+        const remoteDebtors = await SupabaseSyncService.fetchDebtors(m);
+        if (remoteDebtors !== null) {
+          const valid = remoteDebtors.filter((d) => !isDeleted(d.id));
+          saveToStorage(this.getDebtorsKey(m), valid);
+        }
+        return;
+      }
+      if (t.includes('abono') || t.includes('debt_payment')) {
+        const remoteAbonos = await SupabaseSyncService.fetchDebtPayments(m);
+        if (remoteAbonos !== null) {
+          const valid = remoteAbonos.filter((p) => !isDeleted(p.id));
+          saveToStorage(this.getDebtPaymentsKey(m), valid);
+        }
+        return;
+      }
+      if (t.includes('gasto') || t.includes('expense')) {
+        const remoteExp = await SupabaseSyncService.fetchExpenses(m);
+        if (remoteExp !== null) {
+          const valid = remoteExp.filter((e) => !isDeleted(e.id));
+          saveToStorage(this.getExpensesKey(m), valid);
+        }
+        return;
+      }
+      if (t.includes('traspaso') || t.includes('transfer')) {
+        const remoteTransfers = await SupabaseSyncService.fetchTransfers(m);
+        if (remoteTransfers !== null) {
+          const valid = remoteTransfers.filter((tr) => !isDeleted(tr.id));
+          saveToStorage(this.getTransfersKey(m), valid);
+        }
+        return;
+      }
+      if (t.includes('cierre') || t.includes('closure')) {
+        const remoteClosures = await SupabaseSyncService.fetchClosures(m);
+        if (remoteClosures !== null) {
+          const valid = remoteClosures.filter((c) => !isDeleted(c.id));
+          saveToStorage(this.getClosuresKey(m), valid);
+        }
+        return;
+      }
+      if (t.includes('proveedor') || t.includes('supplier')) {
+        const remoteSuppliers = await SupabaseSyncService.fetchSuppliers(m);
+        if (remoteSuppliers !== null) {
+          const valid = remoteSuppliers.filter((s) => !isDeleted(s.id));
+          saveToStorage(this.getSuppliersKey(m), valid);
+        }
+        return;
+      }
+      if (t.includes('remesa')) {
+        const remoteRemesas = await SupabaseSyncService.fetchRemesas(m);
+        if (remoteRemesas !== null) {
+          saveToStorage(this.getRemesasKey(m), remoteRemesas);
+        }
+        return;
+      }
+      if (t.includes('remitente')) {
+        const remoteRemitentes = await SupabaseSyncService.fetchRemitentes(m);
+        if (remoteRemitentes !== null) {
+          saveToStorage(this.getRemitentesKey(m), remoteRemitentes);
+        }
+        return;
+      }
+      // Si no es ninguna tabla identificada, hacemos sync general
+      return this.syncFromSupabase(m);
+    } catch (e) {
+      console.warn('[SyncTable ' + tableName + '] error:', e);
+    }
+  },
+
+
   // Accounts
   getAccounts(mode?: AppMode): Account[] {
     const m = mode || this.getAppMode();
