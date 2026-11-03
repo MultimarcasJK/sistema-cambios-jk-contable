@@ -198,13 +198,16 @@ export default function Home() {
       window.addEventListener('focus', handleWindowFocus);
       document.addEventListener('visibilitychange', handleVisibilityChange);
 
-      // Auto-sincronizar Supabase en segundo plano cada 10 segundos para multi-dispositivo en vivo
+      // Respaldo cada 60 segundos (los cambios de otras computadoras llegan al instante por el aviso de
+      // Supabase de abajo). Antes era cada 10 s y descargaba todas las tablas desde cada computadora,
+      // lo que agotaba el disco del plan gratis de Supabase. Una pestaña oculta no descarga.
       const supabaseInterval = setInterval(() => {
+        if (document.visibilityState === 'hidden') return;
         const currentMode = StorageService.getAppMode();
         StorageService.syncFromSupabase(currentMode)
           .then(() => refreshData(currentMode))
           .catch(() => {});
-      }, 10000);
+      }, 60000);
 
       // Sincronización instantánea: Supabase avisa cuando otra computadora guarda o borra algo.
       // Se agrupan los avisos seguidos (500 ms) para no sincronizar varias veces por un solo guardado.
