@@ -403,6 +403,10 @@ function flushDebtorOutbox(): Promise<void> {
   return run;
 }
 
+// Descargas desde Supabase en curso / en cola, por modo (ver syncFromSupabase)
+const syncEnCurso: Partial<Record<AppMode, Promise<void>>> = {};
+const syncEnCola: Partial<Record<AppMode, Promise<void>>> = {};
+
 export const StorageService = {
   getAppMode(): AppMode {
     if (typeof window !== 'undefined') {
@@ -673,9 +677,32 @@ export const StorageService = {
     }
   },
 
-  // Sincronización con Supabase en segundo plano
-  async syncFromSupabase(mode?: AppMode): Promise<void> {
+  // Sincronización con Supabase en segundo plano.
+  // Si ya hay una descarga en curso para ese modo, no se lanza otra en paralelo:
+  // se deja UNA sola pendiente para cuando termine (antes se acumulaban varias
+  // descargas completas a la vez y se agotaba el presupuesto de disco de Supabase).
+  syncFromSupabase(mode?: AppMode): Promise<void> {
     const m = mode || this.getAppMode();
+    const running = syncEnCurso[m];
+    if (running) {
+      if (!syncEnCola[m]) {
+        syncEnCola[m] = running
+          .catch(() => {})
+          .then(() => {
+            syncEnCola[m] = undefined;
+            return this.syncFromSupabase(m);
+          });
+      }
+      return syncEnCola[m]!;
+    }
+    const p = this.syncFromSupabaseAhora(m).finally(() => {
+      syncEnCurso[m] = undefined;
+    });
+    syncEnCurso[m] = p;
+    return p;
+  },
+
+  async syncFromSupabaseAhora(m: AppMode): Promise<void> {
     try {
       // Enviar primero lo pendiente para no descargar filas que ya se borraron aquí
       await flushDebtorOutbox().catch(() => {});
