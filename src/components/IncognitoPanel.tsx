@@ -6,7 +6,7 @@ import { StorageService } from '@/lib/storage';
 import { isIncognito, INCOGNITO_NAME } from '@/lib/incognito';
 import { isActorAdmin } from '@/lib/actor';
 import { knownClientNames } from '@/components/EditRecordModal';
-import { HelpCircle, UserCheck } from 'lucide-react';
+import { ChevronDown, ChevronUp, HelpCircle, UserCheck } from 'lucide-react';
 
 interface Props {
   accounts: Account[];
@@ -19,6 +19,8 @@ interface Props {
 export function IncognitoPanel({ accounts, appMode, onDataChange }: Props) {
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [clientName, setClientName] = useState('');
+  // Cerrado por defecto: una sola línea. Se abre para ver la lista y pasar depósitos.
+  const [open, setOpen] = useState(false);
   const admin = isActorAdmin();
 
   const pendientes = StorageService.getDebtPayments(appMode)
@@ -46,26 +48,24 @@ export function IncognitoPanel({ accounts, appMode, onDataChange }: Props) {
   };
 
   return (
-    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 sm:p-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-        <div className="flex items-center gap-2">
-          <HelpCircle className="w-5 h-5 text-amber-600" />
-          <div>
-            <h3 className="text-sm font-bold text-amber-900">Depósitos sin identificar ({INCOGNITO_NAME})</h3>
-            <p className="text-[11px] text-amber-700">
-              Entraron a la cuenta pero aún no sabemos de qué cliente son. Cuando aparezca el cliente, pásale el depósito.
-            </p>
-          </div>
-        </div>
-        <div className="text-right">
-          <span className="text-[10px] uppercase font-bold text-amber-700 block">Por identificar</span>
-          <span className="font-mono font-black text-amber-900">
-            ${money(total)} USD · {pendientes.length}
-          </span>
-        </div>
-      </div>
+    <div className="bg-amber-50 border border-amber-200 rounded-xl">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left cursor-pointer"
+      >
+        <span className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+          <HelpCircle className="w-4 h-4 text-amber-600 shrink-0" />
+          Depósitos sin identificar ({INCOGNITO_NAME}): {pendientes.length} · ${money(total)} USD
+        </span>
+        <span className="flex items-center gap-1 text-[11px] font-bold text-amber-700 shrink-0">
+          {open ? 'Ocultar' : 'Ver'}
+          {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </span>
+      </button>
 
-      <div className="overflow-x-auto">
+      {open && (
+      <div className="overflow-x-auto px-3 pb-3">
         <table className="w-full text-xs">
           <thead className="text-amber-800 text-left">
             <tr>
@@ -153,6 +153,7 @@ export function IncognitoPanel({ accounts, appMode, onDataChange }: Props) {
           ))}
         </datalist>
       </div>
+      )}
     </div>
   );
 }
