@@ -7,6 +7,7 @@ import { StorageService } from '@/lib/storage';
 import { ArrowDownLeft, X } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { INCOGNITO_NAME, isIncognito } from '@/lib/incognito';
 
 interface AbonoModalProps {
   isOpen: boolean;
@@ -205,6 +206,23 @@ export function AbonoModal({
                   className="w-full text-xs font-bold border border-slate-300 rounded-xl px-3 py-2 uppercase focus:outline-none focus:ring-2 focus:ring-purple-500"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setSelectedClientName(INCOGNITO_NAME)}
+                  className={`mt-1.5 w-full text-[11px] font-bold rounded-lg px-2 py-1.5 border transition cursor-pointer ${
+                    isIncognito(selectedClientName)
+                      ? 'bg-amber-100 border-amber-400 text-amber-900'
+                      : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+                  }`}
+                >
+                  ¿No sabes de quién es el depósito? Anótalo como {INCOGNITO_NAME}
+                </button>
+                {isIncognito(selectedClientName) && (
+                  <p className="text-[11px] text-amber-700 mt-1">
+                    La plata entra a la cuenta hoy y queda en Deudores como depósito sin identificar. Cuando aparezca el
+                    cliente, un ADMIN se lo pasa con un clic, aunque este día ya esté cerrado.
+                  </p>
+                )}
                 <datalist id="abono-clients-list">
                   {allClientNames.map((name) => {
                     const deb = debtors.find((d) => d.client_name.toUpperCase() === name);
