@@ -45,6 +45,7 @@ import { AuditService } from './audit';
 import { lineaCuadra } from './daily-report';
 import { recordTime } from './order';
 import { isActorAdmin, getActor } from './actor';
+import { isIncognito } from './incognito';
 import { unirGastosFijos } from './gastos-fijos';
 import type { LedgerSources } from './ledger';
 import {
@@ -3751,6 +3752,41 @@ export const StorageService = {
       entityId: id,
       summary: `Abono de ${pay.amount} USD pasado de ${pay.client_name} a ${upperNew}`,
       data: updated,
+    });
+    return updated;
+  },
+
+  // Pasa un depósito sin identificar (abono de INCÓGNITO) a su cliente real. Se puede aunque el día
+  // del depósito esté cerrado: no mueve cuentas (la plata ya entró ese día), solo cambia de quién es
+  // el saldo a favor. Solo ADMIN; queda en la nota del abono y en la bitácora.
+  assignIncognitoPayment(id: string, clientName: string, mode?: AppMode): DebtPayment {
+    const m = mode || this.getAppMode();
+    if (!isActorAdmin()) throw new Error('Solo un ADMIN puede asignar un depósito sin identificar.');
+    const target = (clientName || '').trim().toUpperCase();
+    if (!target) throw new Error('Escribe el nombre del cliente.');
+    if (isIncognito(target)) throw new Error('Elige el cliente real, no INCÓGNITO.');
+    const pay = this.getDebtPayments(m).find((p) => p.id === id);
+    if (!pay) throw new Error('No se encontró el depósito.');
+    if (!isIncognito(pay.client_name)) throw new Error('Este abono ya tiene cliente.');
+    const renamed = this.renameDebtPayment(id, target, m);
+    if (!renamed) throw new Error('No se pudo asignar el depósito.');
+    const today = localDateStr();
+    const marca = `Depósito sin identificar del ${pay.date}, asignado el ${today}${
+      getActor()?.email ? ' por ' + getActor()?.email : ''
+    }`;
+    const updated: DebtPayment = { ...renamed, notes: renamed.notes ? `${renamed.notes} · ${marca}` : marca };
+    saveToStorage(
+      this.getDebtPaymentsKey(m),
+      this.getDebtPayments(m).map((p) => (p.id === id ? updated : p))
+    );
+    pushDebtPayment(updated, m);
+    AuditService.log({
+      mode: m,
+      action: 'editar',
+      entity: 'abono_cliente',
+      entityId: id,
+      summary: `Depósito INCÓGNITO de ${pay.amount} USD (${pay.date}) asignado a ${target}`,
+      data: { antes: pay.client_name, despues: target, fecha_deposito: pay.date },
     });
     return updated;
   },

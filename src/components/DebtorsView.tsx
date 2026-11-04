@@ -32,6 +32,7 @@ import { localDateStr } from '@/lib/dates';
 import { stripManualTag, LostDebtCandidate } from '@/lib/debtor-sync';
 import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { IncognitoPanel } from '@/components/IncognitoPanel';
 
 // Botón "Revisar deudas perdidas": oculto, ya se usó para recuperar las deudas que borró el
 // recálculo. Poner en true para volver a mostrarlo.
@@ -362,6 +363,8 @@ export function DebtorsView({
         )}
         </div>
       </div>
+
+      <IncognitoPanel accounts={accounts} appMode={appMode} onDataChange={onDataChange} />
 
       {/* Deudas anotadas a mano que el recálculo borró */}
       {lostDebts && (
