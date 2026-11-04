@@ -1,8 +1,30 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { Lock, Mail, ArrowRight, AlertCircle, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertCircle, KeyRound, Eye, EyeOff, UserRound, X } from 'lucide-react';
+
+// Usuarios que ya entraron en esta computadora (solo el correo, nunca la contraseña).
+// Todas usan la misma cuenta de Chrome, así que se guardan varios para elegir con un clic.
+const RECENT_KEY = 'cambiosjk_usuarios_recientes_v1';
+const MAX_RECENT = 6;
+
+function readRecent(): string[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    return Array.isArray(list) ? list.filter((x) => typeof x === 'string' && x.includes('@')).slice(0, MAX_RECENT) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeRecent(list: string[]): void {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, MAX_RECENT)));
+  } catch {
+    // sin espacio o bloqueado: simplemente no se recuerda
+  }
+}
 
 export function LoginView() {
   const { signIn } = useAuth();
@@ -11,6 +33,28 @@ export function LoginView() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [recent, setRecent] = useState<string[]>([]);
+  const [remember, setRemember] = useState(true);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const list = readRecent();
+    setRecent(list);
+    if (list.length === 1) setEmail(list[0]);
+  }, []);
+
+  const pickUser = (u: string) => {
+    setEmail(u);
+    setErrorMessage(null);
+    passwordRef.current?.focus();
+  };
+
+  const forgetUser = (u: string) => {
+    const next = recent.filter((x) => x !== u);
+    setRecent(next);
+    writeRecent(next);
+    if (email === u) setEmail('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,6 +67,11 @@ export function LoginView() {
     setErrorMessage(null);
 
     const { error } = await signIn(email, password);
+    if (!error) {
+      const clean = email.trim().toLowerCase();
+      const others = readRecent().filter((x) => x !== clean);
+      writeRecent(remember ? [clean, ...others] : others);
+    }
     if (error) {
       if (error.message.includes('Invalid login credentials')) {
         setErrorMessage('Correo o contraseña incorrectos. Verifica tus datos.');
@@ -76,6 +125,41 @@ export function LoginView() {
             </div>
           )}
 
+          {recent.length > 0 && (
+            <div className="mb-5">
+              <p className="text-xs font-semibold text-slate-300 mb-2">¿Quién va a entrar?</p>
+              <div className="flex flex-wrap gap-2">
+                {recent.map((u) => (
+                  <div
+                    key={u}
+                    className={`flex items-center rounded-xl border text-xs transition ${
+                      email === u
+                        ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
+                        : 'bg-slate-900/90 border-slate-700 text-slate-300 hover:border-emerald-500'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => pickUser(u)}
+                      className="flex items-center gap-1.5 pl-3 pr-1.5 py-2 cursor-pointer max-w-[220px]"
+                    >
+                      <UserRound className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{u}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => forgetUser(u)}
+                      title="Olvidar este usuario en esta computadora"
+                      className="pr-2 pl-1 py-2 text-slate-500 hover:text-rose-400 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Campo de Correo */}
             <div>
@@ -86,6 +170,8 @@ export function LoginView() {
                 <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="email"
+                  name="email"
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@cambiosjk.com"
@@ -103,7 +189,10 @@ export function LoginView() {
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
+                  ref={passwordRef}
                   type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -119,6 +208,16 @@ export function LoginView() {
                 </button>
               </div>
             </div>
+
+            <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                className="w-3.5 h-3.5 accent-emerald-500"
+              />
+              Recordar mi usuario en esta computadora
+            </label>
 
             {/* Botón de Ingreso */}
             <button
