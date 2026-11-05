@@ -49,6 +49,7 @@ import { SearchableSelect } from '@/components/SearchableSelect';
 import { GastosFijosPanel } from './GastosFijosPanel';
 import { packGastoFijo, unpackGastoFijo } from '@/lib/client-fee';
 import { adelantoPeriod, isAdelanto, pendingAdelantos, pendingAdelantosTotal } from '@/lib/adelantos';
+import { isDarkFor } from '@/lib/theme';
 
 interface PayrollServicesViewProps {
   accounts: Account[];
@@ -67,7 +68,7 @@ export function PayrollServicesView({
   onDataChange,
   appMode,
 }: PayrollServicesViewProps) {
-  const isDark = appMode === 'mayor';
+  const isDark = isDarkFor(appMode);
   const todayStr = localDateStr();
 
   // Sub-pestañas internas del módulo

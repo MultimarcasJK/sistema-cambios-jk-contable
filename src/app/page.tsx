@@ -39,8 +39,10 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { LoginView } from '@/components/LoginView';
 import { UpdateBanner } from '@/components/UpdateBanner';
+import { isDarkFor, themeAttrFor, useThemeChoice } from '@/lib/theme';
 
 export default function Home() {
+  useThemeChoice(); // vuelve a pintar al cambiar claro/oscuro
   const { user, profile, isLoading: isAuthLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [appMode, setAppMode] = useState<AppMode>('detal');
@@ -293,10 +295,11 @@ export default function Home() {
     );
   }
 
-  const isDark = appMode === 'mayor';
+  const isDark = isDarkFor(appMode);
+  const themeAttr = themeAttrFor(appMode);
 
   return (
-    <div className={`min-h-screen flex flex-col selection:bg-emerald-500 selection:text-white transition-colors duration-300 ${isDark ? 'bg-[#0f172a]' : 'bg-slate-50'}`} data-theme={appMode}>
+    <div className={`min-h-screen flex flex-col selection:bg-emerald-500 selection:text-white transition-colors duration-300 ${isDark ? 'bg-[#0f172a]' : 'bg-slate-50'}`} data-theme={themeAttr}>
       <FloatingScrollbar />
       <UpdateBanner />
       <Header
@@ -316,7 +319,7 @@ export default function Home() {
           appMode={appMode}
         />
 
-        <main className="flex-1 p-4 md:p-6 w-full max-w-full overflow-hidden" data-theme={appMode}>
+        <main className="flex-1 p-4 md:p-6 w-full max-w-full overflow-hidden" data-theme={themeAttr}>
           {activeTab === 'dashboard' && (
             <DashboardView
               accounts={accounts}

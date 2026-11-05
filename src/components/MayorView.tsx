@@ -16,6 +16,7 @@ import { localDateStr } from '@/lib/dates';
 import { commissionInAccountCurrency, commissionOutOfAccount } from '@/lib/commission';
 import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { isDarkFor } from '@/lib/theme';
 
 interface MayorProps {
   accounts: Account[];
@@ -408,7 +409,7 @@ export function MayorView({
 
         {/* Banner Tasa Oficial Cambios JK con Selector de Moneda (Catálogo Completo) */}
         {(() => {
-          const isDark = appMode === 'mayor';
+          const isDark = isDarkFor(appMode);
           return (
             <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl text-xs shadow-sm ${
               isDark

@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/auth-context';
 import { localDateStr } from '@/lib/dates';
 import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { isDarkFor } from '@/lib/theme';
 
 interface DetalProps {
   accounts: Account[];
@@ -351,7 +352,7 @@ export function DetalView({
 
         {/* Banner Tasa Oficial Cambios JK */}
         {officialUsdtRate && (() => {
-          const isDark = appMode === 'mayor';
+          const isDark = isDarkFor(appMode);
           return (
             <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl text-xs shadow-sm ${
               isDark

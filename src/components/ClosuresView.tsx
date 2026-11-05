@@ -36,6 +36,7 @@ import { localDateStr, localTimeOf } from '@/lib/dates';
 import { gananciaRemesasEl, remesasPagadasEl } from '@/lib/remesa-profit';
 import { DailyReportModal } from './DailyReportModal';
 import { SearchableSelect } from './SearchableSelect';
+import { isDarkFor } from '@/lib/theme';
 
 interface ClosuresProps {
   detalTxs: TransactionDetal[];
@@ -62,7 +63,7 @@ export function ClosuresView({
 }: ClosuresProps) {
   // El cierre más reciente arriba
   const closures = useMemo(() => newestFirst(closuresRaw), [closuresRaw]);
-  const isDark = appMode === 'mayor';
+  const isDark = isDarkFor(appMode);
   const todayStr = localDateStr();
   const [activeSubTab, setActiveSubTab] = useState<'profits' | 'accounts' | 'debtors'>('profits');
 
