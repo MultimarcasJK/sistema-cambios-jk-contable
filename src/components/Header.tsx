@@ -23,6 +23,7 @@ import { isSupabaseConfigured } from '@/lib/supabase';
 import { AppMode } from '@/types';
 import { MasterResetModal } from './MasterResetModal';
 import { useAuth } from '@/lib/auth-context';
+import { setThemeChoice, useThemeChoice, ThemeChoice } from '@/lib/theme';
 
 interface HeaderProps {
   appMode?: AppMode;
@@ -41,6 +42,7 @@ export function Header({
   lastRatesSync = null,
   onResetSuccess,
 }: HeaderProps) {
+  const themeChoice = useThemeChoice();
   const { user, profile, isAdmin, isOperator, signOut } = useAuth();
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -252,6 +254,33 @@ export function Header({
                     </div>
                   </div>
                 )}
+
+                {/* Pantalla clara u oscura (solo en esta computadora) */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Pantalla
+                  </label>
+                  <div className="grid grid-cols-3 gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
+                    {([
+                      { v: 'claro', label: 'Claro', Icon: Sun },
+                      { v: 'oscuro', label: 'Oscuro', Icon: Moon },
+                      { v: 'auto', label: 'Auto', Icon: RefreshCw },
+                    ] as { v: ThemeChoice; label: string; Icon: typeof Sun }[]).map(({ v, label, Icon }) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setThemeChoice(v)}
+                        title={v === 'auto' ? 'Mayor oscuro y Detal claro, como antes' : `Pantalla ${label.toLowerCase()}`}
+                        className={`py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer ${
+                          themeChoice === v ? 'bg-slate-700 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        <Icon className="w-3 h-3" />
+                        <span>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* 2. Sincronización de Tasas JK */}
                 <div className="pt-2 border-t border-slate-800">

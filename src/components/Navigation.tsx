@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth-context';
+import { isDarkFor } from '@/lib/theme';
 
 export type TabKey =
   | 'dashboard'
@@ -44,7 +45,7 @@ interface NavProps {
 
 export function Navigation({ activeTab, onSelectTab, appMode = 'detal' }: NavProps) {
   const { isAdmin, profile } = useAuth();
-  const isDark = appMode === 'mayor';
+  const isDark = isDarkFor(appMode);
   const modoPermitido = profile?.modo_permitido || 'ambos';
 
   const allTabs = [
