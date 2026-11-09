@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Account, Supplier, SupplierPurchase, SupplierPayment, CurrencyConfig } from '@/types';
 import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
@@ -10,7 +10,6 @@ import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from './ManageCurrenciesModal';
 import { SupplierHistoryModal } from './SupplierHistoryModal';
 import { ShareSupplierVoucherModal, SupplierVoucherData } from './ShareSupplierVoucherModal';
-import { adjustRateForUsdtPct, parseUsdtPct, currencyUsesUsdtPct, usdtPctNote, loadSavedUsdtPct, saveUsdtPct } from '@/lib/usdt-premium';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatRateDisplay, formatRateExact, formatInputNumber } from '@/lib/formatters';
 import {
   Truck,
@@ -112,16 +111,10 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
     supplier_id: '',
     quantity: '',
     buy_price: '1.004', // Tasa de compra
-    usdt_pct: '', // % al que se compraron los USDT (negativo = en contra, positivo = a favor)
     account_id: '', // Cuenta donde entra el dinero comprado
     credited_amount: '0', // Abono de inmediato al proveedor
     notes: '',
   });
-
-  useEffect(() => {
-    const saved = loadSavedUsdtPct();
-    if (saved) setPurchaseForm((prev) => ({ ...prev, usdt_pct: saved }));
-  }, []);
 
   const refreshCurrencies = () => {
     setSystemCurrencies(CurrencyService.getCurrencies());
@@ -141,13 +134,10 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
   // Cálculo en vivo según la moneda:
   const calculatedCost = useMemo(() => {
     const qty = parseFormattedNumber(purchaseForm.quantity);
-    const baseRate = parseFloat(purchaseForm.buy_price) || 1;
-    const usdtPct = currencyUsesUsdtPct(selectedCurrency) ? parseUsdtPct(purchaseForm.usdt_pct) : 0;
-    // Tasa real: la tasa del proveedor ajustada por el % al que se compraron los USDT
-    const rate = adjustRateForUsdtPct(baseRate, usdtPct);
+    const rate = parseFloat(purchaseForm.buy_price) || 1;
     const credited = parseFormattedNumber(purchaseForm.credited_amount);
 
-    if (qty <= 0 || rate <= 0) return { costUsd: 0, pendingDebt: 0, rate, baseRate, usdtPct };
+    if (qty <= 0 || rate <= 0) return { costUsd: 0, pendingDebt: 0 };
 
     let costUsd = 0;
     if (selectedCurrency === 'USD') {
@@ -161,8 +151,8 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
     }
 
     const pendingDebt = Number((costUsd - credited).toFixed(2));
-    return { costUsd, pendingDebt, rate, baseRate, usdtPct };
-  }, [selectedCurrency, purchaseForm.quantity, purchaseForm.buy_price, purchaseForm.usdt_pct, purchaseForm.credited_amount]);
+    return { costUsd, pendingDebt };
+  }, [selectedCurrency, purchaseForm.quantity, purchaseForm.buy_price, purchaseForm.credited_amount]);
 
   // Cuentas sugeridas para la moneda seleccionada
   const matchingAccounts = useMemo(() => {
@@ -201,10 +191,8 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
 
     const supplier = suppliers.find((s) => s.id === purchaseForm.supplier_id);
     const qty = parseFormattedNumber(purchaseForm.quantity);
-    const { rate, baseRate, usdtPct } = calculatedCost;
+    const rate = parseFloat(purchaseForm.buy_price) || 1;
     const credited = parseFormattedNumber(purchaseForm.credited_amount);
-    const pctNote = usdtPctNote(baseRate, usdtPct);
-    const notes = [purchaseForm.notes, pctNote].filter((n) => n && n.trim()).join(' · ');
 
     StorageService.addSupplierPurchase({
       date: purchaseForm.date,
@@ -216,7 +204,7 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
       cost_usd: calculatedCost.costUsd,
       account_id: purchaseForm.account_id || undefined,
       credited_amount: credited,
-      notes,
+      notes: purchaseForm.notes,
     });
 
     setPurchaseForm({
@@ -224,7 +212,6 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
       supplier_id: '',
       quantity: '',
       buy_price: purchaseForm.buy_price,
-      usdt_pct: purchaseForm.usdt_pct,
       account_id: '',
       credited_amount: '0',
       notes: '',
@@ -550,30 +537,6 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                 required
               />
             </div>
-
-            {currencyUsesUsdtPct(selectedCurrency) && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
-                  % compra USDT (− en contra, + a favor)
-                </label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="ej. -1.3"
-                  value={purchaseForm.usdt_pct}
-                  onChange={(e) => {
-                    saveUsdtPct(e.target.value);
-                    setPurchaseForm({ ...purchaseForm, usdt_pct: e.target.value });
-                  }}
-                  className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold"
-                />
-                {calculatedCost.usdtPct !== 0 && (
-                  <p className="text-[11px] mt-1 font-semibold text-indigo-700">
-                    Tasa real: {formatRateExact(calculatedCost.rate)} {currentCurrencyConfig.code}/USD
-                  </p>
-                )}
-              </div>
-            )}
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">
