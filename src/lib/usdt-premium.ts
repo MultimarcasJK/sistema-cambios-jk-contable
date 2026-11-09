@@ -30,7 +30,7 @@ export function usdtPctNote(baseRate: number, pct: number): string {
   return `% compra USDT ${sign}${pct}% ${pct < 0 ? 'en contra' : 'a favor'} (tasa base ${baseRate})`;
 }
 
-// El % del día se recuerda en este navegador y se comparte entre Proveedores y Ventas
+// El % del día se recuerda en este navegador para no escribirlo en cada venta
 const PCT_KEY = 'cambiosjk_usdt_pct';
 
 export function loadSavedUsdtPct(): string {
