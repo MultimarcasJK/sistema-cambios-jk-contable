@@ -17,6 +17,7 @@ import { commissionInAccountCurrency, commissionOutOfAccount } from '@/lib/commi
 import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { isDarkFor } from '@/lib/theme';
+import { adjustRateForUsdtPct, parseUsdtPct, currencyUsesUsdtPct, usdtPctNote, loadSavedUsdtPct, saveUsdtPct } from '@/lib/usdt-premium';
 
 interface MayorProps {
   accounts: Account[];
@@ -99,6 +100,16 @@ export function MayorView({
   const [isAbonoModalOpen, setIsAbonoModalOpen] = useState(false);
   const [feeMode, setFeeMode] = useState<'fixed' | 'percent'>('fixed');
   const [feePercent, setFeePercent] = useState<string>('');
+  // % al que se compraron los USDT (negativo = en contra). Ajusta la tasa de compra (costo).
+  const [usdtPct, setUsdtPctState] = useState<string>('');
+  useEffect(() => setUsdtPctState(loadSavedUsdtPct()), []);
+  const setUsdtPct = (v: string) => {
+    setUsdtPctState(v);
+    saveUsdtPct(v);
+  };
+  const usdtPctValue = currencyUsesUsdtPct(selectedCurrency) ? parseUsdtPct(usdtPct) : 0;
+  const baseBuy = parseFormattedNumber(formData.buy_price);
+  const realBuy = adjustRateForUsdtPct(baseBuy, usdtPctValue);
 
   const handleClientSelect = (name: string) => {
     const matched = clients.find((c) => c.name.toUpperCase() === name.toUpperCase());
@@ -125,7 +136,7 @@ export function MayorView({
 
   const calculations = useMemo(() => {
     const ves = parseFormattedNumber(formData.amount_ves);
-    const buy = parseFormattedNumber(formData.buy_price);
+    const buy = realBuy;
     const sell = parseFormattedNumber(formData.sell_price);
 
     if (ves <= 0 || sell <= 0) {
@@ -189,7 +200,7 @@ export function MayorView({
       commissionAccount,
       paidAccount,
     };
-  }, [formData.amount_ves, formData.buy_price, formData.sell_price, formData.commission, formData.client_fee, formData.paid_account_id, accounts, feeMode, feePercent, selectedCurrency]);
+  }, [formData.amount_ves, formData.buy_price, formData.sell_price, formData.commission, formData.client_fee, formData.paid_account_id, accounts, feeMode, feePercent, selectedCurrency, realBuy]);
 
   const handleSetFullPayment = () => {
     if (formData.received_account_id === 'POR_COBRAR') {
@@ -239,8 +250,9 @@ export function MayorView({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const ves = parseFormattedNumber(formData.amount_ves);
-    const buy = parseFormattedNumber(formData.buy_price);
+    const buy = realBuy;
     const sell = parseFormattedNumber(formData.sell_price);
+    const pctNote = usdtPctNote(baseBuy, usdtPctValue);
 
     if (!formData.client_name || ves <= 0 || sell <= 0) {
       alert('Complete los campos obligatorios: Cliente, Cantidad válida y Tasa de Venta');
@@ -285,7 +297,7 @@ export function MayorView({
       is_vip: formData.is_vip || undefined,
       profit_usd: calculations.profitUsd,
       reference: formData.reference,
-      notes: formData.notes,
+      notes: [formData.notes, pctNote].filter((n) => n && n.trim()).join(' · '),
     }, appMode);
 
     setFormData((prev) => ({
@@ -587,15 +599,35 @@ export function MayorView({
             </div>
 
             <div>
-              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">Tasa de Compra (Costo)</label>
-              <input
-                type="number"
-                step="any"
-                placeholder="ej. 940.00"
-                value={formData.buy_price}
-                onChange={(e) => setFormData({ ...formData, buy_price: e.target.value })}
-                className="w-full text-xs font-mono border border-slate-300 rounded-xl px-3 py-2"
-              />
+              <label className="flex items-center h-6 text-xs font-semibold text-slate-600 mb-1 whitespace-nowrap">
+                Tasa de Compra (Costo){currencyUsesUsdtPct(selectedCurrency) ? ' · % USDT' : ''}
+              </label>
+              <div className="flex gap-1.5">
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="ej. 940.00"
+                  value={formData.buy_price}
+                  onChange={(e) => setFormData({ ...formData, buy_price: e.target.value })}
+                  className="w-full min-w-0 text-xs font-mono border border-slate-300 rounded-xl px-3 py-2"
+                />
+                {currencyUsesUsdtPct(selectedCurrency) && (
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="% ej -1.3"
+                    title="% al que compraste los USDT: negativo si fue en contra, positivo si fue a favor"
+                    value={usdtPct}
+                    onChange={(e) => setUsdtPct(e.target.value)}
+                    className="w-20 shrink-0 text-xs font-mono border border-slate-300 rounded-xl px-2 py-2"
+                  />
+                )}
+              </div>
+              {usdtPctValue !== 0 && baseBuy > 0 && (
+                <p className="text-[11px] mt-1 font-semibold text-indigo-600">
+                  Tasa real: {formatRateDisplay(realBuy)} ({usdtPctValue > 0 ? '+' : ''}{usdtPctValue}%)
+                </p>
+              )}
             </div>
 
             <div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Account, Supplier, SupplierPurchase, SupplierPayment, CurrencyConfig } from '@/types';
 import { newestFirst } from '@/lib/order';
 import { StorageService } from '@/lib/storage';
@@ -10,7 +10,7 @@ import { CurrencyService } from '@/lib/currencies';
 import { ManageCurrenciesModal } from './ManageCurrenciesModal';
 import { SupplierHistoryModal } from './SupplierHistoryModal';
 import { ShareSupplierVoucherModal, SupplierVoucherData } from './ShareSupplierVoucherModal';
-import { adjustRateForUsdtPct, parseUsdtPct, currencyUsesUsdtPct, usdtPctNote } from '@/lib/usdt-premium';
+import { adjustRateForUsdtPct, parseUsdtPct, currencyUsesUsdtPct, usdtPctNote, loadSavedUsdtPct, saveUsdtPct } from '@/lib/usdt-premium';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatRateDisplay, formatRateExact, formatInputNumber } from '@/lib/formatters';
 import {
   Truck,
@@ -117,6 +117,11 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
     credited_amount: '0', // Abono de inmediato al proveedor
     notes: '',
   });
+
+  useEffect(() => {
+    const saved = loadSavedUsdtPct();
+    if (saved) setPurchaseForm((prev) => ({ ...prev, usdt_pct: saved }));
+  }, []);
 
   const refreshCurrencies = () => {
     setSystemCurrencies(CurrencyService.getCurrencies());
@@ -556,7 +561,10 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
                   inputMode="decimal"
                   placeholder="ej. -1.3"
                   value={purchaseForm.usdt_pct}
-                  onChange={(e) => setPurchaseForm({ ...purchaseForm, usdt_pct: e.target.value })}
+                  onChange={(e) => {
+                    saveUsdtPct(e.target.value);
+                    setPurchaseForm({ ...purchaseForm, usdt_pct: e.target.value });
+                  }}
                   className="w-full text-sm border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold"
                 />
                 {calculatedCost.usdtPct !== 0 && (
