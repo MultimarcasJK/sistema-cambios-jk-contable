@@ -128,20 +128,43 @@ function changedLocallySince(mode: AppMode, id: string, since: number): boolean 
   return at !== undefined && at >= since;
 }
 
+// Los guardados de una misma cuenta salen en fila, uno detrás del otro, y cada uno manda el saldo
+// MÁS NUEVO de aquí. Antes salían a la vez: en un pago a proveedor con comisión, el guardado de la
+// comisión (saldo − comisión) podía llegar a Supabase DESPUÉS del del pago (saldo − comisión − pago)
+// y dejar allá el saldo sin el pago; luego la descarga lo traía de vuelta y el pago "no restaba".
+const accountPushChain = new Map<string, Promise<void>>();
+let accountPushSeq = 0;
+
+function latestLocalAccount(account: Account, mode: AppMode): Account {
+  const list = getFromStorage<Account[]>('cambiosjk_' + mode + '_accounts_v2', []) || [];
+  return list.find((a) => a && a.id === account.id) || account;
+}
+
 function pushAccount(account: Account, mode: AppMode): Promise<void> {
   const key = mode + ':' + account.id;
-  const stamp = Date.now();
-  accountLocalChangeAt.set(key, stamp);
+  const now = Date.now();
+  accountPushSeq = (accountPushSeq + 1) % 1000;
+  const stamp = now + accountPushSeq / 1000;
+  accountLocalChangeAt.set(key, now);
   setPendingAccounts({ ...getPendingAccounts(), [key]: stamp });
-  return SupabaseSyncService.upsertAccount(account, mode).then((ok) => {
-    if (!ok) return;
-    const map = getPendingAccounts();
-    // Si hubo otro cambio mientras tanto, queda pendiente hasta que ese también llegue
-    if (map[key] === stamp) {
-      delete map[key];
-      setPendingAccounts(map);
-    }
-  });
+  const prev = accountPushChain.get(key) || Promise.resolve();
+  const next = prev
+    .catch(() => {})
+    .then(() => SupabaseSyncService.upsertAccount(latestLocalAccount(account, mode), mode))
+    .then((ok) => {
+      if (!ok) return;
+      const map = getPendingAccounts();
+      // Si hubo otro cambio mientras tanto, queda pendiente hasta que ese también llegue
+      if (map[key] === stamp) {
+        delete map[key];
+        setPendingAccounts(map);
+      }
+    });
+  accountPushChain.set(key, next);
+  next.finally(() => {
+    if (accountPushChain.get(key) === next) accountPushChain.delete(key);
+  }).catch(() => {});
+  return next;
 }
 
 // Lo mismo para la deuda de cada proveedor: si el guardado en Supabase no se confirmó, o si la
@@ -407,6 +430,41 @@ function flushDebtorOutbox(): Promise<void> {
 // Descargas desde Supabase en curso / en cola, por modo (ver syncFromSupabase)
 const syncEnCurso: Partial<Record<AppMode, Promise<void>>> = {};
 const syncEnCola: Partial<Record<AppMode, Promise<void>>> = {};
+
+export type SyncPart =
+  | 'Adjustments' | 'AuditEntries' | 'Remesas' | 'Remitentes' | 'GastosFijos' | 'Accounts' | 'Clients'
+  | 'Suppliers' | 'Transfers' | 'Expenses' | 'Closures' | 'TransactionsDetal' | 'TransactionsMayor'
+  | 'Debtors' | 'DebtPayments' | 'SupplierPurchases' | 'SupplierPayments' | 'Employees'
+  | 'PayrollPayments' | 'ServiceExpenses';
+
+// Qué descargar cuando Supabase avisa que cambió una tabla. Se incluyen las tablas que se mueven
+// juntas (un gasto también mueve una cuenta, un abono mueve al deudor). null = no se conoce: todo.
+export function syncPartsForTable(table: string): SyncPart[] | null {
+  const t = (table || '').toLowerCase().replace(/^(detal|mayor)_/, '');
+  const map: Record<string, SyncPart[]> = {
+    cuentas: ['Accounts'],
+    ajustes_saldo: ['Adjustments', 'Accounts'],
+    clientes: ['Clients'],
+    deudores: ['Debtors'],
+    abonos_deudores: ['DebtPayments', 'Debtors', 'Accounts'],
+    gastos_ingresos: ['Expenses', 'Accounts'],
+    cambio_saldos: ['Transfers', 'Accounts'],
+    cierres_diarios: ['Closures'],
+    proveedores: ['Suppliers', 'SupplierPurchases', 'SupplierPayments'],
+    compras_proveedores: ['Suppliers', 'SupplierPurchases', 'SupplierPayments', 'Accounts'],
+    pagos_proveedores: ['Suppliers', 'SupplierPurchases', 'SupplierPayments', 'Accounts', 'Expenses'],
+    ventas_cripto_dolar: ['TransactionsDetal', 'Debtors', 'Accounts'],
+    ventas_regionales: ['TransactionsMayor', 'Debtors', 'Accounts'],
+    remesas: ['Remesas', 'Accounts', 'Suppliers', 'SupplierPurchases', 'SupplierPayments'],
+    remitentes: ['Remitentes'],
+    gastos_fijos: ['GastosFijos'],
+    empleados: ['Employees'],
+    pagos_nomina: ['PayrollPayments', 'Employees', 'Accounts'],
+    gastos_servicios: ['ServiceExpenses', 'Accounts'],
+    auditoria: ['AuditEntries'],
+  };
+  return map[t] || null;
+}
 
 export const StorageService = {
   getAppMode(): AppMode {
@@ -703,16 +761,20 @@ export const StorageService = {
     return p;
   },
 
-  async syncFromSupabaseAhora(m: AppMode): Promise<void> {
+  // only: si viene, se descargan solo esas tablas (nombres de SYNC_PARTS). Las demás quedan en null y
+  // su paso de unión se salta, así que cada tabla pasa por la MISMA unión protegida que la completa.
+  async syncFromSupabaseAhora(m: AppMode, only?: Set<SyncPart>): Promise<void> {
+    const pick = <T>(part: SyncPart, f: () => Promise<T | null>): Promise<T | null> =>
+      !only || only.has(part) ? f() : Promise.resolve(null);
     try {
       // Enviar primero lo pendiente para no descargar filas que ya se borraron aquí
-      await flushDebtorOutbox().catch(() => {});
+      if (!only || only.has('Debtors') || only.has('DebtPayments')) await flushDebtorOutbox().catch(() => {});
       const [remoteAdjustments, remoteAudit, remoteRemesas, remoteRemitentes, remoteGastosFijos] = await Promise.all([
-        SupabaseSyncService.fetchAdjustments(m),
-        SupabaseSyncService.fetchAuditEntries(m),
-        SupabaseSyncService.fetchRemesas(m),
-        SupabaseSyncService.fetchRemitentes(m),
-        SupabaseSyncService.fetchGastosFijos(m),
+        pick('Adjustments', () => SupabaseSyncService.fetchAdjustments(m)),
+        pick('AuditEntries', () => SupabaseSyncService.fetchAuditEntries(m)),
+        pick('Remesas', () => SupabaseSyncService.fetchRemesas(m)),
+        pick('Remitentes', () => SupabaseSyncService.fetchRemitentes(m)),
+        pick('GastosFijos', () => SupabaseSyncService.fetchGastosFijos(m)),
       ]);
       if (remoteGastosFijos !== null) {
         const { merged, subir } = unirGastosFijos(this.getAllGastosFijos(m), remoteGastosFijos);
@@ -786,21 +848,21 @@ export const StorageService = {
         remotePayrollPayments,
         remoteServiceExpenses,
       ] = await Promise.all([
-        SupabaseSyncService.fetchAccounts(m),
-        SupabaseSyncService.fetchClients(m),
-        SupabaseSyncService.fetchSuppliers(m),
-        SupabaseSyncService.fetchTransfers(m),
-        SupabaseSyncService.fetchExpenses(m),
-        SupabaseSyncService.fetchClosures(m),
-        SupabaseSyncService.fetchTransactionsDetal(m),
-        SupabaseSyncService.fetchTransactionsMayor(m),
-        SupabaseSyncService.fetchDebtors(m),
-        SupabaseSyncService.fetchDebtPayments(m),
-        SupabaseSyncService.fetchSupplierPurchases(m),
-        SupabaseSyncService.fetchSupplierPayments(m),
-        SupabaseSyncService.fetchEmployees(m),
-        SupabaseSyncService.fetchPayrollPayments(m),
-        SupabaseSyncService.fetchServiceExpenses(m),
+        pick('Accounts', () => SupabaseSyncService.fetchAccounts(m)),
+        pick('Clients', () => SupabaseSyncService.fetchClients(m)),
+        pick('Suppliers', () => SupabaseSyncService.fetchSuppliers(m)),
+        pick('Transfers', () => SupabaseSyncService.fetchTransfers(m)),
+        pick('Expenses', () => SupabaseSyncService.fetchExpenses(m)),
+        pick('Closures', () => SupabaseSyncService.fetchClosures(m)),
+        pick('TransactionsDetal', () => SupabaseSyncService.fetchTransactionsDetal(m)),
+        pick('TransactionsMayor', () => SupabaseSyncService.fetchTransactionsMayor(m)),
+        pick('Debtors', () => SupabaseSyncService.fetchDebtors(m)),
+        pick('DebtPayments', () => SupabaseSyncService.fetchDebtPayments(m)),
+        pick('SupplierPurchases', () => SupabaseSyncService.fetchSupplierPurchases(m)),
+        pick('SupplierPayments', () => SupabaseSyncService.fetchSupplierPayments(m)),
+        pick('Employees', () => SupabaseSyncService.fetchEmployees(m)),
+        pick('PayrollPayments', () => SupabaseSyncService.fetchPayrollPayments(m)),
+        pick('ServiceExpenses', () => SupabaseSyncService.fetchServiceExpenses(m)),
       ]);
 
       if (remoteAccs !== null) {
@@ -1210,100 +1272,23 @@ export const StorageService = {
     }
   },
 
-  // Sincronización inteligente de una sola tabla específica (ahorra 95% de llamadas y disco)
-  async syncTableFromSupabase(tableName?: string, mode?: AppMode): Promise<void> {
+  // Sincronizar solo lo que avisó Supabase en tiempo real (para cuidar el disco), pero pasando por la
+  // misma unión que la sincronización completa. Antes se reemplazaba la tabla local con la de Supabase
+  // sin más: un saldo recién restado (pago a proveedor + comisión) volvía al valor viejo y se perdían
+  // registros que aún no habían subido.
+  async syncTableFromSupabase(tableNames?: string | string[], mode?: AppMode): Promise<void> {
     const m = mode || this.getAppMode();
-    if (!tableName) {
-      return this.syncFromSupabase(m);
+    const names = (Array.isArray(tableNames) ? tableNames : tableNames ? [tableNames] : []).filter(Boolean);
+    const parts = new Set<SyncPart>();
+    for (const n of names) {
+      const p = syncPartsForTable(n);
+      if (!p) return this.syncFromSupabase(m);
+      p.forEach((x) => parts.add(x));
     }
-    const t = tableName.toLowerCase();
-    try {
-      if (t.includes('cuenta') || t.includes('account')) {
-        const remoteAccs = await SupabaseSyncService.fetchAccounts(m);
-        if (remoteAccs !== null) {
-          const valid = remoteAccs.filter((a) => !isDeleted(a.id));
-          const local = this.getAccounts(m);
-          const remoteIds = new Set(valid.map((a) => a.id));
-          const localPending = local.filter((a) => a && !remoteIds.has(a.id) && !isDeleted(a.id));
-          saveToStorage(this.getAccountsKey(m), [...valid, ...localPending]);
-        }
-        return;
-      }
-      if (t.includes('cliente') || t.includes('client')) {
-        const remoteClients = await SupabaseSyncService.fetchClients(m);
-        if (remoteClients !== null) {
-          const valid = remoteClients.filter((c) => !isDeleted(c.id));
-          saveToStorage(this.getClientsKey(m), valid);
-        }
-        return;
-      }
-      if (t.includes('deudor') || t.includes('debtor')) {
-        const remoteDebtors = await SupabaseSyncService.fetchDebtors(m);
-        if (remoteDebtors !== null) {
-          const valid = remoteDebtors.filter((d) => !isDeleted(d.id));
-          saveToStorage(this.getDebtorsKey(m), valid);
-        }
-        return;
-      }
-      if (t.includes('abono') || t.includes('debt_payment')) {
-        const remoteAbonos = await SupabaseSyncService.fetchDebtPayments(m);
-        if (remoteAbonos !== null) {
-          const valid = remoteAbonos.filter((p) => !isDeleted(p.id));
-          saveToStorage(this.getDebtPaymentsKey(m), valid);
-        }
-        return;
-      }
-      if (t.includes('gasto') || t.includes('expense')) {
-        const remoteExp = await SupabaseSyncService.fetchExpenses(m);
-        if (remoteExp !== null) {
-          const valid = remoteExp.filter((e) => !isDeleted(e.id));
-          saveToStorage(this.getExpensesKey(m), valid);
-        }
-        return;
-      }
-      if (t.includes('traspaso') || t.includes('transfer')) {
-        const remoteTransfers = await SupabaseSyncService.fetchTransfers(m);
-        if (remoteTransfers !== null) {
-          const valid = remoteTransfers.filter((tr) => !isDeleted(tr.id));
-          saveToStorage(this.getTransfersKey(m), valid);
-        }
-        return;
-      }
-      if (t.includes('cierre') || t.includes('closure')) {
-        const remoteClosures = await SupabaseSyncService.fetchClosures(m);
-        if (remoteClosures !== null) {
-          const valid = remoteClosures.filter((c) => !isDeleted(c.id));
-          saveToStorage(this.getClosuresKey(m), valid);
-        }
-        return;
-      }
-      if (t.includes('proveedor') || t.includes('supplier')) {
-        const remoteSuppliers = await SupabaseSyncService.fetchSuppliers(m);
-        if (remoteSuppliers !== null) {
-          const valid = remoteSuppliers.filter((s) => !isDeleted(s.id));
-          saveToStorage(this.getSuppliersKey(m), valid);
-        }
-        return;
-      }
-      if (t.includes('remesa')) {
-        const remoteRemesas = await SupabaseSyncService.fetchRemesas(m);
-        if (remoteRemesas !== null) {
-          saveToStorage(this.getRemesasKey(m), remoteRemesas);
-        }
-        return;
-      }
-      if (t.includes('remitente')) {
-        const remoteRemitentes = await SupabaseSyncService.fetchRemitentes(m);
-        if (remoteRemitentes !== null) {
-          saveToStorage(this.getRemitentesKey(m), remoteRemitentes);
-        }
-        return;
-      }
-      // Si no es ninguna tabla identificada, hacemos sync general
-      return this.syncFromSupabase(m);
-    } catch (e) {
-      console.warn('[SyncTable ' + tableName + '] error:', e);
-    }
+    if (parts.size === 0) return this.syncFromSupabase(m);
+    // Si hay una sincronización completa en curso, esa ya trae todo
+    if (syncEnCurso[m]) return syncEnCurso[m];
+    return this.syncFromSupabaseAhora(m, parts);
   },
 
 

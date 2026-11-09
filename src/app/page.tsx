@@ -218,7 +218,10 @@ export default function Home() {
 
       // Sincronización instantánea inteligente: Supabase avisa qué tabla cambió
       // y SOLO sincroniza esa tabla específica, evitando recargar todas las tablas juntas
+      // Se juntan TODAS las tablas que avisan en el medio segundo (un pago a proveedor toca cuentas,
+      // gastos, pagos y proveedores); antes solo se sincronizaba la última y las otras se perdían.
       let realtimeTimer: ReturnType<typeof setTimeout> | null = null;
+      const tablasPendientes = new Set<string>();
       const realtimeChannel = supabase
         ?.channel('jk-cambios')
         .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
@@ -229,9 +232,12 @@ export default function Home() {
             ultimaSync = 0; // forzar sincronización al volver a la pestaña
             return;
           }
+          tablasPendientes.add(payload.table);
           if (realtimeTimer) clearTimeout(realtimeTimer);
           realtimeTimer = setTimeout(() => {
-            StorageService.syncTableFromSupabase(payload.table, currentMode)
+            const tablas = Array.from(tablasPendientes);
+            tablasPendientes.clear();
+            StorageService.syncTableFromSupabase(tablas, currentMode)
               .then(() => refreshData(currentMode))
               .catch(() => {});
           }, 500);
