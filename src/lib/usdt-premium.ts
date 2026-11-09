@@ -29,3 +29,22 @@ export function usdtPctNote(baseRate: number, pct: number): string {
   const sign = pct > 0 ? '+' : '';
   return `% compra USDT ${sign}${pct}% ${pct < 0 ? 'en contra' : 'a favor'} (tasa base ${baseRate})`;
 }
+
+// El % del día se recuerda en este navegador y se comparte entre Proveedores y Ventas
+const PCT_KEY = 'cambiosjk_usdt_pct';
+
+export function loadSavedUsdtPct(): string {
+  try {
+    return (typeof window !== 'undefined' && window.localStorage.getItem(PCT_KEY)) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function saveUsdtPct(value: string): void {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(PCT_KEY, value);
+  } catch {
+    /* sin almacenamiento: no pasa nada */
+  }
+}
