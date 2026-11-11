@@ -33,6 +33,7 @@ import { stripManualTag, LostDebtCandidate } from '@/lib/debtor-sync';
 import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { IncognitoPanel } from '@/components/IncognitoPanel';
+import { getUltimaCuentaAbono, setUltimaCuentaAbono } from '@/lib/ultima-cuenta-abono';
 
 // Botón "Revisar deudas perdidas": oculto, ya se usó para recuperar las deudas que borró el
 // recálculo. Poner en true para volver a mostrarlo.
@@ -214,7 +215,7 @@ export function DebtorsView({
     setPaymentAmountCurrency('');
     setPaymentRate('');
     setPaymentDate(localDateStr());
-    setPaymentAccountId('');
+    setPaymentAccountId(getUltimaCuentaAbono(appMode, accounts));
     setPaymentNotes('');
   };
 
@@ -288,6 +289,7 @@ export function DebtorsView({
       account_id: paymentAccountId || undefined,
       notes: paymentNotes.trim() || undefined,
     }, appMode);
+    setUltimaCuentaAbono(appMode, paymentAccountId);
 
     setPaymentModalDebtor(null);
     setPaymentAmount('');

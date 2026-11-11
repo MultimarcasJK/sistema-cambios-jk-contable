@@ -30,6 +30,7 @@ import {
 import { localDateStr, localDateOf } from '@/lib/dates';
 import { getManualEntries, stripManualTag } from '@/lib/debtor-sync';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { getUltimaCuentaAbono, setUltimaCuentaAbono } from '@/lib/ultima-cuenta-abono';
 
 interface ClientsProps {
   clients: Client[];
@@ -171,7 +172,7 @@ export function ClientsView({
     setPaymentAmountCurrency('');
     setPaymentRate('');
     setPaymentDate(localDateStr());
-    setPaymentAccountId('');
+    setPaymentAccountId(getUltimaCuentaAbono(appMode, accounts));
     setPaymentNotes('');
   };
 
@@ -228,6 +229,7 @@ export function ClientsView({
       account_id: paymentAccountId || undefined,
       notes: paymentNotes.trim() || undefined,
     }, appMode);
+    setUltimaCuentaAbono(appMode, paymentAccountId);
 
     setAbonoModalDebtor(null);
     setPaymentAmount('');

@@ -8,6 +8,7 @@ import { ArrowDownLeft, X } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { INCOGNITO_NAME, isIncognito } from '@/lib/incognito';
+import { getUltimaCuentaAbono, setUltimaCuentaAbono } from '@/lib/ultima-cuenta-abono';
 
 interface AbonoModalProps {
   isOpen: boolean;
@@ -76,9 +77,10 @@ export function AbonoModal({
       setPaymentAmountCurrency('');
       setPaymentRate('');
       setPaymentDate(localDateStr());
-      setPaymentAccountId('');
+      setPaymentAccountId(getUltimaCuentaAbono(appMode, accounts));
       setPaymentNotes('');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, preselectedClientName, currentDebtor]);
 
   if (!isOpen) return null;
@@ -146,6 +148,7 @@ export function AbonoModal({
       account_id: paymentAccountId || undefined,
       notes: finalNotes,
     }, appMode);
+    setUltimaCuentaAbono(appMode, paymentAccountId);
 
     onSuccess();
     onClose();
