@@ -30,11 +30,12 @@ import {
   resumenRemesas,
   resumenProveedores,
   cuadreUltimosDias,
+  ventasPorMoneda,
   diaSinCierre,
   sumarDias,
 } from '@/lib/dashboard-metrics';
 import { TabKey } from './Navigation';
-import { AlertTriangle, CalendarX, ChevronDown, FileText, Scale, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, CalendarX, ChevronDown, FileText, Scale, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
 import { AccountStatementModal } from './AccountStatementModal';
 
 interface Props {
@@ -168,6 +169,9 @@ export function AnalyticsView({
   const cuadraron = cuadre.filter((c) => c.cuadra === true).length;
   const conReporte = cuadre.filter((c) => c.cuadra !== null).length;
   const ultimoDescuadre = [...cuadre].reverse().find((c) => c.cuadra === false);
+
+  const ventasMoneda = useMemo(() => ventasPorMoneda(fuentes, rango.desde, rango.hasta), [fuentes, rango]);
+  const ventasMonedaUsd = ventasMoneda.reduce((s, m) => s + m.usd, 0);
 
   const clientes = useMemo(() => topClientes({ detalTxs, mayorTxs }, debtors, rango.desde, rango.hasta), [detalTxs, mayorTxs, debtors, rango]);
 
@@ -399,6 +403,38 @@ export function AnalyticsView({
           </div>
         </Card>
       </div>
+
+      {/* Ventas por moneda del período */}
+      <Card>
+        <div className="flex items-baseline justify-between mb-3 gap-2">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+            <ArrowLeftRight className="w-4 h-4 text-blue-600" /> Ventas por moneda
+          </h3>
+          <span className="font-mono font-black text-slate-900">≈ {usd(ventasMonedaUsd, 0)}</span>
+        </div>
+        {ventasMoneda.length === 0 ? (
+          <p className="text-sm text-slate-500">No hay ventas en este período.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            {ventasMoneda.map((m) => (
+              <div key={m.code} className="bg-slate-50 rounded-xl p-3">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-xs font-black text-slate-800">{m.code}</span>
+                  <span className="text-[11px] text-slate-500">{m.operaciones} op.</span>
+                </div>
+                <div className="text-lg font-black font-mono text-slate-900 truncate" title={formatCurrency(m.cantidad, 2)}>
+                  {formatCurrency(m.cantidad, 2)}
+                </div>
+                <div className="text-xs font-mono text-slate-600">≈ {usd(m.usd)}</div>
+                <div className="h-1.5 bg-slate-200 rounded-full mt-2">
+                  <div className="h-1.5 rounded-full" style={{ width: `${pct(m.usd, ventasMonedaUsd)}%`, background: COLORES.mayor }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-[11px] text-slate-400 mt-3">Incluye Detal (USDT), Mayor y lo entregado en remesas. El equivalente es lo que se cobró en USD.</p>
+      </Card>
 
       {/* Liquidez, por cobrar, por pagar */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

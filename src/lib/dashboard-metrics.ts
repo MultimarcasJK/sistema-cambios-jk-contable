@@ -318,3 +318,42 @@ export function cuadreUltimosDias(reports: DailyReport[], hoy: string, n = 7): D
 export function diaSinCierre(closures: DailyClosure[], date: string): boolean {
   return !(closures || []).some((c) => c && c.date === date);
 }
+
+export interface VentaMoneda {
+  code: string;
+  cantidad: number; // total entregado en la moneda vendida
+  usd: number; // lo que se cobró por esa cantidad, en USD
+  operaciones: number;
+}
+
+// Cuánto se vendió de cada moneda en el período: USDT del Detal, la moneda de cada venta al
+// Mayor (VES por defecto) y lo que se entregó en remesas (moneda de pago, sin anuladas).
+export function ventasPorMoneda(
+  f: Pick<FuentesDashboard, 'detalTxs' | 'mayorTxs' | 'remesas'>,
+  desde: string,
+  hasta: string
+): VentaMoneda[] {
+  const map = new Map<string, VentaMoneda>();
+  const sumar = (code: string, cantidad: number, usd: number) => {
+    const c = (code || 'VES').toUpperCase();
+    const m = map.get(c) || { code: c, cantidad: 0, usd: 0, operaciones: 0 };
+    m.cantidad += cantidad || 0;
+    m.usd += usd || 0;
+    m.operaciones += 1;
+    map.set(c, m);
+  };
+  (f.detalTxs || []).forEach((t) => {
+    if (t && enRango(t.date, desde, hasta)) sumar('USDT', t.usdt_amount, t.total_to_pay);
+  });
+  (f.mayorTxs || []).forEach((t) => {
+    if (t && enRango(t.date, desde, hasta)) sumar(String(t.currency || 'VES'), t.amount_ves, t.total_to_pay);
+  });
+  (f.remesas || []).forEach((r) => {
+    if (!r || r.estado === 'anulada' || !enRango(r.date, desde, hasta)) return;
+    sumar(String(r.moneda_pago || 'VES'), r.monto_pago, (r.monto_enviar || 0) / (r.tasa_origen_usd || 1));
+  });
+  return Array.from(map.values())
+    .map((m) => ({ ...m, cantidad: r2(m.cantidad), usd: r2(m.usd) }))
+    .filter((m) => m.operaciones > 0)
+    .sort((a, b) => b.usd - a.usd);
+}
