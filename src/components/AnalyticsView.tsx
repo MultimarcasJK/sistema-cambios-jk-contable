@@ -34,7 +34,8 @@ import {
   sumarDias,
 } from '@/lib/dashboard-metrics';
 import { TabKey } from './Navigation';
-import { AlertTriangle, CalendarX, Scale, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { AlertTriangle, CalendarX, ChevronDown, FileText, Scale, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { AccountStatementModal } from './AccountStatementModal';
 
 interface Props {
   accounts: Account[];
@@ -112,6 +113,8 @@ export function AnalyticsView({
   const [periodo, setPeriodo] = useState<Periodo>('mes');
   const [desde, setDesde] = useState(sumarDias(hoy, -29));
   const [hasta, setHasta] = useState(hoy);
+  const [verNegativas, setVerNegativas] = useState(false);
+  const [cuentaEstado, setCuentaEstado] = useState<Account | null>(null);
   const rango = useMemo(() => rangoPeriodo(periodo, hoy, desde, hasta), [periodo, hoy, desde, hasta]);
 
   const fuentes = useMemo(() => ({ detalTxs, mayorTxs, remesas, expenses }), [detalTxs, mayorTxs, remesas, expenses]);
@@ -170,7 +173,9 @@ export function AnalyticsView({
 
   const ayer = sumarDias(hoy, -1);
   const huboMovAyer = resumenPeriodo(fuentes, ayer, ayer).operaciones > 0;
-  const negativas = accounts.filter((a) => a.is_active !== false && (a.current_balance || 0) < -0.005);
+  const negativas = accounts
+    .filter((a) => a.is_active !== false && (a.current_balance || 0) < -0.005)
+    .sort((a, b) => (a.country || '').localeCompare(b.country || '') || (a.current_balance || 0) - (b.current_balance || 0));
 
   const alertas: { key: string; texto: string; tono: 'rojo' | 'naranja' | 'azul'; tab: TabKey }[] = [];
   if (fijosCount.vencido > 0)
@@ -235,14 +240,62 @@ export function AnalyticsView({
             <button
               key={a.key}
               type="button"
-              onClick={() => onNavigate(a.tab)}
+              onClick={() => (a.key === 'neg' ? setVerNegativas((v) => !v) : onNavigate(a.tab))}
+              aria-expanded={a.key === 'neg' ? verNegativas : undefined}
               className={`flex items-center gap-1.5 border rounded-full px-3 py-1.5 text-xs font-semibold hover:brightness-95 ${tonos[a.tono]}`}
             >
               {a.key === 'cierre' ? <CalendarX className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
               {a.texto}
+              {a.key === 'neg' && <ChevronDown className={`w-3.5 h-3.5 transition-transform ${verNegativas ? 'rotate-180' : ''}`} />}
             </button>
           ))}
         </div>
+      )}
+
+      {/* Detalle de cuentas con saldo negativo */}
+      {verNegativas && negativas.length > 0 && (
+        <div className="bg-white border border-rose-200 rounded-2xl p-4" data-testid="cuentas-negativas">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h3 className="text-sm font-black text-rose-800">Cuentas con saldo negativo</h3>
+            <button type="button" onClick={() => onNavigate('accounts')} className="text-xs font-bold text-blue-700 hover:underline">
+              Ir a Cuentas
+            </button>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {negativas.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCuentaEstado(c)}
+                title="Ver estado de cuenta"
+                className="w-full flex items-center justify-between gap-3 py-2 text-left hover:bg-rose-50 rounded-lg px-2"
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-slate-900 truncate">{c.name}</span>
+                  <span className="block text-xs text-slate-500 truncate">
+                    {[c.country, c.bank_name, c.responsible].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className="font-mono text-sm font-bold text-rose-700">
+                    −{formatCurrency(Math.abs(c.current_balance || 0), 2)} {c.currency}
+                  </span>
+                  <FileText className="w-4 h-4 text-slate-400" />
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {cuentaEstado && (
+        <AccountStatementModal
+          isOpen={!!cuentaEstado}
+          onClose={() => setCuentaEstado(null)}
+          account={cuentaEstado}
+          allAccounts={accounts}
+          onSelectAccount={(acc) => setCuentaEstado(acc)}
+        />
       )}
 
       {/* Indicadores */}
