@@ -137,3 +137,14 @@ describe('dashboard: ventas por moneda', () => {
     ]);
   });
 });
+
+describe('dashboard: todos los clientes', () => {
+  it('sin límite devuelve todos los clientes del período, no solo 5', () => {
+    const mayorTxs = ['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((n, i) => mayor('2026-11-05', i + 1, 100, n));
+    const outside = mayor('2026-10-01', 50, 100, 'H');
+    const f = { detalTxs: [], mayorTxs: [...mayorTxs, outside] };
+    expect(topClientes(f, [], '2026-11-01', '2026-11-10')).toHaveLength(5);
+    const todos = topClientes(f, [], '2026-11-01', '2026-11-10', Infinity);
+    expect(todos.map((c) => c.name)).toEqual(['G', 'F', 'E', 'D', 'C', 'B', 'A']);
+  });
+});
