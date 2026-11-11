@@ -49,7 +49,9 @@ describe('sincronizar cuentas sin perder lo recién guardado', () => {
 
   it('cuando Supabase ya confirmó, manda la copia de Supabase (cambios de otro equipo)', async () => {
     StorageService.saveAccountEdit({ ...get('VES1'), initial_balance: 100 }, MODE);
-    await new Promise((r) => setTimeout(r, 0));
+    // La descarga tiene que empezar al menos 1 ms después del cambio local (si cae en el mismo
+    // milisegundo, el cambio local cuenta como más nuevo y la prueba fallaba a veces)
+    await new Promise((r) => setTimeout(r, 5));
     fake.remoteAccounts = [acc('VES1', 100, 250)];
     await StorageService.syncFromSupabase(MODE);
     expect(get('VES1').current_balance).toBe(250);

@@ -172,6 +172,7 @@ export function AnalyticsView({
 
   const ventasMoneda = useMemo(() => ventasPorMoneda(fuentes, rango.desde, rango.hasta), [fuentes, rango]);
   const ventasMonedaUsd = ventasMoneda.reduce((s, m) => s + m.usd, 0);
+  const maxVenta = Math.max(1, ...ventasMoneda.map((m) => m.usd));
 
   const clientes = useMemo(() => topClientes({ detalTxs, mayorTxs }, debtors, rango.desde, rango.hasta), [detalTxs, mayorTxs, debtors, rango]);
 
@@ -404,39 +405,7 @@ export function AnalyticsView({
         </Card>
       </div>
 
-      {/* Ventas por moneda del período */}
-      <Card>
-        <div className="flex items-baseline justify-between mb-3 gap-2">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-            <ArrowLeftRight className="w-4 h-4 text-blue-600" /> Ventas por moneda
-          </h3>
-          <span className="font-mono font-black text-slate-900">≈ {usd(ventasMonedaUsd, 0)}</span>
-        </div>
-        {ventasMoneda.length === 0 ? (
-          <p className="text-sm text-slate-500">No hay ventas en este período.</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-            {ventasMoneda.map((m) => (
-              <div key={m.code} className="bg-slate-50 rounded-xl p-3">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-xs font-black text-slate-800">{m.code}</span>
-                  <span className="text-[11px] text-slate-500">{m.operaciones} op.</span>
-                </div>
-                <div className="text-lg font-black font-mono text-slate-900 truncate" title={formatCurrency(m.cantidad, 2)}>
-                  {formatCurrency(m.cantidad, 2)}
-                </div>
-                <div className="text-xs font-mono text-slate-600">≈ {usd(m.usd)}</div>
-                <div className="h-1.5 bg-slate-200 rounded-full mt-2">
-                  <div className="h-1.5 rounded-full" style={{ width: `${pct(m.usd, ventasMonedaUsd)}%`, background: COLORES.mayor }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <p className="text-[11px] text-slate-400 mt-3">Incluye Detal (USDT), Mayor y lo entregado en remesas. El equivalente es lo que se cobró en USD.</p>
-      </Card>
-
-      {/* Liquidez, por cobrar, por pagar */}
+      {/* Liquidez, ventas por moneda, por cobrar, por pagar, gastos fijos, remesas, cuadre y mejores clientes */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <Card>
           <div className="flex items-baseline justify-between mb-3">
@@ -462,6 +431,34 @@ export function AnalyticsView({
             {liquidez.length === 0 && <p className="text-sm text-slate-500">No hay cuentas activas.</p>}
           </div>
           <p className="text-[11px] text-slate-400 mt-3">Convertido con la tasa de costo cargada hoy.</p>
+        </Card>
+
+        <Card>
+          <div className="flex items-baseline justify-between mb-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+              <ArrowLeftRight className="w-4 h-4 text-blue-600" /> Ventas por moneda
+            </h3>
+            <span className="font-mono font-black text-slate-900">≈ {usd(ventasMonedaUsd, 0)}</span>
+          </div>
+          <div className="space-y-2.5">
+            {ventasMoneda.map((m) => (
+              <div key={m.code}>
+                <div className="flex justify-between text-xs">
+                  <span className="font-bold text-slate-800">
+                    {m.code} <span className="font-normal text-slate-400">· {m.operaciones} op.</span>
+                  </span>
+                  <span className="font-mono text-slate-600">
+                    {formatCurrency(m.cantidad, 2)} ≈ <strong className="text-slate-900">{usd(m.usd, 0)}</strong>
+                  </span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full mt-1">
+                  <div className="h-2 rounded-full" style={{ width: `${(m.usd / maxVenta) * 100}%`, background: COLORES.mayor }} />
+                </div>
+              </div>
+            ))}
+            {ventasMoneda.length === 0 && <p className="text-sm text-slate-500">No hay ventas en este período.</p>}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-3">Ventas del período: Detal (USDT), Mayor y remesas. El ≈ es lo cobrado en USD.</p>
         </Card>
 
         <Card>
@@ -518,10 +515,7 @@ export function AnalyticsView({
             <div className="flex justify-between"><span>Comisiones banco/wallet</span><strong className="font-mono">{usd(prov.comisiones)}</strong></div>
           </div>
         </Card>
-      </div>
 
-      {/* Gastos fijos, remesas, cuadre */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <Card>
           <h3 className="text-sm font-bold text-slate-900 mb-3">Gastos fijos del mes</h3>
           {fijos.length === 0 ? (
@@ -604,40 +598,40 @@ export function AnalyticsView({
             )}
           </p>
         </Card>
-      </div>
 
-      {/* Mejores clientes */}
-      <Card>
-        <h3 className="text-sm font-bold text-slate-900 mb-3">Mejores clientes del período</h3>
-        {clientes.length === 0 ? (
-          <p className="text-sm text-slate-500">No hay ventas en este período.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-sm">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500">
-                  <th className="py-2 font-semibold">Cliente</th>
-                  <th className="py-2 font-semibold">Operaciones</th>
-                  <th className="py-2 font-semibold">Volumen</th>
-                  <th className="py-2 font-semibold">Ganancia</th>
-                  <th className="py-2 font-semibold">Debe</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clientes.map((c) => (
-                  <tr key={c.name} className="border-t border-slate-100">
-                    <td className="py-2 font-semibold text-slate-800">{c.name}</td>
-                    <td className="py-2">{c.operaciones}</td>
-                    <td className="py-2 font-mono">{usd(c.volumen, 0)}</td>
-                    <td className="py-2 font-mono font-bold text-emerald-700">{usd(c.ganancia)}</td>
-                    <td className="py-2 font-mono">{c.debe > 0 ? usd(c.debe) : '—'}</td>
+        {/* Mejores clientes */}
+        <Card className="md:col-span-2">
+          <h3 className="text-sm font-bold text-slate-900 mb-3">Mejores clientes del período</h3>
+          {clientes.length === 0 ? (
+            <p className="text-sm text-slate-500">No hay ventas en este período.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500">
+                    <th className="py-2 font-semibold">Cliente</th>
+                    <th className="py-2 font-semibold">Operaciones</th>
+                    <th className="py-2 font-semibold">Volumen</th>
+                    <th className="py-2 font-semibold">Ganancia</th>
+                    <th className="py-2 font-semibold">Debe</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+                </thead>
+                <tbody>
+                  {clientes.map((c) => (
+                    <tr key={c.name} className="border-t border-slate-100">
+                      <td className="py-2 font-semibold text-slate-800">{c.name}</td>
+                      <td className="py-2">{c.operaciones}</td>
+                      <td className="py-2 font-mono">{usd(c.volumen, 0)}</td>
+                      <td className="py-2 font-mono font-bold text-emerald-700">{usd(c.ganancia)}</td>
+                      <td className="py-2 font-mono">{c.debe > 0 ? usd(c.debe) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
