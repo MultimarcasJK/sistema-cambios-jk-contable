@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { APP_VERSION, hayVersionNueva, versionPublicada } from '@/lib/version-check';
 
-// Archivo del código de la página principal. Cambia de nombre con cada versión publicada.
+// Respaldo: archivo del código de la página principal, que cambia de nombre con cada versión.
 const PAGE_CHUNK = /chunks\/app\/page-[a-z0-9]+\.js/;
+const CADA = 60 * 1000;
 
 function loadedChunk(): string | null {
   if (typeof document === 'undefined') return null;
@@ -15,30 +17,63 @@ function loadedChunk(): string | null {
   return null;
 }
 
+async function revisarVersion(): Promise<boolean> {
+  const base = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  const sinCache = { cache: 'no-store' as RequestCache };
+  // 1) version.json: cambia con cualquier cambio publicado, aunque sea en otra parte del código.
+  try {
+    const res = await fetch(`${base}/version.json?t=${Date.now()}`, sinCache);
+    if (res.ok) {
+      const publicada = versionPublicada(await res.json());
+      if (publicada) return hayVersionNueva(APP_VERSION, publicada);
+    }
+  } catch {
+    // sigue con el respaldo
+  }
+  // 2) Respaldo: comparar el archivo de la página principal.
+  const actual = loadedChunk();
+  if (!actual) return false;
+  const res = await fetch(window.location.pathname + '?v=' + Date.now(), sinCache);
+  if (!res.ok) return false;
+  const m = (await res.text()).match(PAGE_CHUNK);
+  return !!m && m[0] !== actual;
+}
+
 // Si se publicó una versión nueva del sistema, avisa para recargar. Así todas las computadoras
-// usan las mismas reglas (por ejemplo, cómo se calcula la deuda de los proveedores).
+// usan las mismas reglas. Revisa cada minuto y también al volver a la pestaña o a la ventana.
 export function UpdateBanner() {
   const [hayNueva, setHayNueva] = useState(false);
 
   useEffect(() => {
-    const actual = loadedChunk();
-    if (!actual) return;
     let cancel = false;
+    let revisando = false;
     const revisar = async () => {
+      if (revisando || cancel) return;
+      revisando = true;
       try {
-        const res = await fetch(window.location.pathname + '?v=' + Date.now(), { cache: 'no-store' });
-        if (!res.ok) return;
-        const m = (await res.text()).match(PAGE_CHUNK);
-        if (!cancel && m && m[0] !== actual) setHayNueva(true);
+        if (await revisarVersion()) {
+          if (!cancel) setHayNueva(true);
+        }
       } catch {
         // sin internet: se revisa en la próxima vuelta
+      } finally {
+        revisando = false;
       }
     };
+    const alVolver = () => {
+      if (document.visibilityState === 'visible') revisar();
+    };
     revisar();
-    const id = window.setInterval(revisar, 2 * 60 * 1000);
+    const id = window.setInterval(revisar, CADA);
+    document.addEventListener('visibilitychange', alVolver);
+    window.addEventListener('focus', revisar);
+    window.addEventListener('online', revisar);
     return () => {
       cancel = true;
       window.clearInterval(id);
+      document.removeEventListener('visibilitychange', alVolver);
+      window.removeEventListener('focus', revisar);
+      window.removeEventListener('online', revisar);
     };
   }, []);
 

@@ -24,6 +24,7 @@ import { AppMode } from '@/types';
 import { MasterResetModal } from './MasterResetModal';
 import { useAuth } from '@/lib/auth-context';
 import { setThemeChoice, useThemeChoice, ThemeChoice } from '@/lib/theme';
+import { APP_VERSION } from '@/lib/version-check';
 
 interface HeaderProps {
   appMode?: AppMode;
@@ -390,6 +391,9 @@ export function Header({
                     <span className="text-[10px] text-slate-500 group-hover:text-rose-300 font-semibold uppercase">Salir</span>
                   </button>
                 </div>
+                <p className="pt-1 text-center text-[10px] text-slate-500" title="Si dos computadoras muestran números distintos, la de número viejo debe recargar">
+                  Versión del sistema: {APP_VERSION}
+                </p>
               </div>
             </div>
           )}
