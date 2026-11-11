@@ -175,6 +175,14 @@ export function AnalyticsView({
   const maxVenta = Math.max(1, ...ventasMoneda.map((m) => m.usd));
 
   const clientes = useMemo(() => topClientes({ detalTxs, mayorTxs }, debtors, rango.desde, rango.hasta), [detalTxs, mayorTxs, debtors, rango]);
+  const todosClientes = useMemo(
+    () => topClientes({ detalTxs, mayorTxs }, debtors, rango.desde, rango.hasta, Infinity),
+    [detalTxs, mayorTxs, debtors, rango]
+  );
+  const totClientes = todosClientes.reduce(
+    (t, c) => ({ operaciones: t.operaciones + c.operaciones, volumen: t.volumen + c.volumen, ganancia: t.ganancia + c.ganancia, debe: t.debe + c.debe }),
+    { operaciones: 0, volumen: 0, ganancia: 0, debe: 0 }
+  );
 
   const ayer = sumarDias(hoy, -1);
   const huboMovAyer = resumenPeriodo(fuentes, ayer, ayer).operaciones > 0;
@@ -632,6 +640,51 @@ export function AnalyticsView({
           )}
         </Card>
       </div>
+
+      {/* Todos los clientes del período */}
+      <Card>
+        <div className="flex items-baseline justify-between mb-3">
+          <h3 className="text-sm font-bold text-slate-900">Todos los clientes del período</h3>
+          <span className="text-xs text-slate-500">{todosClientes.length} clientes</span>
+        </div>
+        {todosClientes.length === 0 ? (
+          <p className="text-sm text-slate-500">No hay ventas en este período.</p>
+        ) : (
+          <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead className="sticky top-0 bg-white">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500">
+                  <th className="py-2 font-semibold">Cliente</th>
+                  <th className="py-2 font-semibold">Operaciones</th>
+                  <th className="py-2 font-semibold">Volumen</th>
+                  <th className="py-2 font-semibold">Ganancia</th>
+                  <th className="py-2 font-semibold">Debe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {todosClientes.map((c) => (
+                  <tr key={c.name} className="border-t border-slate-100">
+                    <td className="py-2 font-semibold text-slate-800">{c.name}</td>
+                    <td className="py-2">{c.operaciones}</td>
+                    <td className="py-2 font-mono">{usd(c.volumen, 0)}</td>
+                    <td className="py-2 font-mono font-bold text-emerald-700">{usd(c.ganancia)}</td>
+                    <td className="py-2 font-mono">{c.debe > 0 ? usd(c.debe) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="sticky bottom-0 bg-white">
+                <tr className="border-t-2 border-slate-200 font-black">
+                  <td className="py-2 text-slate-900">Total</td>
+                  <td className="py-2">{totClientes.operaciones}</td>
+                  <td className="py-2 font-mono">{usd(totClientes.volumen, 0)}</td>
+                  <td className="py-2 font-mono text-emerald-700">{usd(totClientes.ganancia)}</td>
+                  <td className="py-2 font-mono">{totClientes.debe > 0 ? usd(totClientes.debe) : '—'}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
