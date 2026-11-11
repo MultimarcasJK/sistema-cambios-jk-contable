@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/write-version.mjs",
     "start": "next start",
     "lint": "next lint",
     "predeploy": "npm run build",
