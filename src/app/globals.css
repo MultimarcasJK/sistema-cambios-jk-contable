@@ -209,6 +209,14 @@ select option {
   border-color: #334155 !important;
 }
 
+/* Hover con fondos pastel claros → resalte oscuro legible (el texto sigue blanco) */
+[data-theme="mayor"] .hover\:bg-rose-50:hover,
+[data-theme="mayor"] .hover\:bg-slate-50:hover,
+[data-theme="mayor"] .hover\:bg-blue-50:hover,
+[data-theme="mayor"] .hover\:bg-emerald-50:hover {
+  background-color: #334155 !important;
+}
+
 /* Fondos con opacidad o variantes claras → fondo oscuro nítido */
 [data-theme="mayor"] [class*="bg-white/"],
 [data-theme="mayor"] [class*="bg-slate-50/"],
