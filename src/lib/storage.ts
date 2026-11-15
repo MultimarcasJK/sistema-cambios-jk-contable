@@ -170,6 +170,17 @@ function pushAccount(account: Account, mode: AppMode): Promise<void> {
 // Lo mismo para la deuda de cada proveedor: si el guardado en Supabase no se confirmó, o si la
 // deuda cambió aquí mientras se descargaban los proveedores, la copia descargada no la pisa.
 const PENDING_SUPPLIERS_KEY = 'cambiosjk_pending_suppliers_v1';
+// Fila "marca" en {modo}_proveedores que avisa a todos los equipos que un proveedor borrado se recuperó
+const SUPPLIER_RESTORED_PREFIX = 'sup-restaurado-';
+
+export interface DeletedSupplierInfo {
+  id: string;
+  name: string;
+  compras: number;
+  pagos: number;
+  remesas: number;
+  lastDate: string;
+}
 const supplierLocalChangeAt = new Map<string, number>();
 
 function getPendingSuppliers(): Record<string, number> {
@@ -973,7 +984,18 @@ export const StorageService = {
         saveToStorage(this.getClientsKey(m), sorted);
       }
       if (remoteSuppliers !== null) {
+        // Marcas de "proveedor recuperado": nunca se muestran. Si este equipo lo tenía como borrado
+        // (fue el que lo borró), la marca le dice que ya se recuperó y no lo vuelve a borrar.
+        const restoredIds = new Set(
+          remoteSuppliers
+            .filter((s) => s && typeof s.id === 'string' && s.id.startsWith(SUPPLIER_RESTORED_PREFIX))
+            .map((s) => s.id.slice(SUPPLIER_RESTORED_PREFIX.length))
+        );
+        restoredIds.forEach((id) => {
+          if (isDeleted(id)) unmarkDeleted(id);
+        });
         const validRemote = remoteSuppliers.filter((s) => {
+          if (!s || (typeof s.id === 'string' && s.id.startsWith(SUPPLIER_RESTORED_PREFIX))) return false;
           if (isDeleted(s.id)) {
             SupabaseSyncService.deleteSupplier(s.id, m).catch(() => {});
             return false;
@@ -992,7 +1014,16 @@ export const StorageService = {
         });
         const remoteIds = new Set(validRemote.map((s) => s.id));
         const seenRemote = remoteIds.size < 1000 ? getSeenRemote(this.getSuppliersKey(m)) : new Set<string>();
-        const localPending = local.filter((s) => s && !remoteIds.has(s.id) && !isDeleted(s.id) && !seenRemote.has(s.id) && (seenRemote.size > 0 || isRecentLocal(s)));
+        const pendingSup = getPendingSuppliers();
+        const localPending = local.filter(
+          (s) =>
+            s &&
+            !remoteIds.has(s.id) &&
+            !isDeleted(s.id) &&
+            // Un proveedor guardado aquí que Supabase aún no confirmó (p. ej. recién recuperado) se conserva
+            (pendingSup[m + ':' + s.id] !== undefined ||
+              (!seenRemote.has(s.id) && (seenRemote.size > 0 || isRecentLocal(s))))
+        );
         rememberSeenRemote(this.getSuppliersKey(m), seenRemote, remoteIds);
         localPending.forEach((s) => {
           pushSupplier(s, m).catch(() => {});
@@ -2356,13 +2387,106 @@ export const StorageService = {
     return ledger.extractDebtUsd;
   },
 
+  // Borrar un proveedor solo quita su ficha: sus compras, pagos y remesas se quedan guardados,
+  // así que se puede recuperar con todo su historial (ver getDeletedSuppliers / restoreSupplier).
   async deleteSupplier(supplierId: string, mode?: AppMode): Promise<void> {
-    markAsDeleted(supplierId);
     const m = mode || this.getAppMode();
     const all = this.getSuppliers(m);
+    const sup = all.find((s) => s && s.id === supplierId);
+    markAsDeleted(supplierId);
     const updated = all.filter((s) => s.id !== supplierId);
     this.saveSuppliers(updated, m);
+    if (sup) {
+      AuditService.log({
+        mode: m,
+        action: 'eliminar',
+        entity: 'proveedor',
+        entityId: sup.id,
+        summary: `Proveedor eliminado: ${sup.name}`,
+        data: sup,
+      });
+    }
     await SupabaseSyncService.deleteSupplier(supplierId, m).catch(() => {});
+    await SupabaseSyncService.deleteSupplier(SUPPLIER_RESTORED_PREFIX + supplierId, m).catch(() => {});
+  },
+
+  // Proveedores que ya no están en la lista pero dejaron compras, pagos o remesas guardadas
+  getDeletedSuppliers(mode?: AppMode): DeletedSupplierInfo[] {
+    const m = mode || this.getAppMode();
+    const suppliers = this.getSuppliers(m).filter(Boolean);
+    const liveIds = new Set(suppliers.map((s) => s.id));
+    const liveNames = new Set(suppliers.map((s) => (s.name || '').trim().toUpperCase()));
+    const found = new Map<string, DeletedSupplierInfo>();
+    const touch = (id: string | undefined, name: string | undefined, kind: 'compras' | 'pagos' | 'remesas', when: string) => {
+      if (!id || liveIds.has(id) || id.startsWith(SUPPLIER_RESTORED_PREFIX)) return;
+      const cleanName = (name || '').trim();
+      let info = found.get(id);
+      if (!info) {
+        info = { id, name: cleanName, compras: 0, pagos: 0, remesas: 0, lastDate: '' };
+        found.set(id, info);
+      }
+      info[kind] += 1;
+      if (when && when > info.lastDate) {
+        info.lastDate = when;
+        if (cleanName) info.name = cleanName;
+      } else if (!info.name && cleanName) {
+        info.name = cleanName;
+      }
+    };
+    this.getSupplierPurchases(m).forEach((p) => p && touch(p.supplier_id, p.supplier_name, 'compras', p.date || ''));
+    this.getSupplierPayments(m).forEach((p) => p && touch(p.supplier_id, p.supplier_name, 'pagos', p.date || ''));
+    this.getRemesas(m).forEach(
+      (r) => r && r.metodo_pago === 'aliado' && touch(r.aliado_id, r.aliado_name, 'remesas', r.fecha_pago || r.date || '')
+    );
+    return Array.from(found.values())
+      // Si ya hay otro proveedor activo con ese nombre, su extracto ya cuenta esos registros
+      .filter((d) => d.name && !liveNames.has(d.name.toUpperCase()))
+      .sort((a, b) => b.lastDate.localeCompare(a.lastDate));
+  },
+
+  // Vuelve a crear la ficha con el mismo id: compras, pagos y remesas vuelven a quedar enlazadas
+  restoreSupplier(info: Pick<DeletedSupplierInfo, 'id' | 'name'>, mode?: AppMode): Supplier {
+    const m = mode || this.getAppMode();
+    const existing = this.getSuppliers(m).find((s) => s && s.id === info.id);
+    if (existing) return existing;
+    // Si se borró desde esta versión, la bitácora guardó la ficha completa (tipo y datos de pago)
+    const prev = AuditService.getEntries(m).find(
+      (e) => e.entity === 'proveedor' && e.action === 'eliminar' && e.entity_id === info.id && e.data
+    )?.data as Partial<Supplier> | undefined;
+    const restored: Supplier = {
+      id: info.id,
+      name: (prev?.name || info.name || '').trim(),
+      type: prev?.type || '-',
+      contact_info: prev?.contact_info || '',
+      notes: prev?.notes,
+      current_debt_usd: 0,
+      created_at: prev?.created_at || new Date().toISOString(),
+    };
+    unmarkDeleted(info.id);
+    const all = this.getSuppliers(m);
+    all.unshift(restored);
+    this.saveSuppliers(all, m);
+    pushSupplier(restored, m).catch(() => {});
+    SupabaseSyncService.upsertSupplier(
+      {
+        id: SUPPLIER_RESTORED_PREFIX + info.id,
+        name: restored.name,
+        type: '-',
+        contact_info: 'Marca interna: proveedor recuperado (no borrar)',
+        current_debt_usd: 0,
+      },
+      m
+    ).catch(() => {});
+    AuditService.log({
+      mode: m,
+      action: 'crear',
+      entity: 'proveedor',
+      entityId: restored.id,
+      summary: `Proveedor recuperado: ${restored.name}`,
+      data: restored,
+    });
+    this.recalcSupplierDebt(restored.id, m);
+    return this.getSuppliers(m).find((s) => s.id === restored.id) || restored;
   },
 
   getSupplierPurchases(mode?: AppMode): SupplierPurchase[] {
