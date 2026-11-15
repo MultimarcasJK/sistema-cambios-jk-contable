@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { Account, Supplier, SupplierPurchase, SupplierPayment, CurrencyConfig } from '@/types';
 import { newestFirst } from '@/lib/order';
-import { StorageService } from '@/lib/storage';
+import { StorageService, DeletedSupplierInfo } from '@/lib/storage';
 import { useAuth } from '@/lib/auth-context';
 import { RatesService } from '@/lib/rates-service';
 import { CurrencyService } from '@/lib/currencies';
@@ -31,6 +31,8 @@ import {
   FileText,
   Share2,
   ArrowUp,
+  RotateCcw,
+  X,
 } from 'lucide-react';
 import { localDateStr } from '@/lib/dates';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -276,11 +278,41 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
     setIsSupplierModalOpen(true);
   };
 
+  // Borrar pide escribir el nombre: un clic suelto en la papelera ya no basta
   const handleDeleteSupplier = async (sup: Supplier) => {
-    if (confirm(`¿Estás seguro de que deseas eliminar al proveedor "${sup.name}"?`)) {
-      await StorageService.deleteSupplier(sup.id);
-      onDataChange();
+    const ledger = StorageService.getSupplierLedger(sup);
+    const nCompras = StorageService.getSupplierPurchases().filter((p) => p && p.supplier_id === sup.id).length;
+    const nPagos = StorageService.getSupplierPayments().filter((p) => p && p.supplier_id === sup.id).length;
+    const typed = window.prompt(
+      `Vas a eliminar al proveedor "${sup.name}".\n` +
+        `Tiene ${nCompras} compra(s), ${nPagos} pago(s) y ${ledger.remesasCount} remesa(s); saldo $${formatCurrency(sup.current_debt_usd)}.\n` +
+        `Su historial no se borra y se puede recuperar con el botón "Recuperar borrados".\n\n` +
+        `Para confirmar, escribe el nombre del proveedor:`
+    );
+    if (typed === null) return;
+    if (typed.trim().toUpperCase() !== (sup.name || '').trim().toUpperCase()) {
+      alert('El nombre no coincide. No se eliminó el proveedor.');
+      return;
     }
+    await StorageService.deleteSupplier(sup.id);
+    setRestoreTick((t) => t + 1);
+    onDataChange();
+  };
+
+  // Proveedores borrados que dejaron historial (compras, pagos o remesas) y se pueden recuperar
+  const [isRestoreOpen, setIsRestoreOpen] = useState(false);
+  const [restoreTick, setRestoreTick] = useState(0);
+  const deletedSuppliers = useMemo(
+    () => StorageService.getDeletedSuppliers(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [suppliers, restoreTick, isRestoreOpen]
+  );
+  const handleRestoreSupplier = (d: DeletedSupplierInfo) => {
+    if (!confirm(`¿Recuperar al proveedor "${d.name}" con todo su historial?`)) return;
+    const restored = StorageService.restoreSupplier(d);
+    setRestoreTick((t) => t + 1);
+    onDataChange();
+    alert(`Proveedor "${restored.name}" recuperado. Saldo según su extracto: $${formatCurrency(restored.current_debt_usd)}.`);
   };
 
   const handleDeletePurchase = async (id: string) => {
@@ -771,6 +803,18 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
               <span>Agregar</span>
             </button>
 
+            {deletedSuppliers.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsRestoreOpen(true)}
+                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center space-x-1 cursor-pointer"
+                title="Proveedores borrados que todavía tienen historial guardado"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Recuperar borrados ({deletedSuppliers.length})</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
@@ -1132,6 +1176,62 @@ export function SuppliersView({ accounts, suppliers, onDataChange }: SuppliersPr
       )}
 
       {/* Modal de Historial Completo del Proveedor */}
+      {isRestoreOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setIsRestoreOpen(false)}>
+          <div
+            className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4 text-amber-500" />
+                  Recuperar proveedores borrados
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Al recuperarlo vuelve con sus compras, pagos y remesas, y el saldo se recalcula con su extracto.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRestoreOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                title="Cerrar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {deletedSuppliers.length === 0 ? (
+              <p className="text-xs text-slate-500 text-center py-6">No hay proveedores borrados con historial.</p>
+            ) : (
+              <ul className="space-y-2">
+                {deletedSuppliers.map((d) => (
+                  <li
+                    key={d.id}
+                    className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate">{d.name}</p>
+                      <p className="text-[11px] text-slate-500">
+                        {d.compras} compra(s) · {d.pagos} pago(s) · {d.remesas} remesa(s)
+                        {d.lastDate ? ` · último movimiento ${d.lastDate}` : ''}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRestoreSupplier(d)}
+                      className="shrink-0 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                    >
+                      Recuperar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
       {selectedSupplierForHistory && (
         <SupplierHistoryModal
           isOpen={!!selectedSupplierForHistory}
