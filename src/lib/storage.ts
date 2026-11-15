@@ -140,6 +140,86 @@ function latestLocalAccount(account: Account, mode: AppMode): Account {
   return list.find((a) => a && a.id === account.id) || account;
 }
 
+function chainAccountPush(key: string, job: () => Promise<void>): Promise<void> {
+  const prev = accountPushChain.get(key) || Promise.resolve();
+  const next = prev.catch(() => {}).then(job);
+  accountPushChain.set(key, next);
+  next.finally(() => {
+    if (accountPushChain.get(key) === next) accountPushChain.delete(key);
+  }).catch(() => {});
+  return next;
+}
+
+// Movimientos de saldo (pagos, gastos, ventas…) que Supabase todavía no sumó, por cuenta.
+// Antes cada movimiento subía el saldo COMPLETO de este equipo: si otro equipo tenía la cuenta
+// con un saldo viejo y anotaba algo, subía su saldo y borraba el movimiento de este (por ejemplo,
+// un pago de gasto fijo que "no se descontaba"). Ahora se sube solo el monto del movimiento.
+const PENDING_DELTAS_KEY = 'cambiosjk_pending_balance_deltas_v1';
+
+function getPendingDeltas(): Record<string, number> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(PENDING_DELTAS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+function addPendingDelta(key: string, delta: number): void {
+  if (typeof window === 'undefined') return;
+  const map = getPendingDeltas();
+  const v = Number(((Number(map[key]) || 0) + delta).toFixed(4));
+  if (Math.abs(v) < 0.00005) delete map[key];
+  else map[key] = v;
+  try {
+    localStorage.setItem(PENDING_DELTAS_KEY, JSON.stringify(map));
+  } catch {
+    // sin espacio: se pierde solo la marca
+  }
+}
+
+function pendingDeltaOf(mode: AppMode, id: string): number {
+  return Number(getPendingDeltas()[mode + ':' + id]) || 0;
+}
+
+function setLocalBalance(mode: AppMode, id: string, balance: number): void {
+  const key = 'cambiosjk_' + mode + '_accounts_v2';
+  const list = getFromStorage<Account[]>(key, []) || [];
+  saveToStorage(
+    key,
+    list.map((a) => (a && a.id === id ? { ...a, current_balance: Number(balance.toFixed(4)) } : a))
+  );
+}
+
+// Sube a Supabase los movimientos pendientes de una cuenta, sumándolos al saldo que tiene allá
+function pushBalanceDelta(accountId: string, mode: AppMode): Promise<void> {
+  const key = mode + ':' + accountId;
+  accountLocalChangeAt.set(key, Date.now());
+  return chainAccountPush(key, async () => {
+    const d = pendingDeltaOf(mode, accountId);
+    if (Math.abs(d) < 0.00005) return;
+    const res = await SupabaseSyncService.addToAccountBalance(accountId, mode, d);
+    if (typeof res !== 'number' && res !== 'missing') return; // queda pendiente; se reintenta en la próxima sincronización
+    if (res === 'missing') {
+      // La cuenta aún no está en Supabase: se sube completa (ya incluye el movimiento)
+      const acc = latestLocalAccount({ id: accountId } as Account, mode);
+      if (!acc || !acc.name) return;
+      const ok = await SupabaseSyncService.upsertAccount(acc, mode);
+      if (ok) addPendingDelta(key, -d);
+      return;
+    }
+    addPendingDelta(key, -d);
+    // El saldo de aquí queda igual al de Supabase (que puede traer movimientos de otros equipos)
+    // más lo que se anotó aquí mientras tanto y aún no sube.
+    if (!isAccountPending(mode, accountId)) {
+      setLocalBalance(mode, accountId, res + pendingDeltaOf(mode, accountId));
+      accountLocalChangeAt.set(key, Date.now());
+    }
+  });
+}
+
 function pushAccount(account: Account, mode: AppMode): Promise<void> {
   const key = mode + ':' + account.id;
   const now = Date.now();
@@ -147,24 +227,19 @@ function pushAccount(account: Account, mode: AppMode): Promise<void> {
   const stamp = now + accountPushSeq / 1000;
   accountLocalChangeAt.set(key, now);
   setPendingAccounts({ ...getPendingAccounts(), [key]: stamp });
-  const prev = accountPushChain.get(key) || Promise.resolve();
-  const next = prev
-    .catch(() => {})
-    .then(() => SupabaseSyncService.upsertAccount(latestLocalAccount(account, mode), mode))
-    .then((ok) => {
-      if (!ok) return;
-      const map = getPendingAccounts();
-      // Si hubo otro cambio mientras tanto, queda pendiente hasta que ese también llegue
-      if (map[key] === stamp) {
-        delete map[key];
-        setPendingAccounts(map);
-      }
-    });
-  accountPushChain.set(key, next);
-  next.finally(() => {
-    if (accountPushChain.get(key) === next) accountPushChain.delete(key);
-  }).catch(() => {});
-  return next;
+  return chainAccountPush(key, async () => {
+    // El saldo completo que se sube ya incluye los movimientos pendientes de ese momento
+    const deltaIncluido = pendingDeltaOf(mode, account.id);
+    const ok = await SupabaseSyncService.upsertAccount(latestLocalAccount(account, mode), mode);
+    if (!ok) return;
+    if (Math.abs(deltaIncluido) >= 0.00005) addPendingDelta(key, -deltaIncluido);
+    const map = getPendingAccounts();
+    // Si hubo otro cambio mientras tanto, queda pendiente hasta que ese también llegue
+    if (map[key] === stamp) {
+      delete map[key];
+      setPendingAccounts(map);
+    }
+  });
 }
 
 // Lo mismo para la deuda de cada proveedor: si el guardado en Supabase no se confirmó, o si la
@@ -910,16 +985,19 @@ export const StorageService = {
         const mergedAccounts = [
           ...validRemote.map((remote) => {
             const loc = localMap.get(remote.id) || localMap.get(remote.name.trim().toUpperCase());
-            if (
-              loc &&
-              loc.id === remote.id &&
-              (isAccountPending(m, remote.id) || changedLocallySince(m, remote.id, fetchStartedAt))
-            ) {
-              pushAccount(loc, m).catch(() => {});
-              return loc;
+            const mismo = !!loc && loc.id === remote.id;
+            // Un cambio completo de la ficha (edición) que aún no sube: se mantiene y se reenvía
+            if (mismo && isAccountPending(m, remote.id)) {
+              pushAccount(loc!, m).catch(() => {});
+              return loc!;
             }
+            const pendiente = mismo ? pendingDeltaOf(m, remote.id) : 0;
+            if (Math.abs(pendiente) >= 0.00005) pushBalanceDelta(remote.id, m).catch(() => {});
+            // La descarga empezó antes del último movimiento de aquí: trae un saldo viejo, no lo pisa
+            if (mismo && changedLocallySince(m, remote.id, fetchStartedAt)) return loc!;
             return {
               ...remote,
+              current_balance: Number(((Number(remote.current_balance) || 0) + pendiente).toFixed(4)),
               account_subtype: remote.account_subtype || loc?.account_subtype || '',
               account_number: remote.account_number || loc?.account_number || '',
               notes: remote.notes || loc?.notes || '',
@@ -1486,8 +1564,9 @@ export const StorageService = {
       return acc;
     });
     this.saveAccounts(updated, m);
-    if (updatedAcc) {
-      pushAccount(updatedAcc, m).catch(() => {});
+    if (updatedAcc && Math.abs(delta) >= 0.00005) {
+      addPendingDelta(m + ':' + accountId, delta);
+      pushBalanceDelta(accountId, m).catch(() => {});
     }
   },
 

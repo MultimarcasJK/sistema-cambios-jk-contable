@@ -23,6 +23,16 @@ vi.mock('../src/lib/supabase-sync', () => {
             fake.remoteAccounts = fake.remoteAccounts.map((r) => (r.id === a.id ? { ...a } : r));
             return true;
           };
+        if (prop === 'addToAccountBalance')
+          return async (id: string, _m: any, delta: number) => {
+            const wait = fake.delays.shift() ?? 0;
+            await new Promise((r) => setTimeout(r, wait));
+            const row = fake.remoteAccounts.find((r) => r.id === id);
+            if (!row) return 'missing';
+            row.current_balance = Number((row.current_balance + delta).toFixed(4));
+            fake.upserts.push(row.current_balance);
+            return row.current_balance;
+          };
         if (prop.startsWith('fetch')) return async () => null;
         return async () => true;
       },

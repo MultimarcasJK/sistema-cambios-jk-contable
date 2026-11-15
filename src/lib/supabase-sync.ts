@@ -71,6 +71,33 @@ export const SupabaseSyncService = {
     }
   },
 
+  // Suma (o resta) un monto al saldo que tiene Supabase AHORA, sin pisar lo que otro equipo
+  // haya movido en esa misma cuenta. Lee el saldo y lo cambia solo si nadie lo tocó entre medio
+  // (si lo tocaron, vuelve a leer y lo intenta otra vez).
+  // Devuelve el saldo nuevo de Supabase, 'missing' si la cuenta aún no existe allá, o null si falló.
+  async addToAccountBalance(accountId: string, mode: AppMode, delta: number): Promise<number | 'missing' | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const table = `${mode}_cuentas`;
+    try {
+      for (let intento = 0; intento < 5; intento++) {
+        const { data: rows, error } = await supabase.from(table).select('current_balance').eq('id', accountId).limit(1);
+        if (error) return null;
+        if (!rows || rows.length === 0) return 'missing';
+        const raw = (rows[0] as any).current_balance;
+        const nuevo = Number(((Number(raw) || 0) + delta).toFixed(4));
+        let q = supabase.from(table).update({ current_balance: nuevo }).eq('id', accountId);
+        q = raw === null || raw === undefined ? q.is('current_balance', null) : q.eq('current_balance', raw);
+        const { data: upd, error: errUpd } = await q.select('id');
+        if (errUpd) return null;
+        if (upd && upd.length > 0) return nuevo;
+        // Otro equipo cambió el saldo entre la lectura y el guardado: se reintenta con el nuevo
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
   // true = Supabase confirmó el guardado
   async upsertAccount(account: Account, mode: AppMode): Promise<boolean> {
     if (!isSupabaseConfigured || !supabase) return false;
