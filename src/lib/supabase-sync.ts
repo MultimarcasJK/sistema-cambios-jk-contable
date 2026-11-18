@@ -45,13 +45,41 @@ import {
   AppMode,
 } from '@/types';
 
+// Supabase entrega como máximo 1000 filas por consulta. Antes se leía una sola vez: cuando una
+// tabla pasaba de 1000 filas (ventas, abonos, remesas…), las más viejas dejaban de llegar y el
+// sistema recalculaba deudas sin esos registros (reaparecían deudas ya pagadas). Ahora se lee
+// por páginas hasta traer todas. Si una página falla, se devuelve error y no se usa nada a medias.
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 500;
+export async function selectAllRows(
+  table: string,
+  columns = '*',
+  order?: { column: string; ascending: boolean }
+): Promise<{ data: any[] | null; error: any }> {
+  if (!supabase) return { data: null, error: 'sin conexión' };
+  const rows: any[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const from = page * PAGE_SIZE;
+    let q: any = supabase.from(table).select(columns);
+    if (order) q = q.order(order.column, { ascending: order.ascending });
+    // Desempate fijo por id para que ninguna fila se repita ni se salte entre páginas
+    if (!order || order.column !== 'id') q = q.order('id', { ascending: true });
+    const { data, error } = await q.range(from, from + PAGE_SIZE - 1);
+    if (error) return { data: null, error };
+    const chunk = (data || []) as any[];
+    rows.push(...chunk);
+    if (chunk.length < PAGE_SIZE) return { data: rows, error: null };
+  }
+  return { data: null, error: 'demasiadas filas' };
+}
+
 export const SupabaseSyncService = {
   // Accounts (detal_cuentas / mayor_cuentas)
   async fetchAccounts(mode: AppMode): Promise<Account[] | null> {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_cuentas`;
     try {
-      const { data, error } = await supabase.from(table).select('*');
+      const { data, error } = await selectAllRows(table);
       if (error) {
         /* warn */
         return null;
@@ -147,7 +175,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_clientes`;
     try {
-      const { data, error } = await supabase.from(table).select('*');
+      const { data, error } = await selectAllRows(table);
       if (error) return null;
       return (data as Client[]) || [];
     } catch {
@@ -185,7 +213,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_ventas_cripto_dolar`;
     try {
-      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      const { data, error } = await selectAllRows(table, '*', { column: 'date', ascending: false });
       if (error) {
         console.error(`[SupabaseSync] Error fetching ${table}:`, error);
         return null;
@@ -267,7 +295,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_ventas_regionales`;
     try {
-      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      const { data, error } = await selectAllRows(table, '*', { column: 'date', ascending: false });
       if (error) return null;
       return (data || []).map((row: any) => ({
         id: row.id,
@@ -336,7 +364,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_deudores`;
     try {
-      const { data, error } = await supabase.from(table).select('*');
+      const { data, error } = await selectAllRows(table);
       if (error) return null;
       return ((data || []) as any[]).map((row) => ({
         ...row,
@@ -404,7 +432,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_abonos_deudores`;
     try {
-      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      const { data, error } = await selectAllRows(table, '*', { column: 'date', ascending: false });
       if (error) return null;
       return ((data || []) as any[]).map((row) => ({
         ...row,
@@ -461,7 +489,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_cambio_saldos`;
     try {
-      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      const { data, error } = await selectAllRows(table, '*', { column: 'date', ascending: false });
       if (error) return null;
       // La tabla guarda el concepto en "notes" y no tiene percentage_fee: se normaliza para que la pantalla no falle
       return ((data || []) as any[]).map((row) => ({
@@ -514,7 +542,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_gastos_ingresos`;
     try {
-      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      const { data, error } = await selectAllRows(table, '*', { column: 'date', ascending: false });
       if (error) return null;
       return ((data || []) as any[]).map((row) => {
         const meta = unpackExpenseMeta(row.notes);
@@ -566,7 +594,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_cierres_diarios`;
     try {
-      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      const { data, error } = await selectAllRows(table, '*', { column: 'date', ascending: false });
       if (error) return null;
       return ((data || []) as any[]).map((row) => {
         const meta = unpackClosureMeta(row.notes);
@@ -651,7 +679,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_proveedores`;
     try {
-      const { data, error } = await supabase.from(table).select('*');
+      const { data, error } = await selectAllRows(table);
       if (error) return null;
       return ((data || []) as any[]).map((row) => ({
         ...row,
@@ -697,7 +725,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_compras_proveedores`;
     try {
-      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      const { data, error } = await selectAllRows(table, '*', { column: 'date', ascending: false });
       if (error) return null;
       return ((data || []) as any[]).map((row) => {
         const meta = unpackPurchaseRate(row.notes);
@@ -750,7 +778,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_pagos_proveedores`;
     try {
-      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      const { data, error } = await selectAllRows(table, '*', { column: 'date', ascending: false });
       if (error) return null;
       return ((data || []) as any[]).map((row) => ({ ...row, created_at: createdAtOf(row) })) as SupplierPayment[];
     } catch {
@@ -791,7 +819,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_empleados`;
     try {
-      const { data, error } = await supabase.from(table).select('*').order('name', { ascending: true });
+      const { data, error } = await selectAllRows(table, '*', { column: 'name', ascending: true });
       if (error) return null;
       return ((data || []) as any[]).map((row) => ({
         id: row.id,
@@ -848,7 +876,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_pagos_nomina`;
     try {
-      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      const { data, error } = await selectAllRows(table, '*', { column: 'date', ascending: false });
       if (error) return null;
       return ((data || []) as any[]).map((row) => ({
         id: row.id,
@@ -919,7 +947,7 @@ export const SupabaseSyncService = {
     if (!isSupabaseConfigured || !supabase) return null;
     const table = `${mode}_gastos_servicios`;
     try {
-      const { data, error } = await supabase.from(table).select('*').order('date', { ascending: false });
+      const { data, error } = await selectAllRows(table, '*', { column: 'date', ascending: false });
       if (error) return null;
       return ((data || []) as any[]).map((row) => ({
         id: row.id,
@@ -1087,7 +1115,7 @@ export const SupabaseSyncService = {
   async fetchAdjustments(mode: AppMode): Promise<BalanceAdjustment[] | null> {
     if (!isSupabaseConfigured || !supabase) return null;
     try {
-      const { data, error } = await supabase.from(`${mode}_ajustes_saldo`).select('*');
+      const { data, error } = await selectAllRows(`${mode}_ajustes_saldo`);
       if (error) return null;
       return ((data || []) as any[]).map((row) => ({
         ...row,
@@ -1166,7 +1194,7 @@ export const SupabaseSyncService = {
   async fetchRemesas(mode: AppMode): Promise<Remesa[] | null> {
     if (!isSupabaseConfigured || !supabase) return null;
     try {
-      const { data, error } = await supabase.from(`${mode}_remesas`).select('data');
+      const { data, error } = await selectAllRows(`${mode}_remesas`, 'data');
       if (error) return null;
       return ((data || []) as any[]).map((row) => row.data).filter(Boolean) as Remesa[];
     } catch {
@@ -1194,7 +1222,7 @@ export const SupabaseSyncService = {
   async fetchRemitentes(mode: AppMode): Promise<Remitente[] | null> {
     if (!isSupabaseConfigured || !supabase) return null;
     try {
-      const { data, error } = await supabase.from(`${mode}_remitentes`).select('data');
+      const { data, error } = await selectAllRows(`${mode}_remitentes`, 'data');
       if (error) return null;
       return ((data || []) as any[]).map((row) => row.data).filter(Boolean) as Remitente[];
     } catch {
@@ -1219,7 +1247,7 @@ export const SupabaseSyncService = {
   async fetchGastosFijos(mode: AppMode): Promise<GastoFijo[] | null> {
     if (!isSupabaseConfigured || !supabase) return null;
     try {
-      const { data, error } = await supabase.from(`${mode}_gastos_fijos`).select('data');
+      const { data, error } = await selectAllRows(`${mode}_gastos_fijos`, 'data');
       if (error) return null;
       return ((data || []) as any[]).map((row) => row.data).filter(Boolean) as GastoFijo[];
     } catch {
