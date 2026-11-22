@@ -1151,7 +1151,7 @@ export const SupabaseSyncService = {
   },
 
   // Bitácora de auditoría (detal_auditoria / mayor_auditoria): solo se inserta, nunca se edita
-  async fetchAuditEntries(mode: AppMode, limit = 1000): Promise<AuditEntry[] | null> {
+  async fetchAuditEntries(mode: AppMode, limit = 100): Promise<AuditEntry[] | null> {
     if (!isSupabaseConfigured || !supabase) return null;
     try {
       const { data, error } = await supabase

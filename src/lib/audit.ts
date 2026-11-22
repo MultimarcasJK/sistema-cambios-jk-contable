@@ -4,8 +4,9 @@ import { SupabaseSyncService } from './supabase-sync';
 
 // Bitácora de auditoría: cada cambio que mueve dinero o saldos deja una fila.
 // Se guarda en el navegador y se sube a Supabase ({modo}_auditoria) para verla desde cualquier equipo.
+// Se limitan a 100 en memoria local para no saturar el localStorage del navegador.
 
-const MAX_LOCAL_ENTRIES = 3000;
+const MAX_LOCAL_ENTRIES = 100;
 
 function storageKey(mode: AppMode): string {
   return 'cambiosjk_' + mode + '_auditoria_v1';

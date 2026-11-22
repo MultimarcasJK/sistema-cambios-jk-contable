@@ -743,6 +743,24 @@ export const StorageService = {
       console.log('[JK] Purga automática de deudores fantasmas de Detal ejecutada.');
     }
 
+    // Poda de auditoría local acumulada en navegadores para liberar espacio y acelerar la app
+    const TRIM_AUDIT_KEY = 'cambiosjk_trim_audit_v1';
+    if (!localStorage.getItem(TRIM_AUDIT_KEY)) {
+      (['detal', 'mayor'] as AppMode[]).forEach((mode) => {
+        try {
+          const k = 'cambiosjk_' + mode + '_auditoria_v1';
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr) && arr.length > 100) {
+              localStorage.setItem(k, JSON.stringify(arr.slice(0, 100)));
+            }
+          }
+        } catch {}
+      });
+      localStorage.setItem(TRIM_AUDIT_KEY, '1');
+    }
+
     const MIGRATED_FLAG = 'cambiosjk_data_split_v2_migrated';
     if (localStorage.getItem(MIGRATED_FLAG)) return;
 
