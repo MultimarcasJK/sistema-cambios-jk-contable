@@ -3,7 +3,7 @@
 // a veces con % en contra (cada USDT cuesta más de 1 USD) y a veces a favor.
 //   pct negativo = en contra (ej. -1.3)  → la tasa real baja
 //   pct positivo = a favor   (ej. +0.5)  → la tasa real sube
-// tasa real = tasa ÷ (1 − pct/100)   (ej. 200 con -1.3% → 200 ÷ 1.013 = 197.43)
+// tasa real = tasa × (1 + pct/100)   (ej. 1090 con -2.3% → 1090 × 0.977 = 1064.93)
 
 export function parseUsdtPct(value: string | number | null | undefined): number {
   if (value === null || value === undefined) return 0;
@@ -15,7 +15,7 @@ export function parseUsdtPct(value: string | number | null | undefined): number 
 export function adjustRateForUsdtPct(rate: number, pct: number): number {
   if (!Number.isFinite(rate) || rate <= 0) return rate;
   if (!pct) return rate;
-  return Number((rate / (1 - pct / 100)).toFixed(4));
+  return Number((rate * (1 + pct / 100)).toFixed(4));
 }
 
 // Monedas cuya tasa es "unidades por 1 USD" y que se pagan con USDT

@@ -3,10 +3,11 @@ import { adjustRateForUsdtPct, parseUsdtPct, currencyUsesUsdtPct, usdtPctNote } 
 
 describe('% de compra de USDT sobre la tasa', () => {
   it('en contra baja la tasa', () => {
-    expect(adjustRateForUsdtPct(200, -1.3)).toBe(197.4334);
+    expect(adjustRateForUsdtPct(200, -1.3)).toBe(197.4);
+    expect(adjustRateForUsdtPct(1090, -2.3)).toBe(1064.93);
   });
   it('a favor sube la tasa', () => {
-    expect(adjustRateForUsdtPct(200, 0.5)).toBe(201.005);
+    expect(adjustRateForUsdtPct(200, 0.5)).toBe(201);
   });
   it('sin % no cambia', () => {
     expect(adjustRateForUsdtPct(200, 0)).toBe(200);
