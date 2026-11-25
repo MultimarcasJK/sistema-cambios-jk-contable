@@ -48,7 +48,7 @@ import { localDateStr } from '@/lib/dates';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { GastosFijosPanel } from './GastosFijosPanel';
 import { packGastoFijo, unpackGastoFijo } from '@/lib/client-fee';
-import { adelantoPeriod, isAdelanto, pendingAdelantos, pendingAdelantosTotal } from '@/lib/adelantos';
+import { ADELANTO_PARCIAL_MARK, adelantoPeriod, isAdelanto, pendingAdelantos, pendingAdelantosTotal } from '@/lib/adelantos';
 import { isDarkFor } from '@/lib/theme';
 
 interface PayrollServicesViewProps {
@@ -177,7 +177,7 @@ export function PayrollServicesView({
     [payrollPayments, selectedEmployee]
   );
   const employeePendingTotal = Number(
-    employeePendingAdelantos.reduce((s, p) => s + (p.net_amount || 0), 0).toFixed(2)
+    employeePendingAdelantos.reduce((s, item) => s + item.remaining, 0).toFixed(2)
   );
 
   const handlePaymentCurrencyChange = (newCurr: Currency) => {
@@ -246,6 +246,10 @@ export function PayrollServicesView({
     };
   }, [liquidationForm]);
 
+  // Un pago de sueldo puede quedar en 0 si todo el sueldo se va en descontar adelantos
+  const zeroByDeduction = !isAdvance && calculationSummary.deductions > 0 && calculationSummary.netAgreed === 0;
+  const blockedByAmount = calculationSummary.toPayCurrency <= 0 && !zeroByDeduction;
+
   // Cuentas bancarias agrupadas por divisa de pago para el desembolso (Parte 2.2)
   const matchingAccounts = useMemo(() => {
     return accounts.filter((a) => a.currency === liquidationForm.payment_currency && a.is_active);
@@ -272,7 +276,7 @@ export function PayrollServicesView({
       alert('Por favor indica el período liquidado (ej. 1ra Quincena Octubre 2026).');
       return;
     }
-    if (calculationSummary.toPayCurrency <= 0) {
+    if (blockedByAmount) {
       alert('El monto a transferir debe ser mayor a 0.00.');
       return;
     }
@@ -282,9 +286,14 @@ export function PayrollServicesView({
     }
 
     const rateNum = parseFloat(liquidationForm.exchange_rate) || 1;
+    const discounted = Math.min(calculationSummary.deductions, employeePendingTotal);
+    const leftover = Number((employeePendingTotal - discounted).toFixed(2));
     const advanceNote =
-      !isAdvance && employeePendingAdelantos.length > 0 && calculationSummary.deductions > 0
-        ? `Adelantos descontados: ${liquidationForm.agreed_currency} ${employeePendingTotal.toFixed(2)}`
+      !isAdvance && employeePendingAdelantos.length > 0
+        ? [
+            discounted > 0 ? `Adelantos descontados: ${liquidationForm.agreed_currency} ${discounted.toFixed(2)}` : '',
+            leftover > 0 ? `${ADELANTO_PARCIAL_MARK} ${liquidationForm.agreed_currency} ${leftover.toFixed(2)}` : '',
+          ].filter(Boolean).join(' · ')
         : '';
     const notes = [liquidationForm.notes.trim(), advanceNote].filter(Boolean).join(' · ');
 
@@ -318,7 +327,10 @@ export function PayrollServicesView({
         `• Desembolso: ${newPayment.currency} ${newPayment.amount_currency.toLocaleString('es-ES', { minimumFractionDigits: 2 })}\n` +
         `• Equivalente Contable: $${newPayment.amount_usd.toFixed(2)} USD\n\n` +
         `El saldo de la cuenta fue debitado y el egreso quedó registrado en el Cierre Diario.` +
-        (isAdvance ? `\n\nSe descontará solo en el próximo pago de sueldo de este empleado.` : '')
+        (isAdvance ? `\n\nSe descontará solo en el próximo pago de sueldo de este empleado.` : '') +
+        (!isAdvance && leftover > 0
+          ? `\n\nQueda de adelanto pendiente: ${liquidationForm.agreed_currency} ${leftover.toFixed(2)}. Se pondrá solo en Deducciones el próximo pago.`
+          : '')
       );
 
       // Limpiar formulario y reiniciar selección
@@ -1305,12 +1317,16 @@ export function PayrollServicesView({
                   </div>
                   <div className="font-mono text-[11px]">
                     {employeePendingAdelantos
-                      .map((a) => `${a.date}: ${(a.net_amount || 0).toFixed(2)}`)
+                      .map((a) =>
+                        `${a.payment.date}: ${a.remaining.toFixed(2)}` +
+                        (a.remaining < (a.payment.net_amount || 0) ? ` (de ${(a.payment.net_amount || 0).toFixed(2)})` : '')
+                      )
                       .join(' · ')}
                   </div>
                   {!isAdvance && (
                     <div className="text-[11px]">
-                      Ya están puestos en Deducciones. Al registrar este pago quedan saldados.
+                      Ya están puestos en Deducciones. Si solo quieres descontar una parte, cambia el monto en
+                      Deducciones y lo que falte queda pendiente para el próximo pago.
                     </div>
                   )}
                 </div>
@@ -1735,9 +1751,9 @@ export function PayrollServicesView({
 
                   <button
                     type="submit"
-                    disabled={isSubmittingLiquidation || !selectedEmployee || calculationSummary.toPayCurrency <= 0 || !liquidationForm.account_id}
+                    disabled={isSubmittingLiquidation || !selectedEmployee || blockedByAmount || !liquidationForm.account_id}
                     className={`px-6 py-3 rounded-xl font-bold text-xs shadow-md transition flex items-center justify-center space-x-2 cursor-pointer ${
-                      isSubmittingLiquidation || !selectedEmployee || calculationSummary.toPayCurrency <= 0 || !liquidationForm.account_id
+                      isSubmittingLiquidation || !selectedEmployee || blockedByAmount || !liquidationForm.account_id
                         ? 'bg-slate-400 text-white opacity-60 cursor-not-allowed'
                         : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30'
                     }`}
