@@ -19,6 +19,9 @@ import { SearchableSelect } from '@/components/SearchableSelect';
 import { isDarkFor } from '@/lib/theme';
 import { adjustRateForUsdtPct, parseUsdtPct, currencyUsesUsdtPct, usdtPctNote, loadSavedUsdtPct, saveUsdtPct } from '@/lib/usdt-premium';
 
+
+const HISTORY_PAGE_SIZE = 100;
+
 interface MayorProps {
   accounts: Account[];
   clients: Client[];
@@ -373,6 +376,12 @@ export function MayorView({
       return matchSearch && matchDate && matchPaid && matchRecv;
     });
   }, [mayorTxs, allPayments, searchTerm, filterDate, filterPaidAcc, filterRecvAcc]);
+
+  // Historial por páginas: mostrar solo las más recientes para que la pantalla no se ponga lenta.
+  // Los filtros y la búsqueda siguen revisando todo el historial; los totales no cambian.
+  const [visibleCount, setVisibleCount] = useState(HISTORY_PAGE_SIZE);
+  useEffect(() => setVisibleCount(HISTORY_PAGE_SIZE), [searchTerm, filterDate, filterPaidAcc, filterRecvAcc]);
+  const visibleItems = useMemo(() => combinedMayorItems.slice(0, visibleCount), [combinedMayorItems, visibleCount]);
 
   const filteredTxs = useMemo(() => {
     return mayorTxs.filter((tx) => {
@@ -1004,7 +1013,7 @@ export function MayorView({
                   </td>
                 </tr>
               ) : (
-                combinedMayorItems.map((item) => {
+                visibleItems.map((item) => {
                   if (item.type === 'tx') {
                     const tx = item.data;
                     const paidAcc = accounts.find((a) => a.id === tx.paid_account_id);
@@ -1291,6 +1300,27 @@ export function MayorView({
             </tbody>
           </table>
         </div>
+        {combinedMayorItems.length > visibleCount && (
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
+            <span className="text-xs text-slate-500">
+              Mostrando {visibleCount} de {combinedMayorItems.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => setVisibleCount((n) => n + HISTORY_PAGE_SIZE)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer"
+            >
+              Mostrar {Math.min(HISTORY_PAGE_SIZE, combinedMayorItems.length - visibleCount)} más
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisibleCount(combinedMayorItems.length)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-500 hover:text-slate-700 cursor-pointer"
+            >
+              Mostrar todo
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modal de Abono Independiente */}
