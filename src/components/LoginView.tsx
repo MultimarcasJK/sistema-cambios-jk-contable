@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { Lock, Mail, ArrowRight, AlertCircle, KeyRound, Eye, EyeOff, UserRound, X } from 'lucide-react';
+import { InstallAppButton } from './InstallAppButton';
 
 // Usuarios que ya entraron en esta computadora (solo el correo, nunca la contraseña).
 // Todas usan la misma cuenta de Chrome, así que se guardan varios para elegir con un clic.
@@ -239,6 +240,8 @@ export function LoginView() {
             </button>
           </form>
         </div>
+
+        <InstallAppButton variant="login" />
 
         {/* Footer */}
         <p className="text-center text-[11px] text-slate-500 mt-6">

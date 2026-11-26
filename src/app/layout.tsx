@@ -1,13 +1,20 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
 export const metadata: Metadata = {
   title: 'CAMBIOS JK - Sistema Contable y Mesa de Cambio',
   description: 'Control financiero, tesorería multimoneda, arqueo de cuentas y cierre de ganancias',
-  manifest: '/manifest.json',
+  manifest: `${basePath}/manifest.json`,
   icons: {
-    icon: '/icon-192.png',
-    apple: '/icon-512.png',
+    icon: `${basePath}/icon-192.png`,
+    apple: `${basePath}/icon-512.png`,
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Cambios JK',
   },
 };
 

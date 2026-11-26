@@ -22,6 +22,7 @@ import {
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { AppMode } from '@/types';
 import { MasterResetModal } from './MasterResetModal';
+import { InstallAppButton } from './InstallAppButton';
 import { useAuth } from '@/lib/auth-context';
 import { setThemeChoice, useThemeChoice, ThemeChoice } from '@/lib/theme';
 import { APP_VERSION } from '@/lib/version-check';
@@ -105,8 +106,10 @@ export function Header({
           </div>
         </div>
 
-        {/* Botón de Perfil & Configuración en la parte superior derecha */}
-        <div className="relative" ref={profileMenuRef}>
+        {/* Botón Instalar App + Botón de Perfil & Configuración en la parte superior derecha */}
+        <div className="flex items-center gap-2">
+          <InstallAppButton variant="header" />
+          <div className="relative" ref={profileMenuRef}>
           <button
             type="button"
             onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
@@ -397,6 +400,7 @@ export function Header({
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
 
