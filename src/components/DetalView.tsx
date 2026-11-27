@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Account, TransactionDetal, Client, AppMode } from '@/types';
+import { Account, TransactionDetal, Client, AppMode, RateTier } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { anularAbono } from '@/lib/anular-abono';
 import { recordTime } from '@/lib/order';
 import { RatesService } from '@/lib/rates-service';
+import { RateTierSelector } from '@/components/RateTierSelector';
 import { AbonoModal } from '@/components/AbonoModal';
 import { parseFormattedNumber, formatCurrency, formatRateDisplay, formatInputNumber } from '@/lib/formatters';
 import { Coins, Search, CheckCircle, Trash2, Pencil, ArrowDownLeft, Sparkles, RefreshCw } from 'lucide-react';
@@ -41,6 +42,7 @@ export function DetalView({
 }: DetalProps) {
   const { isAdmin } = useAuth();
   const todayStr = localDateStr();
+  const [rateTier, setRateTier] = useState<RateTier>('normal');
   const [ratesVersion, setRatesVersion] = useState(0);
 
   useEffect(() => {
@@ -49,7 +51,14 @@ export function DetalView({
     return () => window.removeEventListener('cambiosjk_rates_updated', handleUpdate);
   }, []);
 
-  const officialUsdtRate = useMemo(() => RatesService.getRateInfo('USDT', appMode), [appMode, ratesVersion]);
+  useEffect(() => {
+    setRateTier('normal');
+  }, [appMode]);
+
+  const officialUsdtRate = useMemo(
+    () => RatesService.getRateInfo('USDT', appMode, rateTier),
+    [appMode, rateTier, ratesVersion]
+  );
 
   useEffect(() => {
     if (officialUsdtRate) {
@@ -162,6 +171,32 @@ export function DetalView({
     }
   };
 
+  const handleSelectRateTier = (tier: RateTier) => {
+    const wasVip = rateTier === 'vip';
+    setRateTier(tier);
+    const nextInfo = RatesService.getRateInfo('USDT', appMode, tier);
+    setFormData((prev) => {
+      const currentFee = parseFormattedNumber(prev.client_fee) || 0;
+      const vipFeeVal = nextInfo.vipFee || 1;
+      let nextVip = prev.is_vip;
+      let nextFee = prev.client_fee;
+      if (tier === 'vip') {
+        nextVip = true;
+        nextFee = String(vipFeeVal);
+      } else if (wasVip) {
+        nextVip = false;
+        if (currentFee === vipFeeVal || currentFee === 1) nextFee = '';
+      }
+      return {
+        ...prev,
+        buy_price: nextInfo.costRate.toString(),
+        sell_price: nextInfo.sellRate.toString(),
+        is_vip: nextVip,
+        client_fee: nextFee,
+      };
+    });
+  };
+
   const handleApplyOfficialRate = () => {
     if (officialUsdtRate) {
       setFormData((prev) => ({
@@ -173,13 +208,20 @@ export function DetalView({
   };
 
   const handleToggleVip = () => {
+    if (appMode === 'detal' && officialUsdtRate.hasVip) {
+      handleSelectRateTier(formData.is_vip ? 'normal' : 'vip');
+      return;
+    }
     setFormData((prev) => {
       const turningOn = !prev.is_vip;
       const fee = parseFormattedNumber(prev.client_fee) || 0;
+      const defaultFee = officialUsdtRate.vipFee || 1;
       return {
         ...prev,
         is_vip: turningOn,
-        client_fee: turningOn ? (fee > 0 ? prev.client_fee : '1') : (fee === 1 ? '' : prev.client_fee),
+        client_fee: turningOn
+          ? (fee > 0 ? prev.client_fee : String(defaultFee))
+          : (fee === defaultFee || fee === 1 ? '' : prev.client_fee),
       };
     });
   };
@@ -390,6 +432,13 @@ export function DetalView({
                       ● En vivo {new Date(lastRatesSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
+                  <RateTierSelector
+                    rateInfo={officialUsdtRate}
+                    appMode={appMode}
+                    selectedTier={rateTier}
+                    onSelectTier={handleSelectRateTier}
+                    isDark={isDark}
+                  />
                 </div>
               </div>
               <div className="flex items-center space-x-2 shrink-0 self-start sm:self-auto">

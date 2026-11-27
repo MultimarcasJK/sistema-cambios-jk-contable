@@ -45,6 +45,8 @@ export interface UserProfile {
 
 export type AppMode = 'detal' | 'mayor';
 
+export type RateTier = 'normal' | 'vip' | 'mayor_rst' | 'mayor_volumen';
+
 export interface LiveRate {
   pais: string;
   codigo: Currency;
@@ -53,8 +55,13 @@ export interface LiveRate {
   margenEnvio: number;
   tasaRecibo: number;
   margenRecibo: number;
-  margenEnvioMayor: number;
-  margenReciboMayor: number;
+  margenEnvioMayor: number | null;
+  margenReciboMayor: number | null;
+  margenEnvioVIP?: number | null;
+  comisionVIP?: number | null;
+  margenMayorRST?: number | null;
+  margenMayorVolumen?: number | null;
+  montoMinimo?: number | null;
   proveedor: string;
   ciudades?: string;
   iso?: string;

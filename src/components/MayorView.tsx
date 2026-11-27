@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Account, TransactionMayor, Client, AppMode, CurrencyConfig } from '@/types';
+import { Account, TransactionMayor, Client, AppMode, CurrencyConfig, RateTier } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { anularAbono } from '@/lib/anular-abono';
 import { recordTime } from '@/lib/order';
 import { CurrencyService } from '@/lib/currencies';
 import { RatesService } from '@/lib/rates-service';
+import { RateTierSelector } from '@/components/RateTierSelector';
 import { AbonoModal } from '@/components/AbonoModal';
 import { ManageCurrenciesModal } from '@/components/ManageCurrenciesModal';
 import { parseFormattedNumber, formatCurrency, formatRegionalAmount, formatRateDisplay, formatInputNumber } from '@/lib/formatters';
@@ -50,6 +51,7 @@ export function MayorView({
   );
   const [isManagingCurrencies, setIsManagingCurrencies] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState('VES');
+  const [rateTier, setRateTier] = useState<RateTier>('normal');
   const [ratesVersion, setRatesVersion] = useState(0);
 
   useEffect(() => {
@@ -58,7 +60,14 @@ export function MayorView({
     return () => window.removeEventListener('cambiosjk_rates_updated', handleUpdate);
   }, []);
 
-  const officialRate = useMemo(() => RatesService.getRateInfo(selectedCurrency, appMode), [selectedCurrency, appMode, ratesVersion]);
+  useEffect(() => {
+    setRateTier('normal');
+  }, [appMode, selectedCurrency]);
+
+  const officialRate = useMemo(
+    () => RatesService.getRateInfo(selectedCurrency, appMode, rateTier),
+    [selectedCurrency, appMode, rateTier, ratesVersion]
+  );
 
   useEffect(() => {
     if (officialRate) {
@@ -221,6 +230,32 @@ export function MayorView({
     }
   };
 
+  const handleSelectRateTier = (tier: RateTier) => {
+    const wasVip = rateTier === 'vip';
+    setRateTier(tier);
+    const nextInfo = RatesService.getRateInfo(selectedCurrency, appMode, tier);
+    setFormData((prev) => {
+      const currentFee = parseFormattedNumber(prev.client_fee) || 0;
+      const vipFeeVal = nextInfo.vipFee || 1;
+      let nextVip = prev.is_vip;
+      let nextFee = prev.client_fee;
+      if (tier === 'vip') {
+        nextVip = true;
+        nextFee = String(vipFeeVal);
+      } else if (wasVip) {
+        nextVip = false;
+        if (currentFee === vipFeeVal || currentFee === 1) nextFee = '';
+      }
+      return {
+        ...prev,
+        buy_price: nextInfo.costRate.toString(),
+        sell_price: nextInfo.sellRate.toString(),
+        is_vip: nextVip,
+        client_fee: nextFee,
+      };
+    });
+  };
+
   const handleApplyOfficialRate = () => {
     if (officialRate) {
       setFormData((prev) => ({
@@ -239,13 +274,20 @@ export function MayorView({
   };
 
   const handleToggleVip = () => {
+    if (appMode === 'detal' && officialRate.hasVip) {
+      handleSelectRateTier(formData.is_vip ? 'normal' : 'vip');
+      return;
+    }
     setFormData((prev) => {
       const turningOn = !prev.is_vip;
       const fee = parseFormattedNumber(prev.client_fee) || 0;
+      const defaultFee = officialRate.vipFee || 1;
       return {
         ...prev,
         is_vip: turningOn,
-        client_fee: turningOn ? (fee > 0 ? prev.client_fee : '1') : (fee === 1 ? '' : prev.client_fee),
+        client_fee: turningOn
+          ? (fee > 0 ? prev.client_fee : String(defaultFee))
+          : (fee === defaultFee || fee === 1 ? '' : prev.client_fee),
       };
     });
   };
@@ -446,12 +488,15 @@ export function MayorView({
                     onChange={(e) => {
                       const newCurr = e.target.value;
                       setSelectedCurrency(newCurr);
-                      const rateInfo = RatesService.getRateInfo(newCurr, appMode);
+                      setRateTier('normal');
+                      const rateInfo = RatesService.getRateInfo(newCurr, appMode, 'normal');
                       if (rateInfo) {
                         setFormData((prev) => ({
                           ...prev,
                           buy_price: rateInfo.costRate.toString(),
                           sell_price: rateInfo.sellRate.toString(),
+                          is_vip: false,
+                          client_fee: prev.is_vip ? '' : prev.client_fee,
                         }));
                       }
                     }}
@@ -502,6 +547,13 @@ export function MayorView({
                         ● En vivo {new Date(lastRatesSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     )}
+                    <RateTierSelector
+                      rateInfo={officialRate}
+                      appMode={appMode}
+                      selectedTier={rateTier}
+                      onSelectTier={handleSelectRateTier}
+                      isDark={isDark}
+                    />
                   </div>
                 )}
               </div>

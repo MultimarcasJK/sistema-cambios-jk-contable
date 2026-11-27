@@ -14,11 +14,12 @@ import {
   Trash2,
   RotateCcw,
 } from 'lucide-react';
-import { Account, AppMode, Beneficiario, Client, Remesa, RemesaEstado, RemesaMetodoPago, Supplier } from '@/types';
+import { Account, AppMode, Beneficiario, Client, RateTier, Remesa, RemesaEstado, RemesaMetodoPago, Supplier } from '@/types';
 import { StorageService } from '@/lib/storage';
 import { knownClientNames, openEditRecord, runEdit } from '@/components/EditRecordModal';
 import { newestFirst } from '@/lib/order';
 import { RatesService } from '@/lib/rates-service';
+import { RateTierSelector } from '@/components/RateTierSelector';
 import { COUNTRIES_LIST } from '@/lib/countries';
 import { useAuth } from '@/lib/auth-context';
 import { formatRegionalAmount, parseFormattedNumber } from '@/lib/formatters';
@@ -148,19 +149,64 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
   const fiado = Math.min(Math.max(parseFormattedNumber(form.fiado) || 0, 0), totalCobrado);
   const fiadoUsd = r4(fiado / tasaOrigenUsd);
 
-  // Tasas sugeridas desde la hoja de tasas al cambiar país o cuenta de cobro
+  const [rateTier, setRateTier] = useState<RateTier>('normal');
+  const [ratesVersion, setRatesVersion] = useState(0);
+
   useEffect(() => {
-    const info = RatesService.getRateInfo(form.moneda_pago, appMode);
+    const handleUpdate = () => setRatesVersion((v) => v + 1);
+    window.addEventListener('cambiosjk_rates_updated', handleUpdate);
+    return () => window.removeEventListener('cambiosjk_rates_updated', handleUpdate);
+  }, []);
+
+  useEffect(() => {
+    setRateTier('normal');
+  }, [form.moneda_pago, appMode]);
+
+  const destinoRateInfo = useMemo(
+    () => RatesService.getRateInfo(form.moneda_pago, appMode, rateTier),
+    [form.moneda_pago, appMode, rateTier, ratesVersion]
+  );
+
+  // Tasas sugeridas desde la hoja de tasas al cambiar país, nivel o cuenta de cobro
+  useEffect(() => {
     const origen = monedaOrigen.toUpperCase();
     const origenUsd = origen === 'USD' || origen === 'USDT' ? 1 : RatesService.getRateInfo(origen, appMode).costRate;
     setForm((f) => ({
       ...f,
       tasa_cliente:
-        info.sellRate && info.sellRate !== 1 ? String(r4(info.sellRate / (origenUsd || 1))) : f.tasa_cliente,
-      tasa_costo: info.costRate && info.costRate !== 1 ? String(info.costRate) : f.tasa_costo,
+        destinoRateInfo.sellRate && destinoRateInfo.sellRate !== 1
+          ? String(r4(destinoRateInfo.sellRate / (origenUsd || 1)))
+          : f.tasa_cliente,
+      tasa_costo: destinoRateInfo.costRate && destinoRateInfo.costRate !== 1 ? String(destinoRateInfo.costRate) : f.tasa_costo,
       tasa_origen_usd: String(origenUsd || 1),
     }));
-  }, [form.moneda_pago, monedaOrigen, appMode]);
+  }, [destinoRateInfo, monedaOrigen, appMode]);
+
+  const handleSelectRateTier = (tier: RateTier) => {
+    const wasVip = rateTier === 'vip';
+    setRateTier(tier);
+    const origen = monedaOrigen.toUpperCase();
+    const origenUsd = origen === 'USD' || origen === 'USDT' ? 1 : RatesService.getRateInfo(origen, appMode).costRate;
+    const nextInfo = RatesService.getRateInfo(form.moneda_pago, appMode, tier);
+    const vipCom = r4((nextInfo.vipFee || 1) * (origenUsd || 1));
+    setForm((f) => {
+      let nextCom = f.comision;
+      if (tier === 'vip') {
+        nextCom = String(vipCom);
+      } else if (wasVip && parseFormattedNumber(f.comision) === vipCom) {
+        nextCom = '';
+      }
+      return {
+        ...f,
+        tasa_cliente:
+          nextInfo.sellRate && nextInfo.sellRate !== 1
+            ? String(r4(nextInfo.sellRate / (origenUsd || 1)))
+            : f.tasa_cliente,
+        tasa_costo: nextInfo.costRate && nextInfo.costRate !== 1 ? String(nextInfo.costRate) : f.tasa_costo,
+        comision: nextCom,
+      };
+    });
+  };
 
   // Forma de pago recordada por país
   useEffect(() => {
@@ -789,9 +835,18 @@ export function RemesasView({ appMode, accounts, suppliers, clients, dataVersion
                 />
               </div>
               <div>
-                <label className={label}>
-                  Tasa al cliente ({form.moneda_pago} por 1 {monedaOrigen}) *
-                </label>
+                <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
+                  <label className="block text-xs font-semibold text-slate-600">
+                    Tasa al cliente ({form.moneda_pago} por 1 {monedaOrigen}) *
+                  </label>
+                  <RateTierSelector
+                    rateInfo={destinoRateInfo}
+                    appMode={appMode}
+                    selectedTier={rateTier}
+                    onSelectTier={handleSelectRateTier}
+                    compact
+                  />
+                </div>
                 <input
                   inputMode="decimal"
                   value={form.tasa_cliente}
